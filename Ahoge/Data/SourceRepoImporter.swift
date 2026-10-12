@@ -496,7 +496,7 @@ final class SourceRepoImporter {
         case .mangaBox:
             return overrides["adapter"] == "mangabox"
         case .api:
-            return ["ezmanhwa", "heancms"].contains(overrides["adapter"] ?? "") && overrides["apiURL"] != nil
+            return ["ezmanhwa", "heancms", "mangadex"].contains(overrides["adapter"] ?? "") && overrides["apiURL"] != nil
         default:
             return false
         }
