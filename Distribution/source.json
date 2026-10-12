@@ -23,10 +23,10 @@
       "versions": [
         {
           "version": "0.1.0",
-          "date": "2026-10-12T14:24:00Z",
+          "date": "2026-10-12T14:31:50Z",
           "localizedDescription": "Initial standalone Ahoge release.\n\n- Native Swift/SwiftUI manga reader for iOS.\n- Unsigned physical-device IPA for SideStore signing.\n- Repository-driven manga sources maintained separately in ahoge-extension.\n- Reader, library, downloads, persistence, source imports, and native source runtimes included.",
           "downloadURL": "https://github.com/QuackyPROG/ahoge/releases/download/v0.1.0/Ahoge.ipa",
-          "size": 1722678,
+          "size": 1722680,
           "minOSVersion": "26.2"
         }
       ]
