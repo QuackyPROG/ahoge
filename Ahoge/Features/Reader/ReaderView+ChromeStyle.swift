@@ -1,19 +1,11 @@
 // Modified for Ahoge from an Apache-2.0-licensed prior implementation.
 // See THIRD_PARTY_NOTICES.md for attribution and license information.
 
-//
-//  ReaderView+ChromeStyle.swift
-//  Ahoge
-//
-
 import SwiftUI
 
 extension ReaderView {
     var readerBarBackground: some ShapeStyle {
-        if readerChromeIsBrightMode {
-            return AnyShapeStyle(.regularMaterial)
-        }
-        return AnyShapeStyle(.ultraThinMaterial)
+        AnyShapeStyle(.thinMaterial)
     }
 
     var readerChromeLuminance: CGFloat {
@@ -39,15 +31,15 @@ extension ReaderView {
     }
 
     var readerPillRegularOpacity: Double {
-        readerChromeIsBrightMode ? 0.1 : 0.08
+        readerChromeIsBrightMode ? 0.08 : 0.07
     }
 
     var readerPillProminentOpacity: Double {
-        readerChromeIsBrightMode ? 0.2 : 0.18
+        readerChromeIsBrightMode ? 0.16 : 0.14
     }
 
     var readerCapsuleBackground: some ShapeStyle {
-        Color.white.opacity(0.14)
+        AnyShapeStyle(.thinMaterial)
     }
 
     var readingModeSymbol: String {
@@ -67,9 +59,7 @@ extension ReaderView {
 
     var orientationSymbol: String {
         switch model.state.readerPreferences.orientation {
-        case .system:
-            return "iphone"
-        case .portrait:
+        case .system, .portrait:
             return "iphone"
         case .landscape:
             return "iphone.landscape"
