@@ -3,7 +3,7 @@ name: Migrate Ahoge from reference repo
 on:
   workflow_dispatch:
   push:
-    branches: ["migration/clean-ahoge"]
+    branches: ["main", "migration/clean-ahoge"]
     paths:
       - ".github/workflows/migrate-ahoge.yml"
 
