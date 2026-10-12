@@ -203,8 +203,11 @@ struct NativeUpdateView: View {
                     ProgressView()
                     Text("Checking for a newer Ahoge release…")
                 }
-            case .upToDate:
+            case .upToDate(let manifest):
                 Label("Ahoge is up to date.", systemImage: "checkmark.circle")
+                if let manifest {
+                    releaseDetails(manifest)
+                }
             case .unable(let message):
                 Label("Unable to check for updates.", systemImage: "wifi.exclamationmark")
                 Text(message)
