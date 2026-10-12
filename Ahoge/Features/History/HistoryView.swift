@@ -1,0 +1,61 @@
+// Modified for Ahoge from an Apache-2.0-licensed prior implementation.
+// See THIRD_PARTY_NOTICES.md for attribution and license information.
+
+//
+//  HistoryView.swift
+//  Ahoge
+//
+
+import SwiftUI
+
+struct HistoryView: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var searchText = ""
+
+    var body: some View {
+        let entries = model.historyEntries(searchText: searchText)
+
+        List {
+            Section {
+                Button("Clear History", role: .destructive) {
+                    model.clearHistory()
+                }
+            }
+
+            if entries.isEmpty {
+                ContentUnavailableView(
+                    "No history yet",
+                    systemImage: "clock.arrow.circlepath",
+                    description: Text("Open a chapter from Browse or Library to start tracking progress.")
+                )
+                .padding(.vertical, 12)
+            } else {
+                ForEach(entries, id: \.0.id) { entry, manga, chapter in
+                    NavigationLink {
+                        ReaderView(manga: manga, initialChapter: chapter)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(manga.title)
+                                .font(.headline)
+                            Text(chapter.title)
+                                .font(.subheadline)
+                            Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 3)
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            model.removeHistoryEntry(entry.id)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        }
+        .searchable(text: $searchText, prompt: "Search history")
+        .navigationTitle("History")
+    }
+}

@@ -1,0 +1,42 @@
+name: Ahoge iOS CI
+
+on:
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      PROJECT_PATH: Ahoge.xcodeproj
+      PROJECT_FILE: Ahoge.xcodeproj/project.pbxproj
+      SCHEME: Ahoge
+      BUILD_DESTINATION: generic/platform=iOS Simulator
+      TEST_DESTINATION: platform=iOS Simulator,OS=latest,name=iPhone 16
+      DERIVED_DATA_PATH: .derivedData
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate distribution metadata
+        run: python3 Scripts/validate_distribution.py Distribution/source.json Distribution/latest.json
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Resolve package dependencies
+        run: xcodebuild -resolvePackageDependencies -project "$PROJECT_PATH" -scheme "$SCHEME"
+      - name: Build app for iOS Simulator
+        run: |
+          set -eo pipefail
+          xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -destination "$BUILD_DESTINATION" -derivedDataPath "$DERIVED_DATA_PATH" -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
+      - name: Run XCTest bundles when present
+        run: |
+          set -eo pipefail
+          if grep -Eq 'com\.apple\.product-type\.bundle\.(unit-test|ui-testing)' "$PROJECT_FILE"; then
+            xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -destination "$TEST_DESTINATION" -derivedDataPath "$DERIVED_DATA_PATH" -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO test
+          else
+            echo "No XCTest target found. Skipping test step."
+          fi
