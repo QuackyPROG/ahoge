@@ -1,31 +1,22 @@
 // Modified for Ahoge from an Apache-2.0-licensed prior implementation.
 // See THIRD_PARTY_NOTICES.md for attribution and license information.
 
-//
-//  RootTabView.swift
-//  Ahoge
-//
-
 import SwiftUI
 
 private enum AppTab: Hashable {
     case library
-    case browse
-    case history
-    case updates
+    case explore
+    case activity
     case more
 }
 
 struct RootTabView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedTab: AppTab = .library
-    // Fix #6: Track the previous tab so we can detect a reselect natively
-    // without the UIKit TabBarControllerAccessor hack.
     @State private var previousTab: AppTab = .library
     @State private var libraryPath = NavigationPath()
-    @State private var browsePath = NavigationPath()
-    @State private var historyPath = NavigationPath()
-    @State private var updatesPath = NavigationPath()
+    @State private var explorePath = NavigationPath()
+    @State private var activityPath = NavigationPath()
     @State private var morePath = NavigationPath()
 
     var body: some View {
@@ -33,70 +24,42 @@ struct RootTabView: View {
             NavigationStack(path: $libraryPath) {
                 LibraryView()
             }
-            .tabItem {
-                Label("Library", systemImage: "books.vertical")
-            }
+            .tabItem { Label("Library", systemImage: "books.vertical") }
             .tag(AppTab.library)
 
-            NavigationStack(path: $browsePath) {
+            NavigationStack(path: $explorePath) {
                 BrowseView()
             }
-            .tabItem {
-                Label("Browse", systemImage: "safari")
-            }
-            .tag(AppTab.browse)
+            .tabItem { Label("Explore", systemImage: "safari") }
+            .tag(AppTab.explore)
 
-            NavigationStack(path: $historyPath) {
-                HistoryView()
+            NavigationStack(path: $activityPath) {
+                ActivityView()
             }
-            .tabItem {
-                Label("History", systemImage: "clock.arrow.circlepath")
-            }
-            .tag(AppTab.history)
-
-            NavigationStack(path: $updatesPath) {
-                UpdatesView()
-            }
-            .tabItem {
-                Label("Updates", systemImage: "sparkles.rectangle.stack")
-            }
+            .tabItem { Label("Activity", systemImage: "clock.badge") }
             .badge(model.unreadUpdatesCount > 0 ? model.unreadUpdatesCount : 0)
-            .tag(AppTab.updates)
+            .tag(AppTab.activity)
 
             NavigationStack(path: $morePath) {
                 MoreView()
             }
-            .tabItem {
-                Label("More", systemImage: "ellipsis.circle")
-            }
+            .tabItem { Label("More", systemImage: "ellipsis.circle") }
             .tag(AppTab.more)
         }
         .tint(model.chromeTint)
-        // Fix #2: Remove forced `.visible` so iOS can apply the natural
-        // edge-to-edge transparency behaviour — the material appears only when
-        // scrollable content passes beneath the tab bar.
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
-        // Fix #6: Native pop-to-root — no UIKit bridging required.
-        // When the user taps an already-selected tab, `selectedTab` gets set
-        // to the same value it already holds. SwiftUI will fire onChange even
-        // for same-value assignments on a TabView selection binding, so we
-        // compare against `previousTab` to distinguish a reselect from a
-        // genuine tab switch.
         .onChange(of: selectedTab) { old, new in
-            if new == old {
-                popToRoot(for: new)
-            }
+            if new == old { popToRoot(for: new) }
             previousTab = new
         }
     }
 
     private func popToRoot(for tab: AppTab) {
         switch tab {
-        case .library:   libraryPath  = NavigationPath()
-        case .browse:    browsePath   = NavigationPath()
-        case .history:   historyPath  = NavigationPath()
-        case .updates:   updatesPath  = NavigationPath()
-        case .more:      morePath     = NavigationPath()
+        case .library: libraryPath = NavigationPath()
+        case .explore: explorePath = NavigationPath()
+        case .activity: activityPath = NavigationPath()
+        case .more: morePath = NavigationPath()
         }
     }
 }
