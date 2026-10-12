@@ -1,0 +1,19 @@
+name: Trigger Ahoge Migration
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-migration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch migration workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run migrate-ahoge.yml --repo "$GITHUB_REPOSITORY" --ref migration/clean-ahoge
