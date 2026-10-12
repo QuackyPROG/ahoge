@@ -22,13 +22,15 @@ jobs:
           from pathlib import Path
           path = Path('Ahoge/Data/Sources/MangaThemesiaSourceEngine.swift')
           text = path.read_text()
-          old = '''        let slug = parts[index + 1]
-        return slug.isEmpty ? nil : slug
-'''
-          new = '''        let slug = parts[index + 1]
-        guard !slug.isEmpty, slug.lowercased() != "list-mode" else { return nil }
-        return slug
-'''
+          old = (
+              '        let slug = parts[index + 1]\n'
+              '        return slug.isEmpty ? nil : slug\n'
+          )
+          new = (
+              '        let slug = parts[index + 1]\n'
+              '        guard !slug.isEmpty, slug.lowercased() != "list-mode" else { return nil }\n'
+              '        return slug\n'
+          )
           if old not in text:
               if new in text:
                   raise SystemExit(0)
