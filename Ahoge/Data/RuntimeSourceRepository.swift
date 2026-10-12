@@ -155,6 +155,16 @@ final class RuntimeSourceRepository: SourceRepository, SourceCatalogRuntime {
                     filterNonMangaItems: filterNonMangaItems
                 )
 
+            case .mangaThemesia:
+                guard let context = descriptor.context else { continue }
+                runtimes[source.id] = MangaThemesiaSourceEngine(
+                    source: source,
+                    baseURL: context.baseURL,
+                    requestsPerSecond: max(context.requestPolicy.rateLimit, 1),
+                    mangaPath: descriptor.overrides["mangaPath"] ?? descriptor.overrides["mangaSubPath"] ?? "manga",
+                    dateFormat: descriptor.overrides["dateFormat"] ?? "MMMM d, yyyy"
+                )
+
             case .asuraScans:
                 guard
                     let context = descriptor.context,
