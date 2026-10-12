@@ -7,9 +7,9 @@
   "version": "0.1.0",
   "build": "1",
   "minimumOSVersion": "26.2",
-  "releaseDate": "2026-10-12T14:24:00Z",
+  "releaseDate": "2026-10-12T14:31:50Z",
   "downloadURL": "https://github.com/QuackyPROG/ahoge/releases/download/v0.1.0/Ahoge.ipa",
-  "sha256": "f8486c58d750733152ebe4de67ffded63905989dd1d58b61708f3cf81eda644f",
+  "sha256": "c5d3bce5daa44dc2445f576ed668098fc900ed6883451b9c65c18a43e3cb5225",
   "releaseNotesURL": "https://github.com/QuackyPROG/ahoge/releases/tag/v0.1.0",
-  "size": 1722678
+  "size": 1722680
 }
