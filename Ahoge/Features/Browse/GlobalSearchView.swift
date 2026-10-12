@@ -1,54 +1,75 @@
 // Modified for Ahoge from an Apache-2.0-licensed prior implementation.
 // See THIRD_PARTY_NOTICES.md for attribution and license information.
 
-//
-//  GlobalSearchView.swift
-//  Ahoge
-//
-
 import SwiftUI
 
 struct GlobalSearchView: View {
     @EnvironmentObject private var model: AppModel
     @State private var query = ""
 
+    private let columns = [
+        GridItem(.adaptive(minimum: 142, maximum: 190), spacing: 16, alignment: .top)
+    ]
+
     var body: some View {
         let results = model.globalSearchResults(query: query)
 
-        List {
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                ContentUnavailableView(
-                    "Search all sources",
-                    systemImage: "magnifyingglass",
-                    description: Text("Enter a title, author, or genre to search across enabled sources.")
-                )
-                .padding(.vertical, 12)
-            } else if results.isEmpty {
-                ContentUnavailableView(
-                    "No results",
-                    systemImage: "books.vertical",
-                    description: Text("Try a broader query or enable more sources.")
-                )
-                .padding(.vertical, 12)
-            } else {
-                ForEach(results, id: \.0.id) { source, results in
-                    Section(source.name) {
-                        ForEach(results) { manga in
-                            NavigationLink {
-                                MangaDetailView(manga: manga)
-                            } label: {
-                                MangaRow(
-                                    manga: manga,
-                                    hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
-                                    allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false
-                                )
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: AhogeLayout.sectionSpacing) {
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ContentUnavailableView(
+                        "Search all sources",
+                        systemImage: "magnifyingglass",
+                        description: Text("Enter a title, author, or genre. Results stay grouped by source so you know where each title comes from.")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 80)
+                } else if results.isEmpty {
+                    ContentUnavailableView(
+                        "No results",
+                        systemImage: "books.vertical",
+                        description: Text("Try a broader query or enable more sources.")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 80)
+                } else {
+                    ForEach(results, id: \.0.id) { source, mangas in
+                        VStack(alignment: .leading, spacing: 12) {
+                            AhogeSectionHeader(source.name, subtitle: "\(mangas.count) result\(mangas.count == 1 ? "" : "s")")
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                                ForEach(mangas) { manga in
+                                    NavigationLink {
+                                        MangaDetailView(manga: manga)
+                                    } label: {
+                                        AhogeMangaGridCard(
+                                            manga: manga,
+                                            hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
+                                            allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false,
+                                            badgeText: model.isInLibrary(manga) ? "Library" : nil
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button {
+                                            model.toggleLibrary(manga)
+                                        } label: {
+                                            Label(
+                                                model.isInLibrary(manga) ? "Remove from Library" : "Add to Library",
+                                                systemImage: model.isInLibrary(manga) ? "bookmark.slash" : "bookmark"
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+            .padding(.horizontal, AhogeLayout.pagePadding)
+            .padding(.top, 8)
+            .padding(.bottom, 28)
         }
-        .searchable(text: $query, prompt: "Search all sources")
-        .navigationTitle("Global Search")
+        .searchable(text: $query, prompt: "Title, author, or genre")
+        .navigationTitle("Search")
     }
 }
