@@ -152,12 +152,13 @@ final class RuntimeSourceRepository: SourceRepository, SourceCatalogRuntime {
             switch descriptor.engineFamily {
             case .natsuId:
                 guard let context = descriptor.context else { continue }
+                let chapterListPageOverride = descriptor.overrides["chapterListPageOverride"].flatMap(Int.init)
                 runtimes[source.id] = NatsuIdSourceEngine(
-                    configuration: KiryuuSourceConfiguration(
+                    configuration: NatsuIdSourceConfiguration(
                         source: source,
                         baseURL: context.baseURL,
                         rateLimit: max(context.requestPolicy.rateLimit, 1),
-                        chapterListPageOverride: 1
+                        chapterListPageOverride: chapterListPageOverride
                     )
                 )
 
@@ -194,7 +195,8 @@ final class RuntimeSourceRepository: SourceRepository, SourceCatalogRuntime {
                         source: source,
                         baseURL: context.baseURL,
                         apiURL: apiURL,
-                        requestsPerSecond: max(context.requestPolicy.rateLimit, 1)
+                        requestsPerSecond: max(context.requestPolicy.rateLimit, 1),
+                        latestSortOrder: descriptor.overrides["latestSortOrder"] ?? "desc"
                     )
                 default:
                     continue
