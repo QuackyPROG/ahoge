@@ -204,6 +204,12 @@ final class RuntimeSourceRepository: SourceRepository, SourceCatalogRuntime {
                         translatedLanguage: descriptor.overrides["translatedLanguage"] ?? descriptor.languageCode ?? "en",
                         requestsPerSecond: max(context.requestPolicy.rateLimit, 1)
                     )
+                case "weebcentral":
+                    runtimes[source.id] = WeebCentralSourceEngine(
+                        source: source,
+                        baseURL: context.baseURL,
+                        requestsPerSecond: max(context.requestPolicy.rateLimit, 1)
+                    )
                 default:
                     continue
                 }
