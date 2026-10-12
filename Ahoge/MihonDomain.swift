@@ -1,0 +1,10 @@
+//
+//  MihonDomain.swift
+//  Ahoge
+//
+
+import Foundation
+
+// The domain model used to live entirely in this file. It has been split into
+// topic-based files under `Ahoge/Domain/**` to keep diffs smaller during
+// modularization and to avoid 1000+ line "god files".

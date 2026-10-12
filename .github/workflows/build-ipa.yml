@@ -1,0 +1,44 @@
+name: Build Ahoge IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-ipa:
+    name: Build unsigned IPA
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      PROJECT_PATH: Ahoge.xcodeproj
+      SCHEME: Ahoge
+      DERIVED_DATA_PATH: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Resolve Swift package dependencies
+        run: xcodebuild -resolvePackageDependencies -project "$PROJECT_PATH" -scheme "$SCHEME"
+      - name: Build unsigned iPhone app
+        run: |
+          set -eo pipefail
+          xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -configuration Release -sdk iphoneos -destination "generic/platform=iOS" -derivedDataPath "$DERIVED_DATA_PATH" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package unsigned IPA
+        run: |
+          set -eo pipefail
+          APP_PATH=$(find "$DERIVED_DATA_PATH/Build/Products/Release-iphoneos" -maxdepth 1 -type d -name "*.app" -print -quit)
+          test -n "$APP_PATH" || { echo "ERROR: No .app bundle was produced."; exit 1; }
+          rm -rf Payload Ahoge-iOS-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry Ahoge-iOS-unsigned.ipa Payload
+          ls -lh Ahoge-iOS-unsigned.ipa
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ahoge-iOS-unsigned
+          path: Ahoge-iOS-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
