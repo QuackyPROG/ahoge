@@ -19,8 +19,8 @@ final class AsuraScans2026SourceEngine: SourceRuntime {
 
     init(
         source: Source,
-        baseURL: String = "https://asurascans.com",
-        apiURL: String = "https://api.asurascans.com/api"
+        baseURL: String,
+        apiURL: String
     ) {
         self.source = source
         self.baseURL = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
