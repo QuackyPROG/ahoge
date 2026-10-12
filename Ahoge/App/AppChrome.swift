@@ -296,13 +296,29 @@ private struct OnboardingView: View {
 private struct ReleaseNotesView: View {
     @Environment(\.dismiss) private var dismiss
 
+    private var currentVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    releaseItem("A content-first Library built around covers and reading continuity.", systemImage: "books.vertical.fill")
-                    releaseItem("Explore puts global search and source discovery before source administration.", systemImage: "sparkle.magnifyingglass")
-                    releaseItem("Manga pages, Activity, downloads, and reader controls have a new native iOS presentation.", systemImage: "sparkles")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Native UI/UX overhaul")
+                            .font(.title3.weight(.bold))
+                        if !currentVersion.isEmpty {
+                            Text("Ahoge \(currentVersion)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    releaseItem("Rebuilt Library around cover art, Continue Reading, categories, and adaptive grids.", systemImage: "books.vertical.fill")
+                    releaseItem("New Explore experience with global search and source-first discovery.", systemImage: "sparkle.magnifyingglass")
+                    releaseItem("New Activity hub brings Updates, History, and Downloads together.", systemImage: "clock.arrow.circlepath")
+                    releaseItem("Redesigned manga details, chapter list, downloads, More, Stats, onboarding, and reader controls.", systemImage: "sparkles")
+                    releaseItem("Refined native iOS materials, spacing, accessibility, and light/dark appearance.", systemImage: "iphone")
                 }
                 .padding(24)
             }
