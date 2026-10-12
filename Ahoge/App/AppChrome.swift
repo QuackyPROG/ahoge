@@ -1,11 +1,6 @@
 // Modified for Ahoge from an Apache-2.0-licensed prior implementation.
 // See THIRD_PARTY_NOTICES.md for attribution and license information.
 
-//
-//  AppChrome.swift
-//  Ahoge
-//
-
 import SwiftUI
 
 struct AppChromeView: View {
@@ -13,8 +8,6 @@ struct AppChromeView: View {
     @Environment(\.scenePhase) private var scenePhase
     private let biometricLockEnabled = true
 
-    // Fix #5: Alert state lives here (stable parent) to avoid detached-view warnings
-    // when BiometricLockView is conditionally removed from the hierarchy.
     @State private var showBiometricRetryAlert = false
 
     private var isPrivacyOverlayActive: Bool {
@@ -30,7 +23,6 @@ struct AppChromeView: View {
 
     var body: some View {
         ZStack {
-            // Main content — hidden from VoiceOver when locked/blurred (Fix #1)
             Group {
                 switch model.bootState {
                 case .launching:
@@ -49,7 +41,6 @@ struct AppChromeView: View {
             }
             .accessibilityHidden(isPrivacyOverlayActive || isBiometricLockActive)
 
-            // Privacy blur overlay (app switcher)
             if isPrivacyOverlayActive {
                 Rectangle()
                     .fill(.ultraThinMaterial)
@@ -63,17 +54,13 @@ struct AppChromeView: View {
                 .foregroundStyle(.primary)
             }
 
-            // Biometric lock overlay
             if isBiometricLockActive {
-                BiometricLockView(
-                    onBiometricFailure: {
-                        showBiometricRetryAlert = true
-                    }
-                )
+                BiometricLockView(onBiometricFailure: {
+                    showBiometricRetryAlert = true
+                })
                 .transition(.opacity)
             }
         }
-        // Fix #5: Alert is attached here (always-live parent) — safe across scene-phase transitions
         .alert("Face ID Failed", isPresented: $showBiometricRetryAlert) {
             Button("Retry") {
                 Task { await model.requestBiometricUnlock() }
@@ -120,9 +107,6 @@ struct AppChromeView: View {
 
 private struct BiometricLockView: View {
     @EnvironmentObject private var model: AppModel
-    /// Callback to the stable parent view that should present the retry alert.
-    /// Fix #5: Alert presentation is delegated upward so it isn't detached
-    /// when this view is removed from the ZStack during scene-phase transitions.
     let onBiometricFailure: () -> Void
 
     var body: some View {
@@ -162,13 +146,8 @@ private struct BiometricLockView: View {
 private struct LaunchView: View {
     var body: some View {
         ZStack {
-            // Fix #7: Use semantic Asset Catalog colors so light/dark/high-contrast
-            // appearances are handled automatically instead of hardcoded hex values.
             LinearGradient(
-                colors: [
-                    Color("LaunchGradientTop"),
-                    Color("LaunchGradientBottom")
-                ],
+                colors: [Color("LaunchGradientTop"), Color("LaunchGradientBottom")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -180,7 +159,7 @@ private struct LaunchView: View {
                     .foregroundStyle(.white)
                 ProgressView()
                     .tint(.white)
-                Text("Loading Ahoge for iOS")
+                Text("Loading Ahoge")
                     .font(.headline)
                     .foregroundStyle(.white.opacity(0.9))
             }
@@ -203,31 +182,114 @@ private struct CrashView: View {
 private struct OnboardingView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var page = 0
+
+    private let pageCount = 4
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Welcome") {
-                    Label("Native iOS tab shell for Library, Updates, History, Browse, and More.", systemImage: "square.grid.2x2")
-                    Label("Source catalog replaces Android extension APK installation.", systemImage: "shippingbox")
-                    Label("Reader progress, notes, trackers, and source repos are persisted locally.", systemImage: "externaldrive")
-                }
+            VStack(spacing: 0) {
+                TabView(selection: $page) {
+                    onboardingPage(
+                        systemImage: "books.vertical.fill",
+                        title: "Build your library",
+                        message: "Keep the manga you care about together, organize it with categories, and jump back into what you were reading.",
+                        footnote: "Your library and reading progress stay on this device."
+                    )
+                    .tag(0)
 
-                Section("Initial Setup") {
-                    LabeledContent("Language", value: model.currentLanguageLabel)
-                    LabeledContent("Default Source Repo", value: model.state.sourceRepos.first ?? "None")
+                    onboardingPage(
+                        systemImage: "sparkle.magnifyingglass",
+                        title: "Explore your sources",
+                        message: "Search across enabled sources or browse each catalog directly. Source controls stay available without getting in the way of discovery.",
+                        footnote: "Ahoge uses the sources you configure; it doesn't add a recommendation account or cloud service."
+                    )
+                    .tag(1)
+
+                    onboardingPage(
+                        systemImage: "book.pages.fill",
+                        title: "Read your way",
+                        message: "Resume from your last page and choose the reading mode, orientation, spread handling, and display filters that fit the chapter.",
+                        footnote: "Reader progress is saved locally as you read."
+                    )
+                    .tag(2)
+
+                    onboardingPage(
+                        systemImage: "arrow.down.circle.fill",
+                        title: "Keep chapters available",
+                        message: "Download chapters for offline reading and manage transfers from Activity or the manga page.",
+                        footnote: model.currentLanguageLabel.isEmpty ? nil : "Current language: \(model.currentLanguageLabel)"
+                    )
+                    .tag(3)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .animation(.easeInOut(duration: 0.2), value: page)
+
+                HStack(spacing: 12) {
+                    if page > 0 {
+                        Button("Back") {
+                            withAnimation { page -= 1 }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Button(page == pageCount - 1 ? "Start Reading" : "Continue") {
+                        if page == pageCount - 1 {
+                            model.markOnboardingCompleted()
+                            dismiss()
+                        } else {
+                            withAnimation { page += 1 }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
             .navigationTitle("Welcome to Ahoge")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Continue") {
-                        model.markOnboardingCompleted()
-                        dismiss()
-                    }
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .interactiveDismissDisabled()
+    }
+
+    private func onboardingPage(
+        systemImage: String,
+        title: String,
+        message: String,
+        footnote: String?
+    ) -> some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 28)
+
+            Image(systemName: systemImage)
+                .font(.system(size: 58, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(model.chromeTint)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 12) {
+                Text(title)
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+                Text(message)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let footnote {
+                    Text(footnote)
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .padding(.horizontal, 32)
+
+            Spacer()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -236,21 +298,32 @@ private struct ReleaseNotesView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("This Build") {
-                    Label("Expanded page surface for Library, Browse, Reader, Tracking, Backup, and Migration.", systemImage: "sparkles")
-                    Label("Native settings hierarchy and source catalog management.", systemImage: "gearshape.2")
-                    Label("Richer reader preferences with orientation and color filters.", systemImage: "text.page")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    releaseItem("A content-first Library built around covers and reading continuity.", systemImage: "books.vertical.fill")
+                    releaseItem("Explore puts global search and source discovery before source administration.", systemImage: "sparkle.magnifyingglass")
+                    releaseItem("Manga pages, Activity, downloads, and reader controls have a new native iOS presentation.", systemImage: "sparkles")
                 }
+                .padding(24)
             }
             .navigationTitle("What's New")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                    Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+
+    private func releaseItem(_ text: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .frame(width: 28)
+            Text(text)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
