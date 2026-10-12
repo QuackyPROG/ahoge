@@ -1,0 +1,27 @@
+{
+  "name": "Ahoge",
+  "identifier": "com.quackyprog.ahoge.source",
+  "sourceURL": "https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Distribution/source.json",
+  "apps": [
+    {
+      "name": "Ahoge",
+      "bundleIdentifier": "com.quackyprog.ahoge",
+      "developerName": "QuackyPROG",
+      "subtitle": "Native manga reader with repository-driven sources.",
+      "localizedDescription": "Ahoge is a native SwiftUI manga reader. Install the app once through SideStore, then use Ahoge's separate source repository system for manga source definitions. Native app releases and source-definition updates remain independent.",
+      "iconURL": "https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Ahoge/Assets.xcassets/AppIcon.appiconset/AhogeIcon.png",
+      "permissions": [
+        {
+          "type": "faceid",
+          "usageDescription": "Optional biometric lock for Ahoge."
+        },
+        {
+          "type": "network",
+          "usageDescription": "Loads manga metadata, pages, source repositories, and release metadata from user-configured network sources."
+        }
+      ],
+      "versions": []
+    }
+  ],
+  "news": []
+}
