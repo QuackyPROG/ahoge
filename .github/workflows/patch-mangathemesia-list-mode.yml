@@ -1,0 +1,43 @@
+name: Patch MangaThemesia List Mode
+
+on:
+  push:
+    branches:
+      - fix/mangathemesia-list-mode
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mangathemesia-list-mode
+          fetch-depth: 0
+      - name: Ignore MangaThemesia structural list-mode link
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('Ahoge/Data/Sources/MangaThemesiaSourceEngine.swift')
+          text = path.read_text()
+          old = '''        let slug = parts[index + 1]
+        return slug.isEmpty ? nil : slug
+'''
+          new = '''        let slug = parts[index + 1]
+        guard !slug.isEmpty, slug.lowercased() != "list-mode" else { return nil }
+        return slug
+'''
+          if old not in text:
+              if new in text:
+                  raise SystemExit(0)
+              raise SystemExit('MangaThemesia list slug anchor changed; refusing to patch')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git rm .github/workflows/patch-mangathemesia-list-mode.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Ahoge/Data/Sources/MangaThemesiaSourceEngine.swift
+          git commit -m "Ignore MangaThemesia list-mode route in catalog parsing"
+          git push origin HEAD:fix/mangathemesia-list-mode
