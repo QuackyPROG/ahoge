@@ -1,0 +1,5 @@
+{
+  "version": "0.1.1",
+  "build": "2",
+  "releaseNotes": "Ahoge 0.1.1 — Native UI/UX overhaul\n\n• Rebuilt Library around cover art, Continue Reading, categories, and adaptive grids.\n• New Explore experience with global search and source-first discovery.\n• New Activity hub brings Updates, History, and Downloads together.\n• Redesigned manga details, chapter list, downloads, More, Stats, onboarding, and reader controls.\n• Refined native iOS materials, spacing, accessibility, and light/dark appearance.\n• Reader, source, download, persistence, migration, tracking, and security behavior remain unchanged."
+}
