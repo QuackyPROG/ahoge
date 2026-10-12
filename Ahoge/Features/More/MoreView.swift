@@ -63,6 +63,12 @@ struct MoreView: View {
                 }
 
                 NavigationLink {
+                    NativeUpdateView()
+                } label: {
+                    Label("App Updates", systemImage: "arrow.triangle.2.circlepath")
+                }
+
+                NavigationLink {
                     AboutView()
                 } label: {
                     Label("About", systemImage: "info.circle")

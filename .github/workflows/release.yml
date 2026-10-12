@@ -1,0 +1,241 @@
+name: Release Ahoge
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ahoge-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      PROJECT_PATH: Ahoge.xcodeproj
+      SCHEME: Ahoge
+      DERIVED_DATA_PATH: build-release
+      EXPECTED_BUNDLE_IDENTIFIER: com.quackyprog.ahoge
+
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and derive build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "ERROR: Release tags must match vMAJOR.MINOR.PATCH; got '$TAG'." >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          test -n "$BUILD_NUMBER"
+
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "Releasing Ahoge $VERSION (build $BUILD_NUMBER) from $GITHUB_SHA"
+
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "ERROR: GitHub Release '$TAG' already exists. Versioned releases are immutable." >&2
+            exit 1
+          fi
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve Swift package dependencies
+        run: xcodebuild -resolvePackageDependencies -project "$PROJECT_PATH" -scheme "$SCHEME"
+
+      - name: Build unsigned sideload app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            INFOPLIST_KEY_AhogeDistributionChannel=sideload \
+            build
+
+      - name: Verify metadata and package IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$DERIVED_DATA_PATH/Build/Products/Release-iphoneos" -maxdepth 1 -type d -name "*.app" -print -quit)"
+          test -n "$APP_PATH" || { echo "ERROR: No .app bundle was produced." >&2; exit 1; }
+
+          PLIST="$APP_PATH/Info.plist"
+          test -f "$PLIST" || { echo "ERROR: Built app has no Info.plist." >&2; exit 1; }
+
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")"
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
+          APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
+          MIN_OS="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$PLIST")"
+
+          test "$BUNDLE_ID" = "$EXPECTED_BUNDLE_IDENTIFIER" || {
+            echo "ERROR: Bundle identifier changed from '$EXPECTED_BUNDLE_IDENTIFIER' to '$BUNDLE_ID'." >&2
+            exit 1
+          }
+          test "$APP_VERSION" = "$VERSION" || {
+            echo "ERROR: Tag version '$VERSION' does not match built CFBundleShortVersionString '$APP_VERSION'." >&2
+            exit 1
+          }
+          test "$APP_BUILD" = "$BUILD_NUMBER" || {
+            echo "ERROR: Expected build '$BUILD_NUMBER' but built CFBundleVersion is '$APP_BUILD'." >&2
+            exit 1
+          }
+          test -n "$MIN_OS" || { echo "ERROR: MinimumOSVersion is empty." >&2; exit 1; }
+
+          rm -rf ipa-staging Ahoge.ipa
+          mkdir -p ipa-staging/Payload
+          cp -R "$APP_PATH" ipa-staging/Payload/
+          (cd ipa-staging && zip -qry ../Ahoge.ipa Payload)
+
+          unzip -t Ahoge.ipa >/dev/null
+          unzip -l Ahoge.ipa | grep -Eq 'Payload/[^/]+\.app/Info\.plist' || {
+            echo "ERROR: IPA does not contain Payload/<app>.app/Info.plist." >&2
+            exit 1
+          }
+
+          SHA256="$(shasum -a 256 Ahoge.ipa | awk '{print $1}')"
+          IPA_SIZE="$(stat -f%z Ahoge.ipa)"
+          RELEASE_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          DOWNLOAD_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Ahoge.ipa"
+          RELEASE_NOTES_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+
+          printf '%s  %s\n' "$SHA256" "Ahoge.ipa" > Ahoge.ipa.sha256
+
+          echo "BUNDLE_ID=$BUNDLE_ID" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "APP_BUILD=$APP_BUILD" >> "$GITHUB_ENV"
+          echo "MIN_OS=$MIN_OS" >> "$GITHUB_ENV"
+          echo "SHA256=$SHA256" >> "$GITHUB_ENV"
+          echo "IPA_SIZE=$IPA_SIZE" >> "$GITHUB_ENV"
+          echo "RELEASE_DATE=$RELEASE_DATE" >> "$GITHUB_ENV"
+          echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> "$GITHUB_ENV"
+          echo "RELEASE_NOTES_URL=$RELEASE_NOTES_URL" >> "$GITHUB_ENV"
+
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$TAG" \
+            -f target_commitish="$GITHUB_SHA" \
+            --jq '.body' > release-notes.md
+          if [[ ! -s release-notes.md ]]; then
+            printf 'Ahoge %s\n' "$VERSION" > release-notes.md
+          fi
+
+      - name: Generate machine-readable release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          notes = Path("release-notes.md").read_text(encoding="utf-8").strip()
+          common = {
+              "version": os.environ["APP_VERSION"],
+              "build": os.environ["APP_BUILD"],
+              "minimumOSVersion": os.environ["MIN_OS"],
+              "releaseDate": os.environ["RELEASE_DATE"],
+              "downloadURL": os.environ["DOWNLOAD_URL"],
+              "sha256": os.environ["SHA256"],
+              "releaseNotesURL": os.environ["RELEASE_NOTES_URL"],
+              "size": int(os.environ["IPA_SIZE"]),
+          }
+          metadata = {
+              "schemaVersion": 1,
+              "bundleIdentifier": os.environ["BUNDLE_ID"],
+              "tag": os.environ["TAG"],
+              "commit": os.environ["GITHUB_SHA"],
+              **common,
+          }
+          manifest = {
+              "schemaVersion": 1,
+              "available": True,
+              "channel": "sideload",
+              "sourceURL": "https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Distribution/source.json",
+              "releaseNotes": notes,
+              **common,
+          }
+          Path("release-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+          Path("release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          PY
+
+          python3 -m json.tool release-metadata.json >/dev/null
+          python3 -m json.tool release.json >/dev/null
+
+      - name: Create immutable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            Ahoge.ipa \
+            Ahoge.ipa.sha256 \
+            release-metadata.json \
+            release.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Ahoge $VERSION" \
+            --notes-file release-notes.md
+
+      - name: Update SideStore source and latest manifest on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          rm -rf /tmp/ahoge-main
+          git worktree add --detach /tmp/ahoge-main origin/main
+
+          python3 Scripts/update_distribution.py \
+            --source /tmp/ahoge-main/Distribution/source.json \
+            --latest /tmp/ahoge-main/Distribution/latest.json \
+            --metadata release-metadata.json \
+            --manifest release.json \
+            --notes release-notes.md
+
+          python3 Scripts/validate_distribution.py \
+            /tmp/ahoge-main/Distribution/source.json \
+            /tmp/ahoge-main/Distribution/latest.json
+
+          git -C /tmp/ahoge-main config user.name "github-actions[bot]"
+          git -C /tmp/ahoge-main config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C /tmp/ahoge-main add Distribution/source.json Distribution/latest.json
+          git -C /tmp/ahoge-main commit -m "chore(distribution): publish $TAG"
+          git -C /tmp/ahoge-main push origin HEAD:main

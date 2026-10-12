@@ -1,42 +1,90 @@
 # Ahoge
 
-Ahoge is a native iOS manga reader built with Swift and SwiftUI. It supports repository-driven manga sources without bundling remote web sources into the application.
+Ahoge is a native Swift/SwiftUI iOS manga reader. The app and its remotely maintained manga source definitions are intentionally distributed separately.
 
-## What is included
+## Install Ahoge
 
-- Native iOS library and manga reader
-- Chapter reading and progress tracking
-- Downloads and import infrastructure
-- Local Files support
-- Source repository installation, refresh, and persistence
-- Reusable source runtime engines used by installed source definitions
-- GitHub Actions builds for simulator validation and unsigned iPhone IPA artifacts
+### Recommended: SideStore
 
-## Source repositories
+SideStore is the primary non-App-Store distribution path.
 
-A fresh Ahoge installation does not include remote web manga sources. Remote source definitions are installed separately through the Source Repositories UI.
+1. Install and configure SideStore once.
+2. Add the Ahoge source:
 
-Maintained source definitions live in the independent [`QuackyPROG/ahoge-extension`](https://github.com/QuackyPROG/ahoge-extension) repository.
+   ```text
+   https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Distribution/source.json
+   ```
 
-Install the maintained repository with:
+3. Install Ahoge from that source.
+4. Future Ahoge versions appear as updates in SideStore.
+
+SideStore source deep link:
+
+```text
+sidestore://source?url=https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Distribution/source.json
+```
+
+SideStore handles periodic re-signing/refreshing; it does not remove Apple's free-development signing limits. With a free Apple Account, sideloaded development-signed apps normally need refreshing before their 7-day signing period expires.
+
+### Alternative: AltStore Classic
+
+Use the same source URL in AltStore Classic:
+
+```text
+https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Distribution/source.json
+```
+
+AltStore deep link:
+
+```text
+altstore://source?url=https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Distribution/source.json
+```
+
+AltStore Classic generally relies on AltServer on a Mac or PC for signing and refreshes.
+
+### Direct IPA
+
+Every versioned GitHub Release contains `Ahoge.ipa`, its SHA-256 checksum, and machine-readable release metadata.
+
+Latest release page: <https://github.com/QuackyPROG/ahoge/releases/latest>
+
+Stable latest-IPA URL after the first release:
+
+```text
+https://github.com/QuackyPROG/ahoge/releases/latest/download/Ahoge.ipa
+```
+
+Direct IPA installation is a fallback for Sideloadly, SideStore manual install, AltStore manual install, and other compatible signing tools. It is not the recommended update mechanism.
+
+## Manga source repositories
+
+A fresh Ahoge installation does not bundle remote web manga sources. The maintained source definitions live in the independent [`QuackyPROG/ahoge-extension`](https://github.com/QuackyPROG/ahoge-extension) repository.
+
+Install the maintained manga-source repository inside Ahoge with:
 
 ```text
 https://raw.githubusercontent.com/QuackyPROG/ahoge-extension/main/index.json
 ```
 
-Adding or updating a source that uses an engine already supported by Ahoge does not require rebuilding the application. A new Ahoge release is needed when application behavior, the importer/schema contract, or a native runtime engine changes.
+A source-definition update that uses an engine already shipped in Ahoge does not require a new Ahoge IPA. A native Ahoge release is needed when application behavior, the source schema/import contract, or a native runtime engine changes.
 
-## Development
+## Releases
+
+Production releases are tag-driven. A tag matching `vMAJOR.MINOR.PATCH` builds an unsigned device IPA, verifies the bundle/version metadata, generates SHA-256 and release manifests, creates an immutable GitHub Release, and updates the SideStore/AltStore source automatically.
+
+Normal pushes and pull requests run CI but do not publish production releases. See [`Docs/RELEASING.md`](Docs/RELEASING.md) and [`Docs/DISTRIBUTION.md`](Docs/DISTRIBUTION.md).
+
+## Developer build
 
 Open `Ahoge.xcodeproj` in Xcode and build the `Ahoge` scheme. The deployment target and toolchain requirements are defined by the Xcode project.
 
-GitHub Actions validates simulator builds on pushes and pull requests. The main branch also produces an unsigned device build packaged as `Ahoge-iOS-unsigned.ipa` for sideloading workflows that provide their own signing/install mechanism.
+The production bundle identifier is `com.quackyprog.ahoge`. Do not change it casually: iOS uses the application identity to associate an update with the existing app container and its persisted data.
 
 ## Architecture
 
-Ahoge owns application code, persistence, networking, source runtime interfaces, reusable native source engines, and the source repository importer. It intentionally does not own remotely maintained source manifests or a bundled extension index.
+Ahoge owns application code, persistence, networking, source runtime interfaces, reusable native source engines, and the source repository importer. `ahoge-extension` owns remotely maintained source definitions. The repositories remain independently maintainable.
 
-`Local Files` remains built-in because it is application functionality, not a remote website extension.
+`Local Files` remains built in because it is application functionality rather than a remote website extension.
 
 ## License and attribution
 
