@@ -196,6 +196,14 @@ final class RuntimeSourceRepository: SourceRepository, SourceCatalogRuntime {
                         requestsPerSecond: max(context.requestPolicy.rateLimit, 1),
                         latestSortOrder: descriptor.overrides["latestSortOrder"] ?? "desc"
                     )
+                case "mangadex":
+                    runtimes[source.id] = MangaDexSourceEngine(
+                        source: source,
+                        baseURL: context.baseURL,
+                        apiURL: apiURL,
+                        translatedLanguage: descriptor.overrides["translatedLanguage"] ?? descriptor.languageCode ?? "en",
+                        requestsPerSecond: max(context.requestPolicy.rateLimit, 1)
+                    )
                 default:
                     continue
                 }
