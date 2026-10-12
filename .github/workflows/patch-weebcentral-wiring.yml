@@ -1,0 +1,28 @@
+name: Patch WeebCentral Runtime Wiring
+
+on:
+  push:
+    branches:
+      - feature/weebcentral-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/weebcentral-runtime
+          fetch-depth: 0
+      - name: Wire fixed WeebCentral adapter
+        run: |
+          python3 -c 'from pathlib import Path; p=Path("Ahoge/Data/RuntimeSourceRepository.swift"); t=p.read_text(); old="                case \"mangadex\":\n                    runtimes[source.id] = MangaDexSourceEngine(\n                        source: source,\n                        baseURL: context.baseURL,\n                        apiURL: apiURL,\n                        translatedLanguage: descriptor.overrides[\"translatedLanguage\"] ?? descriptor.languageCode ?? \"en\",\n                        requestsPerSecond: max(context.requestPolicy.rateLimit, 1)\n                    )\n"; new=old+"                case \"weebcentral\":\n                    runtimes[source.id] = WeebCentralSourceEngine(\n                        source: source,\n                        baseURL: context.baseURL,\n                        requestsPerSecond: max(context.requestPolicy.rateLimit, 1)\n                    )\n"; assert old in t or "case \"weebcentral\"" in t, "runtime dispatch anchor changed"; p.write_text(t.replace(old,new,1) if "case \"weebcentral\"" not in t else t)'
+          python3 -c 'from pathlib import Path; p=Path("Ahoge/Data/SourceRepoImporter.swift"); t=p.read_text(); old="[\"ezmanhwa\", \"heancms\", \"mangadex\"].contains(overrides[\"adapter\"] ?? \"\")"; new="[\"ezmanhwa\", \"heancms\", \"mangadex\", \"weebcentral\"].contains(overrides[\"adapter\"] ?? \"\")"; assert old in t or new in t, "API adapter allow-list anchor changed"; p.write_text(t.replace(old,new,1))'
+          git rm .github/workflows/patch-weebcentral-wiring.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Ahoge/Data/RuntimeSourceRepository.swift Ahoge/Data/SourceRepoImporter.swift
+          git commit -m "Wire WeebCentral into fixed API adapter dispatch"
+          git push origin HEAD:feature/weebcentral-runtime
