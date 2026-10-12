@@ -1,11 +1,11 @@
-name: Migrate Ahoge from reference repo
+name: Migrate Ahoge Application Content
 
 on:
-  workflow_dispatch:
   push:
-    branches: ["main", "migration/clean-ahoge"]
+    branches: ["main"]
     paths:
       - ".github/workflows/migrate-ahoge.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,7 +14,7 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout clean destination
+      - name: Checkout migration branch
         uses: actions/checkout@v4
         with:
           ref: migration/clean-ahoge
@@ -27,26 +27,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           rm -rf Ahoge Ahoge.xcodeproj
           cp -R "/tmp/mihon-ios/Mihon IOS" Ahoge
-
           mkdir -p Ahoge.xcodeproj/project.xcworkspace
           cp "/tmp/mihon-ios/Mihon IOS.xcodeproj/project.pbxproj" Ahoge.xcodeproj/project.pbxproj
           cp "/tmp/mihon-ios/Mihon IOS.xcodeproj/project.xcworkspace/contents.xcworkspacedata" Ahoge.xcodeproj/project.xcworkspace/contents.xcworkspacedata
-
           cp /tmp/mihon-ios/LICENSE LICENSE
           cp /tmp/mihon-ios/.gitignore .gitignore
           cp /tmp/mihon-ios/.editorconfig .editorconfig
 
-          # Remote source manifests, old docs, build logs, tools, xuserdata, and
-          # other repository-level experimental artifacts are deliberately not copied.
-
-          # This file is a hardcoded remote-source catalog. The runtime repository
-          # already uses Local Files as the only built-in source, so it must not ship.
+          # Remote source manifests and repository-level experimental artifacts are not copied.
           rm -f Ahoge/Data/Sources/QuackyBuiltInSources.swift
 
-          # Remove source-engine implementations only when they are provably unreferenced.
           remove_if_unreferenced() {
             local file="$1"
             local symbol="$2"
@@ -57,10 +49,9 @@ jobs:
           }
           remove_if_unreferenced Ahoge/Data/Sources/AsuraAPISourceEngine.swift AsuraAPISourceEngine
           remove_if_unreferenced Ahoge/Data/Sources/AsuraHTMLSourceEngine.swift AsuraHTMLSourceEngine
-
           mv Ahoge/Mihon_IOSApp.swift Ahoge/AhogeApp.swift
 
-      - name: Rename product and remove stale signing identity
+      - name: Rename Ahoge product safely
         shell: python
         run: |
           from pathlib import Path
@@ -82,11 +73,8 @@ jobs:
           pbx.write_text(text)
 
           app = Path("Ahoge/AhogeApp.swift")
-          text = app.read_text().replace('Mihon_IOSApp', 'AhogeApp').replace('//  Mihon IOS', '//  Ahoge')
-          app.write_text(text)
+          app.write_text(app.read_text().replace('Mihon_IOSApp', 'AhogeApp').replace('//  Mihon IOS', '//  Ahoge'))
 
-          # Update obvious product-facing text without renaming internal persistence
-          # symbols/types that may encode compatibility assumptions.
           for path in Path('Ahoge').rglob('*.swift'):
               text = path.read_text()
               updated = (text
@@ -97,111 +85,26 @@ jobs:
               if updated != text:
                   path.write_text(updated)
 
-      - name: Remove hardcoded Asura fallback endpoints
+      - name: Make source manifests authoritative
         shell: python
         run: |
           from pathlib import Path
 
-          path = Path('Ahoge/Data/RuntimeSourceRepository.swift')
-          text = path.read_text()
+          runtime = Path('Ahoge/Data/RuntimeSourceRepository.swift')
+          text = runtime.read_text()
           old = '''            case .asuraScans:\n                let baseURL = descriptor.context?.baseURL ?? descriptor.baseURL ?? "https://asurascans.com"\n                let apiURL = descriptor.overrides["apiURL"] ?? "https://api.asurascans.com/api"\n                runtimes[source.id] = AsuraScans2026SourceEngine(\n                    source: source,\n                    baseURL: baseURL,\n                    apiURL: apiURL\n                )\n'''
           new = '''            case .asuraScans:\n                guard\n                    let context = descriptor.context,\n                    let apiURL = descriptor.overrides["apiURL"],\n                    !context.baseURL.isEmpty,\n                    !apiURL.isEmpty\n                else { continue }\n                runtimes[source.id] = AsuraScans2026SourceEngine(\n                    source: source,\n                    baseURL: context.baseURL,\n                    apiURL: apiURL\n                )\n'''
           if old not in text:
               raise SystemExit('Expected Asura fallback block not found; refusing unsafe migration')
-          path.write_text(text.replace(old, new))
+          runtime.write_text(text.replace(old, new))
 
-      - name: Install Ahoge CI workflows
-        shell: bash
-        run: |
-          cat > .github/workflows/ci.yml <<'YAML'
-          name: Ahoge iOS CI
-
-          on:
-            pull_request:
-              branches: ["**"]
-            push:
-              branches: ["main"]
-            workflow_dispatch:
-
-          jobs:
-            build-and-test:
-              name: Build and test
-              runs-on: macos-latest
-              timeout-minutes: 30
-              env:
-                PROJECT_PATH: Ahoge.xcodeproj
-                PROJECT_FILE: Ahoge.xcodeproj/project.pbxproj
-                SCHEME: Ahoge
-                BUILD_DESTINATION: generic/platform=iOS Simulator
-                TEST_DESTINATION: platform=iOS Simulator,OS=latest,name=iPhone 16
-                DERIVED_DATA_PATH: .derivedData
-              steps:
-                - name: Checkout
-                  uses: actions/checkout@v4
-                - name: Show Xcode version
-                  run: xcodebuild -version
-                - name: Resolve package dependencies
-                  run: xcodebuild -resolvePackageDependencies -project "$PROJECT_PATH" -scheme "$SCHEME"
-                - name: Build app for iOS Simulator
-                  run: |
-                    set -eo pipefail
-                    xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -destination "$BUILD_DESTINATION" -derivedDataPath "$DERIVED_DATA_PATH" -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
-                - name: Run XCTest bundles when present
-                  run: |
-                    set -eo pipefail
-                    if grep -Eq 'com\.apple\.product-type\.bundle\.(unit-test|ui-testing)' "$PROJECT_FILE"; then
-                      xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -destination "$TEST_DESTINATION" -derivedDataPath "$DERIVED_DATA_PATH" -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO test
-                    else
-                      echo "No XCTest target found. Skipping test step."
-                    fi
-          YAML
-
-          cat > .github/workflows/build-ipa.yml <<'YAML'
-          name: Build Ahoge IPA
-
-          on:
-            workflow_dispatch:
-            push:
-              branches: ["main"]
-
-          jobs:
-            build-ipa:
-              name: Build unsigned IPA
-              runs-on: macos-latest
-              timeout-minutes: 30
-              env:
-                PROJECT_PATH: Ahoge.xcodeproj
-                SCHEME: Ahoge
-                DERIVED_DATA_PATH: build
-              steps:
-                - name: Checkout repository
-                  uses: actions/checkout@v4
-                - name: Show Xcode version
-                  run: xcodebuild -version
-                - name: Resolve Swift package dependencies
-                  run: xcodebuild -resolvePackageDependencies -project "$PROJECT_PATH" -scheme "$SCHEME"
-                - name: Build unsigned iPhone app
-                  run: |
-                    set -eo pipefail
-                    xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -configuration Release -sdk iphoneos -destination "generic/platform=iOS" -derivedDataPath "$DERIVED_DATA_PATH" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
-                - name: Package unsigned IPA
-                  run: |
-                    set -eo pipefail
-                    APP_PATH=$(find "$DERIVED_DATA_PATH/Build/Products/Release-iphoneos" -maxdepth 1 -type d -name "*.app" -print -quit)
-                    test -n "$APP_PATH" || { echo "ERROR: No .app bundle was produced."; exit 1; }
-                    rm -rf Payload Ahoge-iOS-unsigned.ipa
-                    mkdir -p Payload
-                    cp -R "$APP_PATH" Payload/
-                    zip -qry Ahoge-iOS-unsigned.ipa Payload
-                    ls -lh Ahoge-iOS-unsigned.ipa
-                - name: Upload IPA artifact
-                  uses: actions/upload-artifact@v4
-                  with:
-                    name: Ahoge-iOS-unsigned
-                    path: Ahoge-iOS-unsigned.ipa
-                    if-no-files-found: error
-                    retention-days: 14
-          YAML
+          importer = Path('Ahoge/Data/SourceRepoImporter.swift')
+          text = importer.read_text()
+          old = '''        "asurascans": OverrideProfile(\n            overrides: ["apiURL": "https://api.asurascans.com/api"],\n            additionalFlags: ["source-asura", "asura-2026"]\n        ),'''
+          new = '''        "asurascans": OverrideProfile(\n            overrides: [:],\n            additionalFlags: ["source-asura", "asura-2026"]\n        ),'''
+          if old not in text:
+              raise SystemExit('Expected legacy Asura classifier override not found')
+          importer.write_text(text.replace(old, new))
 
       - name: Record migration audit
         shell: bash
@@ -212,58 +115,65 @@ jobs:
 
           Baseline: `QuackyPROG/mihon-ios` `main`.
 
-          ## Kept
-          - `Mihon IOS/` application source, copied as `Ahoge/`
-          - Xcode project definition and workspace metadata, copied as `Ahoge.xcodeproj`
+          ## Keep
+          - `Mihon IOS/` application source, migrated as `Ahoge/`
+          - Xcode project definition and workspace metadata, migrated as `Ahoge.xcodeproj`
           - application assets
-          - library, reader, downloads/import, local files, persistence, networking, repository importer, source runtime contracts, and runtime engines
+          - library, reader, downloads/import, local files, persistence, networking, source repository importer, runtime contracts, and referenced runtime engines
           - Apache-2.0 `LICENSE`
-          - repository formatting/ignore configuration
+          - required repository formatting/ignore configuration
 
           ## Moved to `ahoge-extension`
-          - top-level `sources/index.json`
-          - per-source JSON manifests for Asura Scans, QiScans, Omega Scans, and Manganato
-          - remotely maintainable URLs/API configuration
+          - source index
+          - Asura Scans, QiScans, Omega Scans, and Manganato manifests
+          - remotely maintained base/API URLs and source metadata
 
           ## Intentionally excluded
           - old Git history
           - `build_log*.txt`
-          - old repository docs/reports and publish-readiness artifacts
+          - stale audit/publish-readiness documents
           - `Tools/`
-          - `Mihon IOS.xcodeproj/xcuserdata/`
+          - Xcode `xcuserdata/`
           - top-level `sources/` manifests
           - hardcoded `QuackyBuiltInSources.swift`
-          - unreferenced legacy source engines when dependency checks proved no references
+          - unreferenced legacy source engines only when dependency checks prove no Swift references
 
-          ## Manual-review / retained compatibility code
-          - legacy source-family enum cases and classifier scaffolding not used by the current maintained manifests
-          - internal identifiers containing `Mihon` where renaming could affect persistence/compatibility rather than visible branding
-          - runtime engines that are still referenced by compiled code even if not used by the initial extension repository
+          ## Retained for compatibility / manual review
+          - internal `Mihon` identifiers that are not user-visible and may affect persistence/import compatibility
+          - legacy source-family classifier scaffolding
+          - runtime engines still referenced by compiled code
+
+          ## Licensing
+          The upstream repository is Apache License 2.0. `LICENSE` is preserved. No upstream `NOTICE` file exists in the migration baseline, so no NOTICE file was invented.
           MD
 
-      - name: Remove one-shot workflow and verify source separation
+      - name: Verify migration invariants
         shell: bash
         run: |
-          rm -f .github/workflows/migrate-ahoge.yml
+          set -euo pipefail
+          test -e LICENSE
+          test -e Ahoge/AhogeApp.swift
+          test ! -e Ahoge/Mihon_IOSApp.swift
+          test ! -e Ahoge/Data/Sources/QuackyBuiltInSources.swift
           test ! -e sources/index.json
           test ! -e sources/asurascans.json
           test ! -e sources/qiscans.json
           test ! -e sources/omegascans.json
           test ! -e sources/manganato.json
-          test ! -e Ahoge/Data/Sources/QuackyBuiltInSources.swift
           ! grep -R -n --include='*.swift' 'https://raw.githubusercontent.com/QuackyPROG/ahoge-extension' Ahoge
+          ! grep -R -n --include='*.swift' 'https://api.asurascans.com/api' Ahoge/Data/RuntimeSourceRepository.swift Ahoge/Data/SourceRepoImporter.swift
           grep -q 'path = Ahoge;' Ahoge.xcodeproj/project.pbxproj
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.quackyprog.ahoge;' Ahoge.xcodeproj/project.pbxproj
 
-      - name: Commit migrated tree
+      - name: Commit migrated application content
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "QuackyPROG"
           git config user.email "206159932+QuackyPROG@users.noreply.github.com"
-          git add -A
+          git add -A -- . ':!.github/workflows'
           if git diff --cached --quiet; then
-            echo "No migration changes to commit."
+            echo "No application-content migration changes to commit."
             exit 0
           fi
           git commit -m "refactor: migrate clean Ahoge application"
