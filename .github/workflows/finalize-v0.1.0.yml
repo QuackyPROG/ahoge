@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$ROOT_SHA"
-          test -z "$(git rev-list --parents -n 1 HEAD | cut -d' ' -f2-)" || {
+          test "$(git rev-list --parents -n 1 HEAD | wc -w | tr -d ' ')" = "1" || {
             echo "ERROR: release root unexpectedly has a parent" >&2
             exit 1
           }
