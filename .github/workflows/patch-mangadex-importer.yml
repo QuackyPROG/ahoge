@@ -1,0 +1,27 @@
+name: Patch MangaDex Importer
+
+on:
+  push:
+    branches:
+      - feature/mangadex-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mangadex-runtime
+          fetch-depth: 0
+      - name: Mark MangaDex adapter runnable
+        run: |
+          python3 -c 'from pathlib import Path; p=Path("Ahoge/Data/SourceRepoImporter.swift"); t=p.read_text(); old="[\"ezmanhwa\", \"heancms\"].contains(overrides[\"adapter\"] ?? \"\")"; new="[\"ezmanhwa\", \"heancms\", \"mangadex\"].contains(overrides[\"adapter\"] ?? \"\")"; assert old in t or new in t, "API adapter allow-list anchor changed"; p.write_text(t.replace(old, new, 1))'
+          git rm .github/workflows/patch-mangadex-importer.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Ahoge/Data/SourceRepoImporter.swift
+          git commit -m "Mark MangaDex API adapter runtime-live"
+          git push origin HEAD:feature/mangadex-runtime
