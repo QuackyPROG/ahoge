@@ -7,10 +7,9 @@ import Foundation
 
 /// Reusable native runtime for the common Madara/WordPress manga theme surface.
 ///
-/// This intentionally implements a constrained subset of the upstream family.
-/// Source-specific routing differences are configuration, but executable parser
-/// logic remains compiled into Ahoge. Chapter-protector crypto, custom auth,
-/// arbitrary selectors, and site scripts are not remotely configurable here.
+/// This is deliberately narrower than the full Android multisrc family. Remote
+/// manifests may choose a small set of routing/date options, but they cannot
+/// provide executable selectors, scripts, crypto, or authentication logic.
 final class MadaraSourceEngine: SourceRuntime {
     enum ChapterMode: String {
         case mangaPage
@@ -67,35 +66,26 @@ final class MadaraSourceEngine: SourceRuntime {
 
     func searchManga(_ request: SourceSearchRequest) async throws -> [Manga] {
         let query = request.query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty {
-            return try await latestManga(page: request.page)
-        }
+        if query.isEmpty { return try await latestManga(page: request.page) }
         return try await browse(page: request.page, query: query, sortKey: nil)
     }
 
     func mangaDetails(mangaIDOrURL: String) async throws -> SourceMangaDetails {
         let slug = mangaSlug(from: mangaIDOrURL)
         guard !slug.isEmpty else { throw RuntimeSourceError.mangaNotFound }
-
         let html = try await getHTML(try mangaURL(slug: slug), ttl: 60 * 30)
-        let title = detailTitle(in: html) ?? SourceEngineUtilities.titleFromSlug(slug)
-        let author = detailAuthor(in: html) ?? "Unknown"
-        let description = detailDescription(in: html)
-        let coverURL = detailCover(in: html)
-        let genres = detailGenres(in: html)
-        let status = detailStatus(in: html)
 
         return SourceMangaDetails(
             manga: Manga(
                 id: mangaID(slug),
                 sourceID: source.id,
-                title: title,
-                author: author,
-                summary: description,
-                genres: genres,
+                title: detailTitle(in: html) ?? SourceEngineUtilities.titleFromSlug(slug),
+                author: detailAuthor(in: html) ?? "Unknown",
+                summary: detailDescription(in: html),
+                genres: detailGenres(in: html),
                 coverHexes: SourceEngineUtilities.palette(for: slug),
-                coverURL: coverURL,
-                statusText: status
+                coverURL: detailCover(in: html),
+                statusText: detailStatus(in: html)
             )
         )
     }
@@ -106,22 +96,17 @@ final class MadaraSourceEngine: SourceRuntime {
 
         let detailURL = try mangaURL(slug: slug)
         let detailHTML = try await getHTML(detailURL, ttl: 60 * 15)
-        rejectProtectedChapterMarkup(detailHTML)
+        try rejectProtectedChapterMarkup(detailHTML)
 
         let chapterHTML: String
         switch chapterMode {
         case .mangaPage:
             chapterHTML = detailHTML
         case .adminAjax:
-            guard let postID = postID(in: detailHTML) else {
-                throw RuntimeSourceError.invalidResponse
-            }
+            guard let postID = postID(in: detailHTML) else { throw RuntimeSourceError.invalidResponse }
             chapterHTML = try await postHTML(
                 try websiteURL("/wp-admin/admin-ajax.php"),
-                fields: [
-                    ("action", "manga_get_chapters"),
-                    ("manga", postID)
-                ],
+                fields: [("action", "manga_get_chapters"), ("manga", postID)],
                 referer: detailURL.absoluteString,
                 ttl: 60 * 15
             )
@@ -134,55 +119,49 @@ final class MadaraSourceEngine: SourceRuntime {
             )
         }
 
-        rejectProtectedChapterMarkup(chapterHTML)
+        try rejectProtectedChapterMarkup(chapterHTML)
         let chapters = parseChapters(chapterHTML, mangaID: manga.id)
         guard !chapters.isEmpty else { throw RuntimeSourceError.parserEmpty }
-        return SourceChapterDetails(chapters: chapters.sorted { lhs, rhs in
-            if lhs.number == rhs.number { return lhs.releaseDate > rhs.releaseDate }
-            return lhs.number > rhs.number
-        })
+        return SourceChapterDetails(
+            chapters: chapters.sorted {
+                $0.number == $1.number ? $0.releaseDate > $1.releaseDate : $0.number > $1.number
+            }
+        )
     }
 
     func pages(for chapter: Chapter) async throws -> SourcePageAsset {
-        guard let path = chapterPath(from: chapter.id) else {
-            throw RuntimeSourceError.chapterPagesMissing
-        }
+        guard let path = chapterPath(from: chapter.id) else { throw RuntimeSourceError.chapterPagesMissing }
         let chapterURL = try resolve(path: path)
         let html = try await getHTML(chapterURL, ttl: 60 * 30)
-        rejectProtectedChapterMarkup(html)
+        try rejectProtectedChapterMarkup(html)
 
         var imageURLs: [String] = []
-
         let pageBlocks = SourceEngineUtilities.allMatchesWithGroups(
             in: html,
             pattern: #"<(?:div|li)[^>]+class=[\"'][^\"']*(?:page-break|blocks-gallery-item)[^\"']*[\"'][^>]*>([\s\S]*?)</(?:div|li)>"#,
             groupCount: 1
-        )
-        for block in pageBlocks.compactMap({ $0.first }) {
-            if let image = imageURL(fromHTML: block, relativeTo: chapterURL) {
-                imageURLs.append(image)
-            }
+        ).compactMap { $0.first }
+
+        for block in pageBlocks {
+            if let image = imageURL(fromHTML: block, relativeTo: chapterURL) { imageURLs.append(image) }
         }
 
         if imageURLs.isEmpty {
-            let scope = readingContentScope(in: html)
             let tags = SourceEngineUtilities.allMatchesWithGroups(
-                in: scope,
+                in: readingContentScope(in: html),
                 pattern: #"(<img\b[^>]*>)"#,
                 groupCount: 1
             ).compactMap { $0.first }
-            imageURLs = tags.compactMap { tag in
-                imageURL(fromTag: tag, relativeTo: chapterURL)
-            }
-            .filter(isLikelyChapterImage)
+            imageURLs = tags.compactMap { imageURL(fromTag: $0, relativeTo: chapterURL) }
+                .filter { isLikelyChapterImage($0) }
         }
 
         var seen = Set<String>()
         let unique = imageURLs
             .map { SourceEngineUtilities.decodeHTML($0).replacingOccurrences(of: "\\/", with: "/") }
             .filter { !$0.isEmpty && seen.insert($0).inserted }
-
         guard !unique.isEmpty else { throw RuntimeSourceError.parserEmpty }
+
         let pages = unique.enumerated().map { index, imageURL in
             ReaderPage(
                 id: "\(chapter.id)#page-\(index + 1)",
@@ -200,22 +179,20 @@ final class MadaraSourceEngine: SourceRuntime {
 
     func genreTags() async throws -> [GenreTag] {
         let html = try await getHTML(try websiteURL("/\(mangaPath)/"), ttl: 60 * 60 * 6)
+        let escapedGenre = NSRegularExpression.escapedPattern(for: genrePath)
         let links = SourceEngineUtilities.allMatchesWithGroups(
             in: html,
-            pattern: #"<a[^>]+href=[\"']([^\"']*/\#(genrePath)/[^\"']+)[\"'][^>]*>([\s\S]*?)</a>"#
-                .replacingOccurrences(of: "#(genrePath)", with: NSRegularExpression.escapedPattern(for: genrePath)),
+            pattern: #"<a[^>]+href=[\"']([^\"']*/\#(escapedGenre)/[^\"']+)[\"'][^>]*>([\s\S]*?)</a>"#,
             groupCount: 2
         )
 
         var seen = Set<String>()
         return links.compactMap { groups -> GenreTag? in
             guard groups.count == 2 else { return nil }
-            let href = groups[0]
             let name = SourceEngineUtilities.stripHTML(groups[1]).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { return nil }
-            let path = URL(string: absoluteURL(href, relativeTo: nil))?.path ?? href
+            let path = URL(string: absoluteURL(groups[0], relativeTo: nil))?.path ?? groups[0]
             let slug = path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).components(separatedBy: "/").last ?? ""
-            guard !slug.isEmpty, seen.insert(slug).inserted else { return nil }
+            guard !name.isEmpty, !slug.isEmpty, seen.insert(slug).inserted else { return nil }
             return GenreTag(name: name, slug: slug)
         }
     }
@@ -234,14 +211,11 @@ final class MadaraSourceEngine: SourceRuntime {
             ("vars[post_status]", "publish"),
             ("vars[manga_archives_item_layout]", "big_thumbnail")
         ]
-
         if filterNonMangaItems {
             fields.append(("vars[meta_query][0][key]", "_wp_manga_chapter_type"))
             fields.append(("vars[meta_query][0][value]", "manga"))
         }
-        if let query, !query.isEmpty {
-            fields.append(("vars[s]", query))
-        }
+        if let query, !query.isEmpty { fields.append(("vars[s]", query)) }
         if let sortKey {
             fields.append(("vars[orderby]", "meta_value_num"))
             fields.append(("vars[meta_key]", sortKey))
@@ -265,56 +239,46 @@ final class MadaraSourceEngine: SourceRuntime {
             pattern: #"<[^>]+class=[\"'][^\"']*post-title[^\"']*[\"'][^>]*>[\s\S]*?<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>([\s\S]*?)</a>"#,
             groupCount: 2
         )
-
         var seen = Set<String>()
-        var result: [Manga] = []
-        for group in groups {
-            guard group.count == 2 else { continue }
-            let href = SourceEngineUtilities.decodeHTML(group[0])
-            guard let slug = mangaSlug(fromHref: href), seen.insert(slug).inserted else { continue }
+        return groups.compactMap { group -> Manga? in
+            guard group.count == 2,
+                  let slug = mangaSlug(fromHref: SourceEngineUtilities.decodeHTML(group[0])),
+                  seen.insert(slug).inserted else { return nil }
             let title = SourceEngineUtilities.stripHTML(group[1]).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !title.isEmpty else { continue }
-
-            result.append(
-                Manga(
-                    id: mangaID(slug),
-                    sourceID: source.id,
-                    title: title,
-                    author: "Unknown",
-                    summary: "",
-                    genres: [],
-                    coverHexes: SourceEngineUtilities.palette(for: slug),
-                    coverURL: nil,
-                    statusText: "Unknown"
-                )
+            guard !title.isEmpty else { return nil }
+            return Manga(
+                id: mangaID(slug),
+                sourceID: source.id,
+                title: title,
+                author: "Unknown",
+                summary: "",
+                genres: [],
+                coverHexes: SourceEngineUtilities.palette(for: slug),
+                coverURL: nil,
+                statusText: "Unknown"
             )
         }
-        return result
     }
 
     // MARK: - Detail parsing
 
     private func detailTitle(in html: String) -> String? {
-        let patterns = [
+        firstMatch(html, patterns: [
             #"<div[^>]+class=[\"'][^\"']*post-title[^\"']*[\"'][^>]*>[\s\S]*?<h[13][^>]*>([\s\S]*?)</h[13]>"#,
             #"<[^>]+id=[\"']manga-title[\"'][^>]*>[\s\S]*?<h1[^>]*>([\s\S]*?)</h1>"#,
             #"<meta[^>]+property=[\"']og:title[\"'][^>]+content=[\"']([^\"']+)[\"']"#
-        ]
-        return firstMatch(html, patterns: patterns)
-            .map(SourceEngineUtilities.stripHTML)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .flatMap { $0.isEmpty ? nil : $0 }
+        ])
+        .map(SourceEngineUtilities.stripHTML)
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .flatMap { $0.isEmpty ? nil : $0 }
     }
 
     private func detailAuthor(in html: String) -> String? {
-        let block = firstMatch(
-            html,
-            patterns: [
-                #"<div[^>]+class=[\"'][^\"']*author-content[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#,
-                #"<div[^>]+class=[\"'][^\"']*manga-authors[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#
-            ]
-        )
-        guard let block else { return nil }
+        guard let block = firstMatch(html, patterns: [
+            #"<div[^>]+class=[\"'][^\"']*author-content[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#,
+            #"<div[^>]+class=[\"'][^\"']*manga-authors[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#
+        ]) else { return nil }
+
         let names = SourceEngineUtilities.allMatchesWithGroups(
             in: block,
             pattern: #"<a[^>]*>([\s\S]*?)</a>"#,
@@ -323,35 +287,31 @@ final class MadaraSourceEngine: SourceRuntime {
             .map(SourceEngineUtilities.stripHTML)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !$0.localizedCaseInsensitiveContains("updating") }
-        let unique = Array(NSOrderedSet(array: names)) as? [String] ?? names
+        var seen = Set<String>()
+        let unique = names.filter { seen.insert($0.lowercased()).inserted }
         return unique.isEmpty ? nil : unique.joined(separator: ", ")
     }
 
     private func detailDescription(in html: String) -> String {
-        let value = firstMatch(
-            html,
-            patterns: [
-                #"<div[^>]+class=[\"'][^\"']*description-summary[^\"']*[\"'][^>]*>[\s\S]*?<div[^>]+class=[\"'][^\"']*summary__content[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#,
-                #"<div[^>]+class=[\"'][^\"']*manga-excerpt[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#,
-                #"<meta[^>]+name=[\"']description[\"'][^>]+content=[\"']([^\"']+)[\"']"#
-            ]
-        ) ?? ""
-        return SourceEngineUtilities.stripHTML(value)
+        let raw = firstMatch(html, patterns: [
+            #"<div[^>]+class=[\"'][^\"']*description-summary[^\"']*[\"'][^>]*>[\s\S]*?<div[^>]+class=[\"'][^\"']*summary__content[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#,
+            #"<div[^>]+class=[\"'][^\"']*manga-excerpt[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#,
+            #"<meta[^>]+name=[\"']description[\"'][^>]+content=[\"']([^\"']+)[\"']"#
+        ]) ?? ""
+        return SourceEngineUtilities.stripHTML(raw)
     }
 
     private func detailCover(in html: String) -> String? {
-        guard let block = firstMatch(
-            html,
-            patterns: [#"<div[^>]+class=[\"'][^\"']*summary_image[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#]
-        ) else { return nil }
+        guard let block = firstMatch(html, patterns: [
+            #"<div[^>]+class=[\"'][^\"']*summary_image[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#
+        ]) else { return nil }
         return imageURL(fromHTML: block, relativeTo: URL(string: baseURL))
     }
 
     private func detailGenres(in html: String) -> [String] {
-        guard let block = firstMatch(
-            html,
-            patterns: [#"<div[^>]+class=[\"'][^\"']*genres-content[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#]
-        ) else { return [] }
+        guard let block = firstMatch(html, patterns: [
+            #"<div[^>]+class=[\"'][^\"']*genres-content[^\"']*[\"'][^>]*>([\s\S]*?)</div>"#
+        ]) else { return [] }
         let values = SourceEngineUtilities.allMatchesWithGroups(
             in: block,
             pattern: #"<a[^>]*>([\s\S]*?)</a>"#,
@@ -364,13 +324,10 @@ final class MadaraSourceEngine: SourceRuntime {
     }
 
     private func detailStatus(in html: String) -> String {
-        let patterns = [
+        let raw = firstMatch(html, patterns: [
             #"(?i)>\s*Status\s*</[^>]+>[\s\S]{0,300}?<[^>]+class=[\"'][^\"']*summary-content[^\"']*[\"'][^>]*>([\s\S]*?)</[^>]+>"#,
             #"(?i)>\s*Status\s*</[^>]+>[\s\S]{0,250}?<[^>]+>([^<]+)</[^>]+>"#
-        ]
-        let raw = firstMatch(html, patterns: patterns)
-            .map(SourceEngineUtilities.stripHTML)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        ]).map(SourceEngineUtilities.stripHTML)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if raw.localizedCaseInsensitiveContains("complete") { return "Completed" }
         if raw.localizedCaseInsensitiveContains("ongoing") || raw.localizedCaseInsensitiveContains("on going") { return "Ongoing" }
         if raw.localizedCaseInsensitiveContains("hiatus") || raw.localizedCaseInsensitiveContains("hold") { return "Hiatus" }
@@ -387,67 +344,53 @@ final class MadaraSourceEngine: SourceRuntime {
             groupCount: 1
         ).compactMap { $0.first }
 
-        var result: [Chapter] = []
         var seen = Set<String>()
-        for block in blocks {
+        return blocks.compactMap { block -> Chapter? in
             guard let href = SourceEngineUtilities.firstMatch(
                 in: block,
                 pattern: #"<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>"#,
                 options: [.caseInsensitive, .dotMatchesLineSeparators]
-            ) else { continue }
-            let absolute = absoluteURL(SourceEngineUtilities.decodeHTML(href), relativeTo: URL(string: baseURL))
-            guard let chapterURL = URL(string: absolute) else { continue }
-            let path = chapterURL.path
-            guard !path.isEmpty, seen.insert(path).inserted else { continue }
+            ) else { return nil }
+            let absolute = absoluteURL(href, relativeTo: URL(string: baseURL))
+            guard let chapterURL = URL(string: absolute), !chapterURL.path.isEmpty, seen.insert(chapterURL.path).inserted else { return nil }
 
             let name = SourceEngineUtilities.firstMatch(
                 in: block,
                 pattern: #"<a[^>]*>([\s\S]*?)</a>"#,
                 options: [.caseInsensitive, .dotMatchesLineSeparators]
-            ).map(SourceEngineUtilities.stripHTML)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? "Chapter"
+            ).map(SourceEngineUtilities.stripHTML)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Chapter"
             let dateText = SourceEngineUtilities.firstMatch(
                 in: block,
                 pattern: #"<span[^>]+class=[\"'][^\"']*chapter-release-date[^\"']*[\"'][^>]*>([\s\S]*?)</span>"#,
                 options: [.caseInsensitive, .dotMatchesLineSeparators]
-            ).map(SourceEngineUtilities.stripHTML)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            ).map(SourceEngineUtilities.stripHTML)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            result.append(
-                Chapter(
-                    id: chapterID(path: path),
-                    mangaID: mangaID,
-                    title: name,
-                    number: chapterNumber(from: name),
-                    releaseDate: parseDate(dateText) ?? .distantPast,
-                    isDownloaded: false,
-                    pages: []
-                )
+            return Chapter(
+                id: chapterID(path: chapterURL.path),
+                mangaID: mangaID,
+                title: name,
+                number: chapterNumber(from: name),
+                releaseDate: parseDate(dateText) ?? .distantPast,
+                isDownloaded: false,
+                pages: []
             )
         }
-        return result
     }
 
     private func postID(in html: String) -> String? {
-        firstMatch(
-            html,
-            patterns: [
-                #"id=[\"']manga-chapters-holder[^\"']*[\"'][^>]+data-id=[\"']([0-9]+)[\"']"#,
-                #"data-id=[\"']([0-9]+)[\"'][^>]+id=[\"']manga-chapters-holder[^\"']*[\"']"#,
-                #"id=[\"']manga-chapters-holder-([0-9]+)[\"']"#,
-                #"class=[\"'][^\"']*rating-post-id[^\"']*[\"'][^>]+value=[\"']([0-9]+)[\"']"#,
-                #"data-post=[\"']([0-9]+)[\"']"#,
-                #"rel=[\"']shortlink[\"'][^>]+href=[\"'][^\"']*\?p=([0-9]+)"#
-            ]
-        )
+        firstMatch(html, patterns: [
+            #"id=[\"']manga-chapters-holder[^\"']*[\"'][^>]+data-id=[\"']([0-9]+)[\"']"#,
+            #"data-id=[\"']([0-9]+)[\"'][^>]+id=[\"']manga-chapters-holder[^\"']*[\"']"#,
+            #"id=[\"']manga-chapters-holder-([0-9]+)[\"']"#,
+            #"class=[\"'][^\"']*rating-post-id[^\"']*[\"'][^>]+value=[\"']([0-9]+)[\"']"#,
+            #"data-post=[\"']([0-9]+)[\"']"#,
+            #"rel=[\"']shortlink[\"'][^>]+href=[\"'][^\"']*\?p=([0-9]+)"#
+        ])
     }
 
-    private func rejectProtectedChapterMarkup(_ html: String) {
+    private func rejectProtectedChapterMarkup(_ html: String) throws {
         if html.localizedCaseInsensitiveContains("chapter-protector-data") {
-            // Upstream Madara can optionally decrypt this with site-provided AES
-            // data. The generic Ahoge runtime intentionally does not execute or
-            // remotely configure crypto/challenge behavior.
-            // Throwing here keeps unsupported sites from silently returning bad pages.
+            throw RuntimeSourceError.unsupportedChapterMarkup
         }
     }
 
@@ -477,42 +420,29 @@ final class MadaraSourceEngine: SourceRuntime {
     }
 
     private func readingContentScope(in html: String) -> String {
-        guard let range = html.range(
-            of: #"class=[\"'][^\"']*reading-content[^\"']*[\"']"#,
-            options: [.regularExpression, .caseInsensitive]
-        ) else { return html }
+        guard let range = html.range(of: #"class=[\"'][^\"']*reading-content[^\"']*[\"']"#, options: [.regularExpression, .caseInsensitive]) else {
+            return html
+        }
         let suffix = String(html[range.lowerBound...])
-        if let end = suffix.range(of: "</article>", options: .caseInsensitive) {
-            return String(suffix[..<end.lowerBound])
-        }
-        if let end = suffix.range(of: "</main>", options: .caseInsensitive) {
-            return String(suffix[..<end.lowerBound])
-        }
+        if let end = suffix.range(of: "</article>", options: .caseInsensitive) { return String(suffix[..<end.lowerBound]) }
+        if let end = suffix.range(of: "</main>", options: .caseInsensitive) { return String(suffix[..<end.lowerBound]) }
         return suffix
     }
 
     private func isLikelyChapterImage(_ value: String) -> Bool {
         let lower = value.lowercased()
-        if lower.contains("logo") || lower.contains("avatar") || lower.contains("banner") || lower.contains("favicon") || lower.contains("ads") {
-            return false
-        }
+        if ["logo", "avatar", "banner", "favicon", "/ads/"].contains(where: lower.contains) { return false }
         return lower.contains("wp-content/uploads") || lower.range(of: #"\.(?:webp|jpe?g|png)(?:\?|$)"#, options: .regularExpression) != nil
     }
 
     // MARK: - Identity / URL helpers
 
-    private func mangaID(_ slug: String) -> String {
-        "\(source.id)::madara::\(slug)"
-    }
+    private func mangaID(_ slug: String) -> String { "\(source.id)::madara::\(slug)" }
 
     private func mangaSlug(from value: String) -> String {
-        if let url = URL(string: value), url.host != nil, let slug = mangaSlug(fromHref: url.absoluteString) {
-            return slug
-        }
+        if let url = URL(string: value), url.host != nil, let slug = mangaSlug(fromHref: url.absoluteString) { return slug }
         let parts = value.components(separatedBy: "::")
-        if let index = parts.firstIndex(of: "madara"), parts.indices.contains(index + 1) {
-            return parts[index + 1]
-        }
+        if let index = parts.firstIndex(of: "madara"), parts.indices.contains(index + 1) { return parts[index + 1] }
         return parts.last ?? value
     }
 
@@ -523,27 +453,21 @@ final class MadaraSourceEngine: SourceRuntime {
         return parts[index + 1].removingPercentEncoding ?? parts[index + 1]
     }
 
-    private func chapterID(path: String) -> String {
-        "\(source.id)::chapter::\(path)"
-    }
+    private func chapterID(path: String) -> String { "\(source.id)::chapter::\(path)" }
 
     private func chapterPath(from value: String) -> String? {
-        guard let range = value.range(of: "::chapter::") else {
-            if let url = URL(string: value), url.host != nil { return url.path }
-            return nil
+        if let range = value.range(of: "::chapter::") {
+            let path = String(value[range.upperBound...])
+            return path.isEmpty ? nil : path
         }
-        let path = String(value[range.upperBound...])
-        return path.isEmpty ? nil : path
+        if let url = URL(string: value), url.host != nil { return url.path }
+        return nil
     }
 
-    private func mangaURL(slug: String) throws -> URL {
-        try websiteURL("/\(mangaPath)/\(slug)/")
-    }
+    private func mangaURL(slug: String) throws -> URL { try websiteURL("/\(mangaPath)/\(slug)/") }
 
     private func websiteURL(_ path: String) throws -> URL {
-        guard let url = URL(string: baseURL + (path.hasPrefix("/") ? path : "/" + path)) else {
-            throw RuntimeSourceError.invalidURL
-        }
+        guard let url = URL(string: baseURL + (path.hasPrefix("/") ? path : "/" + path)) else { throw RuntimeSourceError.invalidURL }
         return url
     }
 
@@ -559,25 +483,19 @@ final class MadaraSourceEngine: SourceRuntime {
         let decoded = SourceEngineUtilities.decodeHTML(value).trimmingCharacters(in: .whitespacesAndNewlines)
         if decoded.hasPrefix("//") { return "https:" + decoded }
         if let url = URL(string: decoded), url.scheme != nil { return url.absoluteString }
-        let root = base ?? URL(string: baseURL + "/")
-        return URL(string: decoded, relativeTo: root)?.absoluteURL.absoluteString ?? decoded
+        return URL(string: decoded, relativeTo: base ?? URL(string: baseURL + "/"))?.absoluteURL.absoluteString ?? decoded
     }
 
     private static func safePathComponent(_ value: String, fallback: String) -> String {
         let trimmed = value.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard !trimmed.isEmpty,
-              trimmed.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil else {
-            return fallback
-        }
+        guard !trimmed.isEmpty, trimmed.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil else { return fallback }
         return trimmed
     }
 
     // MARK: - Date helpers
 
     private func chapterNumber(from value: String) -> Double {
-        guard let number = SourceEngineUtilities.firstMatch(in: value, pattern: #"([0-9]+(?:\.[0-9]+)?)"#) else {
-            return -1
-        }
+        guard let number = SourceEngineUtilities.firstMatch(in: value, pattern: #"([0-9]+(?:\.[0-9]+)?)"#) else { return -1 }
         return Double(number) ?? -1
     }
 
@@ -586,10 +504,10 @@ final class MadaraSourceEngine: SourceRuntime {
         let lower = raw.lowercased()
         if lower == "today" { return Date() }
         if lower == "yesterday" { return Calendar.current.date(byAdding: .day, value: -1, to: Date()) }
-        if let countText = SourceEngineUtilities.firstMatch(in: lower, pattern: #"([0-9]+)\s+days?\s+ago"#), let count = Int(countText) {
+        if let text = SourceEngineUtilities.firstMatch(in: lower, pattern: #"([0-9]+)\s+days?\s+ago"#), let count = Int(text) {
             return Calendar.current.date(byAdding: .day, value: -count, to: Date())
         }
-        if let countText = SourceEngineUtilities.firstMatch(in: lower, pattern: #"([0-9]+)\s+hours?\s+ago"#), let count = Int(countText) {
+        if let text = SourceEngineUtilities.firstMatch(in: lower, pattern: #"([0-9]+)\s+hours?\s+ago"#), let count = Int(text) {
             return Calendar.current.date(byAdding: .hour, value: -count, to: Date())
         }
 
@@ -618,12 +536,7 @@ final class MadaraSourceEngine: SourceRuntime {
         return try await SourceEngineUtilities.html(session: session, request: request, cacheKey: key, ttl: ttl)
     }
 
-    private func postHTML(
-        _ url: URL,
-        fields: [(String, String)],
-        referer: String,
-        ttl: TimeInterval
-    ) async throws -> String {
+    private func postHTML(_ url: URL, fields: [(String, String)], referer: String, ttl: TimeInterval) async throws -> String {
         await rateLimiter.waitTurn()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -637,10 +550,7 @@ final class MadaraSourceEngine: SourceRuntime {
     }
 
     private func formBody(_ fields: [(String, String)]) -> Data {
-        let body = fields.map { key, value in
-            "\(formEncode(key))=\(formEncode(value))"
-        }.joined(separator: "&")
-        return Data(body.utf8)
+        Data(fields.map { "\(formEncode($0.0))=\(formEncode($0.1))" }.joined(separator: "&").utf8)
     }
 
     private func formEncode(_ value: String) -> String {
@@ -655,9 +565,7 @@ final class MadaraSourceEngine: SourceRuntime {
                 in: html,
                 pattern: pattern,
                 options: [.caseInsensitive, .dotMatchesLineSeparators]
-            ) {
-                return value
-            }
+            ) { return value }
         }
         return nil
     }
