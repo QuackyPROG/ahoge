@@ -65,6 +65,7 @@ final class MangaThemesiaSourceEngine: SourceRuntime {
             html,
             patterns: [
                 #"<(?:h1|h2|h3)[^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)</(?:h1|h2|h3)>"#,
+                #"<[^>]+class=["'][^"']*ts-breadcrumb[^"']*["'][^>]*>[\s\S]*<li[^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)</span>"#,
                 #"<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']"#,
                 #"<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']"#
             ]
@@ -127,7 +128,11 @@ final class MangaThemesiaSourceEngine: SourceRuntime {
                 options: [.caseInsensitive]
             ) else { continue }
             let resolved = absoluteURL(href)
-            guard isChapterURL(resolved, mangaSlug: slug), seen.insert(resolved).inserted else { continue }
+            guard
+                looksLikeChapterBlock(block),
+                isSameSiteURL(resolved),
+                seen.insert(resolved).inserted
+            else { continue }
 
             let nameRaw = firstMatch(
                 block,
@@ -296,15 +301,17 @@ final class MangaThemesiaSourceEngine: SourceRuntime {
         return slug.isEmpty ? nil : slug
     }
 
-    private func isChapterURL(_ value: String, mangaSlug: String) -> Bool {
-        guard let parsed = URL(string: value) else { return false }
-        let parts = parsed.pathComponents.filter { $0 != "/" }
+    private func looksLikeChapterBlock(_ block: String) -> Bool {
+        let lowered = block.lowercased()
+        return ["chapternum", "chapterdate", "chbox", "eph-num", "lch"].contains { lowered.contains($0) }
+    }
+
+    private func isSameSiteURL(_ value: String) -> Bool {
         guard
-            let mangaIndex = parts.firstIndex(of: mangaPath),
-            parts.indices.contains(mangaIndex + 1),
-            parts[mangaIndex + 1] == mangaSlug
+            let targetHost = URL(string: value)?.host?.lowercased(),
+            let baseHost = URL(string: baseURL)?.host?.lowercased()
         else { return false }
-        return parts.count > mangaIndex + 2
+        return targetHost == baseHost
     }
 
     private func websiteURL(_ path: String) throws -> URL {

@@ -491,7 +491,7 @@ final class SourceRepoImporter {
 
     private func runtimeIsAvailable(family: SourceEngineFamily, overrides: [String: String]) -> Bool {
         switch family {
-        case .asuraScans, .natsuId, .madara:
+        case .asuraScans, .natsuId, .madara, .mangaThemesia:
             return true
         case .mangaBox:
             return overrides["adapter"] == "mangabox"
