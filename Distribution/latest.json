@@ -3,13 +3,13 @@
   "available": true,
   "channel": "sideload",
   "sourceURL": "https://raw.githubusercontent.com/QuackyPROG/ahoge/main/Distribution/source.json",
-  "releaseNotes": "Initial standalone Ahoge release.\n\n- Native Swift/SwiftUI manga reader for iOS.\n- Unsigned physical-device IPA for SideStore signing.\n- Repository-driven manga sources maintained separately in ahoge-extension.\n- Reader, library, downloads, persistence, source imports, and native source runtimes included.",
-  "version": "0.1.0",
-  "build": "1",
+  "releaseNotes": "Ahoge 0.1.1 — Native UI/UX overhaul\n\n• Rebuilt Library around cover art, Continue Reading, categories, and adaptive grids.\n• New Explore experience with global search and source-first discovery.\n• New Activity hub brings Updates, History, and Downloads together.\n• Redesigned manga details, chapter list, downloads, More, Stats, onboarding, and reader controls.\n• Refined native iOS materials, spacing, accessibility, and light/dark appearance.\n• Reader, source, download, persistence, migration, tracking, and security behavior remain unchanged.",
+  "version": "0.1.1",
+  "build": "2",
   "minimumOSVersion": "26.2",
-  "releaseDate": "2026-10-12T14:31:50Z",
-  "downloadURL": "https://github.com/QuackyPROG/ahoge/releases/download/v0.1.0/Ahoge.ipa",
-  "sha256": "c5d3bce5daa44dc2445f576ed668098fc900ed6883451b9c65c18a43e3cb5225",
-  "releaseNotesURL": "https://github.com/QuackyPROG/ahoge/releases/tag/v0.1.0",
-  "size": 1722680
+  "releaseDate": "2026-10-12T15:40:50Z",
+  "downloadURL": "https://github.com/QuackyPROG/ahoge/releases/download/v0.1.1/Ahoge.ipa",
+  "sha256": "12cb807e2234258a568737c295ab0f24200473e31581208a88a401f760270ebd",
+  "releaseNotesURL": "https://github.com/QuackyPROG/ahoge/releases/tag/v0.1.1",
+  "size": 1987056
 }
