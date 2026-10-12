@@ -298,7 +298,8 @@ final class MangaThemesiaSourceEngine: SourceRuntime {
             parts.count == index + 2
         else { return nil }
         let slug = parts[index + 1]
-        return slug.isEmpty ? nil : slug
+        guard !slug.isEmpty, slug.lowercased() != "list-mode" else { return nil }
+        return slug
     }
 
     private func looksLikeChapterBlock(_ block: String) -> Bool {
