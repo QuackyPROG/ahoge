@@ -11,13 +11,21 @@ final class HeanCMSSourceEngine: SourceRuntime {
 
     private let baseURL: String
     private let apiURL: String
+    private let latestSortOrder: String
     private let session: URLSession
     private let rateLimiter: SourceRateLimiter
 
-    init(source: Source, baseURL: String, apiURL: String, requestsPerSecond: Int = 1) {
+    init(
+        source: Source,
+        baseURL: String,
+        apiURL: String,
+        requestsPerSecond: Int = 1,
+        latestSortOrder: String = "desc"
+    ) {
         self.source = source
         self.baseURL = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         self.apiURL = apiURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        self.latestSortOrder = latestSortOrder == "asc" ? "asc" : "desc"
         self.rateLimiter = SourceRateLimiter(requestsPerSecond: requestsPerSecond)
         self.session = URLSession(
             configuration: SourceEngineUtilities.sessionConfiguration(additionalHeaders: [
@@ -33,7 +41,7 @@ final class HeanCMSSourceEngine: SourceRuntime {
     }
 
     func latestManga(page: Int) async throws -> [Manga] {
-        try await querySeries(page: page, query: "", order: "desc", orderBy: "latest")
+        try await querySeries(page: page, query: "", order: latestSortOrder, orderBy: "latest")
     }
 
     func searchManga(_ request: SourceSearchRequest) async throws -> [Manga] {
