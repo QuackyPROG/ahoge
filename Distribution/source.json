@@ -22,6 +22,14 @@
       ],
       "versions": [
         {
+          "version": "0.1.2",
+          "date": "2026-10-13T03:38:38Z",
+          "localizedDescription": "Ahoge 0.1.2 — Reconstructed reading experience\n\n• Artwork-led Library with reading continuity and an adaptive collection.\n• Discovery-first Explore, source browsing, and global search.\n• Rebuilt manga details with a primary Read/Resume action and dense chapter browsing.\n• Reading timelines for Updates and History, plus an offline shelf and clearer download controls.\n• Reconstructed reader controls, onboarding, More, settings, and management surfaces.\n• Dynamic Type layouts, named accessibility controls, and motion/contrast-aware presentation.\n• Includes the native MangaDex and WeebCentral source runtimes added since 0.1.1.\n• Existing reader-engine, persistence, download, and security behavior is preserved by the presentation reconstruction.",
+          "downloadURL": "https://github.com/QuackyPROG/ahoge/releases/download/v0.1.2/Ahoge.ipa",
+          "size": 2247098,
+          "minOSVersion": "26.2"
+        },
+        {
           "version": "0.1.1",
           "date": "2026-10-12T15:40:50Z",
           "localizedDescription": "Ahoge 0.1.1 — Native UI/UX overhaul\n\n• Rebuilt Library around cover art, Continue Reading, categories, and adaptive grids.\n• New Explore experience with global search and source-first discovery.\n• New Activity hub brings Updates, History, and Downloads together.\n• Redesigned manga details, chapter list, downloads, More, Stats, onboarding, and reader controls.\n• Refined native iOS materials, spacing, accessibility, and light/dark appearance.\n• Reader, source, download, persistence, migration, tracking, and security behavior remain unchanged.",
