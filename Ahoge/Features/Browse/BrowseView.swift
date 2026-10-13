@@ -6,10 +6,15 @@ import UniformTypeIdentifiers
 
 struct BrowseView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private let sourceColumns = [
-        GridItem(.adaptive(minimum: 155, maximum: 230), spacing: 12)
-    ]
+    private var sourceColumns: [GridItem] {
+        [GridItem(.flexible(), alignment: .leading)]
+    }
+
+    private var discoverySources: [Source] {
+        model.visibleSources.filter { !model.mangas(for: $0).isEmpty }
+    }
 
     var body: some View {
         ScrollView {
@@ -37,9 +42,36 @@ struct BrowseView: View {
                             .foregroundStyle(.tertiary)
                     }
                     .padding(14)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
+                    .background(AhogePalette.surface, in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("On the shelves")
+                        .font(.title2.weight(.bold))
+                    Text("Titles already available from your sources")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    if discoverySources.isEmpty {
+                        ContentUnavailableView("Discover your next read", systemImage: "books.vertical", description: Text("Open a source below to browse its catalog. Available titles will appear here."))
+                    } else {
+                        ForEach(discoverySources.prefix(3)) { source in
+                            VStack(alignment: .leading, spacing: 12) {
+                                NavigationLink { SourceView(source: source) } label: {
+                                    Label(source.name, systemImage: source.systemImage)
+                                        .font(.headline).frame(minHeight: 44)
+                                }
+                                LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 132), spacing: 16)], alignment: .leading, spacing: 20) {
+                                    ForEach(model.mangas(for: source).prefix(4)) { manga in
+                                        NavigationLink { MangaDetailView(manga: manga) } label: {
+                                            AhogeMangaGridCard(manga: manga, hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers, allowsAdultContent: source.allowsAdultContent, badgeText: source.name)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 if !model.visibleSources.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
@@ -53,7 +85,7 @@ struct BrowseView: View {
                                 NavigationLink {
                                     SourceView(source: source)
                                 } label: {
-                                    AhogeSourceCard(source: source)
+                                    SourceRow(source: source)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -69,7 +101,7 @@ struct BrowseView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    AhogeSectionHeader("Manage discovery", subtitle: "Source setup stays available without dominating Explore")
+                    AhogeSectionHeader("Manage discovery", subtitle: "Choose catalogs and organize your sources")
                     VStack(spacing: 0) {
                         NavigationLink {
                             SourcesView()
@@ -94,13 +126,14 @@ struct BrowseView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(12)
-                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
+                    .padding(.vertical, 8)
                 }
             }
             .padding(.horizontal, AhogeLayout.pagePadding)
             .padding(.top, 8)
             .padding(.bottom, 28)
+            .frame(maxWidth: 1200, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle("Explore")
     }
@@ -108,11 +141,8 @@ struct BrowseView: View {
 
 struct SourcesView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
-
-    private let columns = [
-        GridItem(.adaptive(minimum: 155, maximum: 230), spacing: 12)
-    ]
 
     private var filteredSources: [Source] {
         model.visibleSources.filter { source in
@@ -121,25 +151,22 @@ struct SourcesView: View {
     }
 
     var body: some View {
-        ScrollView {
+        List {
             if filteredSources.isEmpty {
                 ContentUnavailableView.search(text: query)
-                    .padding(.top, 60)
             } else {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+                Section {
                     ForEach(filteredSources) { source in
-                        NavigationLink {
-                            SourceView(source: source)
-                        } label: {
-                            AhogeSourceCard(source: source)
+                        NavigationLink { SourceView(source: source) } label: {
+                            SourceRow(source: source)
                         }
-                        .buttonStyle(.plain)
                     }
+                } header: { Text("Available catalogs") } footer: {
+                    Text("Source filters control language, visibility, and enabled or pinned sources.")
                 }
-                .padding(.horizontal, AhogeLayout.pagePadding)
-                .padding(.vertical, 12)
             }
         }
+        .listStyle(.insetGrouped)
         .searchable(text: $query, prompt: "Find source")
         .navigationTitle("Sources")
         .toolbar {
@@ -149,6 +176,7 @@ struct SourcesView: View {
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease.circle")
                 }
+                .frame(minWidth: 44, minHeight: 44)
                 .accessibilityLabel("Source filters")
             }
         }
@@ -157,6 +185,7 @@ struct SourcesView: View {
 
 struct SourceView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let source: Source
     @State private var query = ""
@@ -171,9 +200,11 @@ struct SourceView: View {
     @State private var includedGenres: Set<String> = []
     @State private var excludedGenres: Set<String> = []
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 142, maximum: 190), spacing: 16, alignment: .top)
-    ]
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible(), alignment: .top)]
+            : [GridItem(.adaptive(minimum: 132), spacing: 16, alignment: .top)]
+    }
 
     private var filteredManga: [Manga] {
         let items = model.mangas(for: source)
@@ -200,7 +231,8 @@ struct SourceView: View {
                             Text(kind.title).tag(kind)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
+                    .frame(minHeight: 44)
                 }
 
                 if isLoading {
@@ -232,6 +264,8 @@ struct SourceView: View {
             .padding(.horizontal, AhogeLayout.pagePadding)
             .padding(.top, 8)
             .padding(.bottom, 28)
+            .frame(maxWidth: 1200, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .searchable(text: $query, prompt: "Search \(source.name)")
         .navigationTitle(source.name)
@@ -279,6 +313,7 @@ struct SourceView: View {
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                     }
+                    .frame(minWidth: 44, minHeight: 44)
                     .accessibilityLabel("Runtime filters")
                 }
 
@@ -311,6 +346,7 @@ struct SourceView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .frame(minWidth: 44, minHeight: 44)
                 .accessibilityLabel("Source actions")
             }
         }
@@ -327,7 +363,7 @@ struct SourceView: View {
                 Text(source.summary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 7) {
+                VStack(alignment: .leading, spacing: 7) {
                     AhogeStatusBadge(title: source.language.rawValue, systemImage: "character.bubble")
                     AhogeStatusBadge(title: source.kind == .local ? "Local" : "Remote", systemImage: source.kind == .local ? "internaldrive" : "network")
                 }
@@ -353,6 +389,7 @@ struct SourceView: View {
                 .redacted(reason: .placeholder)
             }
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading manga")
     }
 
@@ -408,7 +445,7 @@ struct SourcesFilterView: View {
                 }
             }
 
-            Section("Visibility") {
+            Section {
                 Toggle("Hide adult sources", isOn: Binding(
                     get: { model.state.browsePreferences.hideAdultSources },
                     set: model.setHideAdultSources
@@ -421,7 +458,7 @@ struct SourcesFilterView: View {
                     get: { model.state.browsePreferences.pinnedSourcesOnly },
                     set: model.setPinnedSourcesOnly
                 ))
-            }
+            } header: { Text("Visibility") } footer: { Text("These choices control which sources appear in Explore and search.") }
         }
         .navigationTitle("Source Filters")
     }
@@ -431,8 +468,21 @@ struct SourceRow: View {
     let source: Source
 
     var body: some View {
-        AhogeSourceCard(source: source)
-            .padding(.vertical, 2)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: source.systemImage)
+                .font(.title3).foregroundStyle(.tint)
+                .frame(width: 32, height: 44).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(source.name).font(.headline)
+                Text(source.summary).font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("\(source.language.rawValue) · \(source.kind == .local ? "Local" : "Remote")")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.vertical, 8)
     }
 }
 
@@ -457,14 +507,14 @@ private struct RuntimeSourceFiltersView: View {
 
     var body: some View {
         Form {
-            Section("Sort") {
+            Section {
                 Picker("Sort by", selection: $sortValue) {
                     ForEach(sortOptions, id: \.1) { option in
                         Text(option.0).tag(option.1)
                     }
                 }
                 Toggle("Ascending", isOn: $orderAscending)
-            }
+            } header: { Text("Ordering") } footer: { Text("Filters apply with the next feed request or search.") }
 
             Section("Type") {
                 ForEach(typeOptions, id: \.self) { option in
@@ -523,18 +573,20 @@ struct MangaRow: View {
                 manga: manga,
                 hideSensitiveCover: hideSensitiveCover,
                 allowsAdultContent: allowsAdultContent,
-                cornerRadius: 14,
+                cornerRadius: 8,
                 overlaySystemImage: "book.closed.fill"
             )
-            .frame(width: 56, height: 76)
+            .frame(width: 56, height: 80)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(manga.title).font(.headline).lineLimit(2)
-                Text(manga.author).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                Text(manga.title).font(.headline).fixedSize(horizontal: false, vertical: true)
+                Text(manga.author).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Text(manga.statusText).font(.caption.weight(.medium)).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -545,6 +597,8 @@ struct LocalImportsView: View {
     var body: some View {
         List {
             Section {
+                Label("Your offline collection", systemImage: "internaldrive")
+                    .font(.title3.weight(.semibold))
                 Text(model.localImportSummary())
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -564,7 +618,8 @@ struct LocalImportsView: View {
                             Text("\(job.kind.rawValue.uppercased()) • \(job.status.rawValue)")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            Text(job.detail).font(.caption).foregroundStyle(.secondary)
+                            Text(job.detail).font(.footnote).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -572,7 +627,11 @@ struct LocalImportsView: View {
 
             Section("Imported Titles") {
                 if let localSource = model.primaryLocalSource() {
-                    ForEach(model.mangas(for: localSource)) { manga in
+                    let importedTitles = model.mangas(for: localSource)
+                    if importedTitles.isEmpty {
+                        ContentUnavailableView("No imported titles yet", systemImage: "books.vertical", description: Text("Use Import from Files to add chapters stored on this device."))
+                    }
+                    ForEach(importedTitles) { manga in
                         NavigationLink {
                             MangaDetailView(manga: manga)
                         } label: {

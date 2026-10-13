@@ -47,7 +47,8 @@ struct RootTabView: View {
             .tag(AppTab.more)
         }
         .tint(model.chromeTint)
-        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .toolbarBackground(AhogePalette.canvas, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .onChange(of: selectedTab) { old, new in
             if new == old { popToRoot(for: new) }
             previousTab = new

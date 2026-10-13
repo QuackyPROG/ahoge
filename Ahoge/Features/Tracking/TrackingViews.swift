@@ -13,10 +13,20 @@ struct TrackingCenterView: View {
 
     var body: some View {
         List {
+            Section {
+                Label("Reading trackers", systemImage: "person.badge.clock").font(.title2.weight(.bold))
+                Text("Review which services have title bindings. Link or unlink a service from a manga's tracking screen.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
             ForEach(TrackerService.allCases) { service in
-                LabeledContent(service.rawValue, value: model.bindings().contains(where: { $0.service == service }) ? "In use" : "Available")
+                LabeledContent {
+                    Text(model.bindings().contains(where: { $0.service == service }) ? "In use" : "Available")
+                } label: { Label(service.rawValue, systemImage: service.systemImage) }
             }
         }
+        .listStyle(.insetGrouped)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Tracking")
     }
 }
@@ -27,14 +37,17 @@ struct MangaTrackingView: View {
 
     var body: some View {
         List {
-            Section("Linked") {
+            Section {
+                Text(manga.title).font(.title2.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                Text("Manage tracker bindings for this title.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            Section("Linked services") {
                 if model.trackerBindings(for: manga).isEmpty {
-                    Text("No trackers linked.")
-                        .foregroundStyle(.secondary)
+                    ContentUnavailableView("No linked services", systemImage: "person.badge.clock", description: Text("Choose a tracker below to add a binding for this title."))
                 } else {
                     ForEach(model.trackerBindings(for: manga)) { binding in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(binding.service.rawValue)
+                            Label(binding.service.rawValue, systemImage: binding.service.systemImage)
                                 .font(.headline)
                             Text("\(binding.status) • \(binding.progressText)")
                                 .font(.subheadline)
@@ -56,7 +69,7 @@ struct MangaTrackingView: View {
                     Button {
                         model.linkTracker(service: service, to: manga)
                     } label: {
-                        Label(service.rawValue, systemImage: service.systemImage)
+                        Label(service.rawValue, systemImage: service.systemImage).frame(minHeight: 44)
                     }
                 }
             }
@@ -69,6 +82,9 @@ struct MangaTrackingView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Tracking")
     }
 }
@@ -79,9 +95,15 @@ struct TrackerSearchView: View {
 
     var body: some View {
         List {
+            Section {
+                Text(manga.title).font(.title2.weight(.bold))
+                Label("Title preview", systemImage: "magnifyingglass")
+                Text("This screen previews your search title for each service. Remote search results are not available here.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
             ForEach(TrackerService.allCases) { service in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(service.rawValue)
+                    Label(service.rawValue, systemImage: service.systemImage)
                         .font(.headline)
                     Text(query.isEmpty ? manga.title : query)
                         .foregroundStyle(.secondary)
@@ -89,6 +111,9 @@ struct TrackerSearchView: View {
             }
         }
         .searchable(text: $query, prompt: "Search tracker title")
+        .listStyle(.insetGrouped)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Tracker Search")
     }
 }

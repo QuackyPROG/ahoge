@@ -13,6 +13,17 @@ struct UpdatesView: View {
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Library feed").font(.title2.weight(.bold))
+                    Text("The latest chapters from your Library.").font(.subheadline).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 24)
+
+                AhogeFilterChip("Downloaded chapters", systemImage: "arrow.down.circle", isSelected: downloadedOnly) {
+                    downloadedOnly.toggle()
+                }
+                .padding(.bottom, 16)
+
                 if items.isEmpty {
                     ContentUnavailableView(
                         searchText.isEmpty ? "No library updates" : "No matching updates",
@@ -23,10 +34,17 @@ struct UpdatesView: View {
                     .padding(.top, 80)
                 } else {
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        if index == 0 || !Calendar.current.isDate(item.chapter.releaseDate, inSameDayAs: items[index - 1].chapter.releaseDate) {
+                            Text(item.chapter.releaseDate.formatted(date: .complete, time: .omitted))
+                                .font(.headline).foregroundStyle(.secondary)
+                                .padding(.top, 24).padding(.bottom, 8)
+                                .accessibilityAddTraits(.isHeader)
+                        }
                         NavigationLink {
                             MangaDetailView(manga: item.manga)
                         } label: {
-                            updateRow(item)
+                            if index == 0 { updateFeature(item) }
+                            else { updateRow(item) }
                         }
                         .buttonStyle(.plain)
 
@@ -36,6 +54,8 @@ struct UpdatesView: View {
                     }
                 }
             }
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, AhogeLayout.pagePadding)
             .padding(.bottom, 28)
         }
@@ -43,14 +63,6 @@ struct UpdatesView: View {
         .navigationTitle("Updates")
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    downloadedOnly.toggle()
-                } label: {
-                    Image(systemName: downloadedOnly ? "arrow.down.circle.fill" : "arrow.down.circle")
-                }
-                .accessibilityLabel(downloadedOnly ? "Show all updates" : "Downloaded only")
-                .accessibilityAddTraits(downloadedOnly ? .isSelected : [])
-
                 Menu {
                     Button {
                         model.markAllUpdatesSeen()
@@ -72,33 +84,67 @@ struct UpdatesView: View {
         }
     }
 
+    private func updateFeature(_ item: UpdateFeedItem) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 20) { updateCover(item); updateIdentity(item) }
+            VStack(alignment: .leading, spacing: 16) { updateCover(item); updateIdentity(item) }
+        }
+        .padding(.vertical, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Open manga and its chapter list")
+    }
+
+    private func updateCover(_ item: UpdateFeedItem) -> some View {
+        MangaCoverView(
+            manga: item.manga,
+            hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
+            allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false,
+            cornerRadius: 12
+        )
+        .frame(width: 98, height: 140)
+        .accessibilityHidden(true)
+    }
+
+    private func updateIdentity(_ item: UpdateFeedItem) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Latest chapter").font(.subheadline).foregroundStyle(.secondary)
+            Text(item.manga.title).font(.title2.weight(.bold))
+            Text(item.chapter.title).font(.body).foregroundStyle(.secondary)
+            if item.chapter.isDownloaded { AhogeStatusBadge(title: "Ready offline", systemImage: "arrow.down.circle.fill") }
+            if item.entry.isBookmarked { AhogeStatusBadge(title: "In Library", systemImage: "bookmark.fill") }
+            Label("View chapters", systemImage: "arrow.right").font(.headline).foregroundStyle(.tint)
+                .frame(minHeight: 44)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
     private func updateRow(_ item: UpdateFeedItem) -> some View {
         HStack(alignment: .top, spacing: 14) {
             MangaCoverView(
                 manga: item.manga,
                 hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
                 allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false,
-                cornerRadius: 12
+                cornerRadius: AhogeLayout.coverRadius
             )
-            .frame(width: 56, height: 78)
+            .frame(width: 56, height: 80)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(item.manga.title)
                         .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer()
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(item.chapter.releaseDate, style: .relative)
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Text(item.chapter.title)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     if item.chapter.isDownloaded {
                         AhogeStatusBadge(title: "Downloaded", systemImage: "arrow.down.circle.fill")
                     }

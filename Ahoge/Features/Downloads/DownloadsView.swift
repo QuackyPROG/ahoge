@@ -23,15 +23,18 @@ struct DownloadsView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            Picker("Downloads", selection: $segment) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Read anywhere").font(.headline)
+                Picker("Downloads", selection: $segment) {
                 ForEach(DownloadsSegment.allCases) { segment in
                     Text(segment.rawValue).tag(segment)
                 }
             }
+                }
             .pickerStyle(.segmented)
             .padding(.horizontal, AhogeLayout.pagePadding)
             .padding(.vertical, 10)
-            .background(.bar)
+            .background(AhogePalette.canvas)
         }
         .navigationTitle("Downloads")
         .onAppear {
@@ -42,6 +45,7 @@ struct DownloadsView: View {
 
 private struct DownloadedTitlesView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private struct DownloadedTitle: Identifiable, Hashable {
         var id: String { manga.id }
@@ -76,47 +80,55 @@ private struct DownloadedTitlesView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 70)
             } else {
-                LazyVStack(spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    AhogeSectionHeader("Offline shelf", subtitle: "Chapters stored on this device")
+                        .padding(.vertical, 24)
+                    LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
+                              ? [GridItem(.flexible())]
+                              : [GridItem(.adaptive(minimum: 132), spacing: 20)],
+                              alignment: .leading, spacing: 24) {
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                         NavigationLink {
                             MangaDetailView(manga: item.manga)
                         } label: {
-                            HStack(spacing: 14) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 MangaCoverView(
                                     manga: item.manga,
                                     hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
                                     allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false,
-                                    cornerRadius: 12
+                                    cornerRadius: AhogeLayout.coverRadius
                                 )
-                                .frame(width: 56, height: 78)
+                                .aspectRatio(AhogeLayout.compactCoverRatio, contentMode: .fit)
+                                .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 180 : .infinity)
+                                .accessibilityHidden(true)
 
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(item.manga.title)
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.primary)
-                                        .lineLimit(1)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     Text("\(item.downloadedCount) chapter\(item.downloadedCount == 1 ? "" : "s") downloaded")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                     if item.activeJobsCount > 0 {
                                         Text("\(item.activeJobsCount) active in queue")
-                                            .font(.caption2)
+                                            .font(.footnote)
                                             .foregroundStyle(.secondary)
                                     }
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.tertiary)
+
                             }
                             .padding(.vertical, 12)
                             .contentShape(Rectangle())
+                            .accessibilityElement(children: .combine)
                         }
                         .buttonStyle(.plain)
 
-                        if index < items.count - 1 { Divider().padding(.leading, 84) }
+                    }
                     }
                 }
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, AhogeLayout.pagePadding)
                 .padding(.bottom, 28)
             }

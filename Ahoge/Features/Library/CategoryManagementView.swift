@@ -14,22 +14,21 @@ struct CategoryManagementView: View {
 
     var body: some View {
         List {
-            Section("Create Category") {
-                TextField("New category name", text: $newCategoryName)
-                    .disabled(model.state.securityPreferences.lockLibraryEdits)
-                Button("Add Category") {
-                    model.addCategory(named: newCategoryName)
-                    newCategoryName = ""
+            Section {
+                Label("Organize your shelf", systemImage: "folder").font(.title2.weight(.bold))
+                Text("Create a category, then assign titles from the library or a title's menu.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                if model.state.securityPreferences.lockLibraryEdits {
+                    Label("Library editing is locked", systemImage: "lock.fill")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                .disabled(model.state.securityPreferences.lockLibraryEdits)
             }
-
-            Section("Current Categories") {
+            Section("Your categories") {
                 if model.categories.isEmpty {
                     ContentUnavailableView(
                         "No Categories Yet",
                         systemImage: "folder.badge.plus",
-                        description: Text("Create your own categories here. New installs no longer start with default category groups.")
+                        description: Text("Use the name editor below to create your first category.")
                     )
                 } else {
                     ForEach(model.categories) { category in
@@ -41,7 +40,18 @@ struct CategoryManagementView: View {
                     }
                 }
             }
+            Section("Create Category") {
+                TextField("New category name", text: $newCategoryName)
+                    .disabled(model.state.securityPreferences.lockLibraryEdits)
+                Button("Add Category", systemImage: "folder.badge.plus") {
+                    model.addCategory(named: newCategoryName)
+                    newCategoryName = ""
+                }
+                .disabled(model.state.securityPreferences.lockLibraryEdits)
+            }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Categories")
     }
 }
@@ -58,18 +68,32 @@ private struct CategoryDetailView: View {
 
     var body: some View {
         Form {
-            TextField("Name", text: $name)
+            Section {
+                Label(category.name, systemImage: category.systemImage).font(.title2.weight(.bold))
+                if model.state.securityPreferences.lockLibraryEdits {
+                    Label("Library editing is locked", systemImage: "lock.fill")
+                }
+            }
+            Section("Category name") {
+                TextField("Name", text: $name)
+                    .accessibilityLabel("Category name")
+                    .disabled(model.state.securityPreferences.lockLibraryEdits)
+                Button("Save Name", systemImage: "checkmark") {
+                    model.renameCategory(category.id, to: name)
+                }
                 .disabled(model.state.securityPreferences.lockLibraryEdits)
-            Button("Save Name") {
-                model.renameCategory(category.id, to: name)
             }
-            .disabled(model.state.securityPreferences.lockLibraryEdits)
-
-            Button("Delete Category", role: .destructive) {
-                model.deleteCategory(category.id)
+            Section {
+                Button("Delete Category", role: .destructive) {
+                    model.deleteCategory(category.id)
+                }
+                .disabled(model.state.securityPreferences.lockLibraryEdits)
+            } header: { Text("Remove category") } footer: {
+                Text("Delete this category from your library organization.")
             }
-            .disabled(model.state.securityPreferences.lockLibraryEdits)
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle(category.name)
     }
 }
@@ -79,7 +103,12 @@ struct LibrarySettingsView: View {
 
     var body: some View {
         Form {
-            Section("Display") {
+            Section {
+                Label("Your library", systemImage: "books.vertical").font(.title3.weight(.semibold))
+                Text("Choose how your shelf appears and where newly added titles belong.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Section("Shelf information") {
                 Toggle("Show Continue Reading", isOn: Binding(
                     get: { model.state.libraryPreferences.showContinueReading },
                     set: model.setContinueReadingVisible
@@ -121,6 +150,8 @@ struct LibrarySettingsView: View {
                 }
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Library Settings")
     }
 }
@@ -132,31 +163,45 @@ struct LibraryBatchMigrationView: View {
         let hideSensitiveCovers = model.state.securityPreferences.hideSensitiveCovers
 
         List {
-            ForEach(model.libraryItems(selectedCategoryID: nil)) { item in
-                if let source = model.migrationSource(for: item.manga) {
-                    NavigationLink {
-                        MigrationConfirmationView(source: source, target: item.manga)
-                    } label: {
-                        MangaRow(
-                            manga: item.manga,
-                            hideSensitiveCover: hideSensitiveCovers,
-                            allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false
-                        )
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        MangaRow(
-                            manga: item.manga,
-                            hideSensitiveCover: hideSensitiveCovers,
-                            allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false
-                        )
-                        Text("Migration unavailable because the source could not be resolved.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            Section {
+                Label("Review migration candidates", systemImage: "arrow.triangle.swap").font(.title3.weight(.semibold))
+                Text("Choose a library title to compare its available sources. Transfer options are configured for each title.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Section("Library titles") {
+                let libraryTitles = model.libraryItems(selectedCategoryID: nil)
+            if libraryTitles.isEmpty {
+                ContentUnavailableView("No library titles", systemImage: "books.vertical", description: Text("Add a title to your Library before comparing editions."))
+            }
+            ForEach(libraryTitles) { item in
+                    if let source = model.migrationSource(for: item.manga) {
+                        NavigationLink {
+                            MigrationConfirmationView(source: source, target: item.manga)
+                        } label: {
+                            MangaRow(
+                                manga: item.manga,
+                                hideSensitiveCover: hideSensitiveCovers,
+                                allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false
+                            )
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            MangaRow(
+                                manga: item.manga,
+                                hideSensitiveCover: hideSensitiveCovers,
+                                allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false
+                            )
+                            Text("Migration unavailable because the source could not be resolved.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Batch Migration")
     }
 }

@@ -4,12 +4,22 @@
 import SwiftUI
 
 enum AhogeLayout {
-    static let pagePadding: CGFloat = 18
-    static let sectionSpacing: CGFloat = 24
-    static let contentSpacing: CGFloat = 14
-    static let cardRadius: CGFloat = 18
-    static let coverRadius: CGFloat = 14
+    static let pagePadding: CGFloat = 20
+    static let sectionSpacing: CGFloat = 28
+    static let contentSpacing: CGFloat = 12
+    static let cardRadius: CGFloat = 12
+    static let coverRadius: CGFloat = 8
     static let compactCoverRatio: CGFloat = 0.70
+}
+
+enum AhogePalette {
+    static let canvas = Color(uiColor: .systemBackground)
+    static let surface = Color(uiColor: .secondarySystemBackground)
+    static let ink = Color.primary
+    static let secondaryInk = Color.secondary
+    static let divider = Color(uiColor: .separator)
+    static let accent = Color.accentColor
+    static let status = Color.secondary
 }
 
 struct AhogeSectionHeader<Trailing: View>: View {
@@ -28,16 +38,25 @@ struct AhogeSectionHeader<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.title3.weight(.semibold))
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+        ViewThatFits(in: .horizontal) {
+            headerRow
+            VStack(alignment: .leading, spacing: 12) { heading; trailing }
+        }
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.title3.weight(.bold))
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var headerRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            heading
             Spacer(minLength: 8)
             trailing
         }
@@ -51,6 +70,7 @@ extension AhogeSectionHeader where Trailing == EmptyView {
 }
 
 struct AhogeFilterChip: View {
+    @Environment(\.colorSchemeContrast) private var contrast
     let title: String
     let systemImage: String?
     let isSelected: Bool
@@ -75,15 +95,20 @@ struct AhogeFilterChip: View {
                     Image(systemName: systemImage)
                 }
                 Text(title)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(minHeight: 44)
             .font(.subheadline.weight(isSelected ? .semibold : .medium))
             .padding(.horizontal, 13)
             .padding(.vertical, 8)
-            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
             .background {
                 Capsule(style: .continuous)
-                    .fill(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                    .fill(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.12)) : AnyShapeStyle(AhogePalette.surface))
+            }
+            .overlay {
+                Capsule().stroke(isSelected ? Color.accentColor : AhogePalette.divider,
+                                 lineWidth: contrast == .increased ? 2 : 1)
             }
             .contentShape(Capsule())
         }
@@ -93,6 +118,7 @@ struct AhogeFilterChip: View {
 }
 
 struct AhogeMangaGridCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let manga: Manga
     var hideSensitiveCover = false
     var allowsAdultContent = false
@@ -109,9 +135,9 @@ struct AhogeMangaGridCard: View {
                     allowsAdultContent: allowsAdultContent,
                     cornerRadius: AhogeLayout.coverRadius
                 )
+                .accessibilityHidden(true)
                 .aspectRatio(AhogeLayout.compactCoverRatio, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.10), radius: 10, y: 5)
+                .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 180 : .infinity)
 
                 VStack(alignment: .trailing, spacing: 6) {
                     if showsDownloadedBadge {
@@ -124,7 +150,7 @@ struct AhogeMangaGridCard: View {
                     }
                     if let badgeText, !badgeText.isEmpty {
                         Text(badgeText)
-                            .font(.caption2.weight(.semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
@@ -135,9 +161,9 @@ struct AhogeMangaGridCard: View {
             }
 
             Text(manga.title)
-                .font(.subheadline.weight(.semibold))
+                .font(.headline)
                 .foregroundStyle(.primary)
-                .lineLimit(2)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .multilineTextAlignment(.leading)
 
             if let progress {
@@ -152,7 +178,7 @@ struct AhogeMangaGridCard: View {
                 Text(manga.author.isEmpty ? manga.statusText : manga.author)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             }
         }
         .contentShape(Rectangle())
@@ -167,56 +193,52 @@ struct AhogeContinueReadingCard: View {
     var hideSensitiveCover = false
     var allowsAdultContent = false
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        HStack(spacing: 16) {
-            MangaCoverView(
-                manga: manga,
-                hideSensitiveCover: hideSensitiveCover,
-                allowsAdultContent: allowsAdultContent,
-                cornerRadius: 16
-            )
-            .frame(width: 92, height: 130)
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 5)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("CONTINUE READING")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .tracking(0.6)
-
-                Text(manga.title)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                Text(progress?.chapterTitle ?? chapter.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                if let progress {
-                    ProgressView(
-                        value: Double(progress.pageIndex + 1),
-                        total: Double(max(progress.totalPages, 1))
-                    )
-                    Text("Page \(progress.pageIndex + 1) of \(max(progress.totalPages, 1))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Label("Resume", systemImage: "play.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.tint)
-                    .padding(.top, 2)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 20) { cover; readingDetails }
+            } else {
+                HStack(alignment: .center, spacing: 24) { cover; readingDetails }
             }
-            Spacer(minLength: 0)
         }
-        .padding(14)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous)
-                .stroke(.quaternary, lineWidth: 0.5)
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 16)
         .accessibilityElement(children: .combine)
+        .accessibilityHint("Resume reading this chapter")
+    }
+
+    private var cover: some View {
+        MangaCoverView(
+            manga: manga,
+            hideSensitiveCover: hideSensitiveCover,
+            allowsAdultContent: allowsAdultContent,
+            cornerRadius: 12
+        )
+        .accessibilityHidden(true)
+        .aspectRatio(AhogeLayout.compactCoverRatio, contentMode: .fit)
+        .frame(width: dynamicTypeSize.isAccessibilitySize ? 140 : 120)
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+    }
+
+    private var readingDetails: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Continue reading").font(.subheadline).foregroundStyle(.secondary)
+            Text(manga.title).font(.title2.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+            Text(progress?.chapterTitle ?? chapter.title)
+                .font(.subheadline).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let progress {
+                ProgressView(value: Double(progress.pageIndex + 1), total: Double(max(progress.totalPages, 1)))
+                    .accessibilityLabel("Reading progress")
+                Text("Page \(progress.pageIndex + 1) of \(max(progress.totalPages, 1))")
+                    .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            Label("Resume", systemImage: "play.fill")
+                .font(.headline).foregroundStyle(.tint)
+                .frame(minHeight: 44)
+        }
     }
 }
 
@@ -234,7 +256,7 @@ struct AhogeSourceCard: View {
                 HStack(spacing: 6) {
                     Text(source.name)
                         .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     if source.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.caption2)
@@ -244,15 +266,15 @@ struct AhogeSourceCard: View {
                 Text("\(source.language.rawValue) · \(source.kind == .local ? "Local" : "Remote")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(AhogePalette.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.quaternary, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(AhogePalette.divider, lineWidth: 0.5)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -260,6 +282,7 @@ struct AhogeSourceCard: View {
 }
 
 struct AhogeStatusBadge: View {
+    @Environment(\.colorSchemeContrast) private var contrast
     let title: String
     let systemImage: String
 
@@ -269,7 +292,9 @@ struct AhogeStatusBadge: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .background(.quaternary, in: Capsule())
+            .background(AhogePalette.surface, in: Capsule())
+            .overlay { Capsule().stroke(AhogePalette.divider, lineWidth: contrast == .increased ? 2 : 0.5) }
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -304,6 +329,8 @@ struct AhogeActionRow: View {
                     .foregroundStyle(.tertiary)
             }
         }
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

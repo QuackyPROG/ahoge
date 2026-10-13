@@ -17,30 +17,26 @@ struct ActivityView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AhogeLayout.sectionSpacing) {
-                HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Your reading timeline")
+                        .font(.largeTitle.weight(.bold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("New chapters and the stories you return to.")
+                        .font(.body).foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 0) {
                     activityDestination(
                         title: "Updates",
                         subtitle: model.unreadUpdatesCount > 0 ? "\(model.unreadUpdatesCount) new" : "Library feed",
                         systemImage: "sparkles.rectangle.stack"
-                    ) {
-                        UpdatesView()
-                    }
-
+                    ) { UpdatesView() }
+                    Divider()
                     activityDestination(
                         title: "History",
                         subtitle: "Reading activity",
                         systemImage: "clock.arrow.circlepath"
-                    ) {
-                        HistoryView()
-                    }
-
-                    activityDestination(
-                        title: "Downloads",
-                        subtitle: model.downloadJobs.isEmpty ? "Offline titles" : "\(model.downloadJobs.count) queued",
-                        systemImage: "arrow.down.circle"
-                    ) {
-                        DownloadsView()
-                    }
+                    ) { HistoryView() }
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -63,8 +59,7 @@ struct ActivityView: View {
                                 if index < recentUpdates.count - 1 { Divider().padding(.leading, 74) }
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
+
                     }
                 }
 
@@ -89,11 +84,18 @@ struct ActivityView: View {
                                 if index < recentHistory.count - 1 { Divider().padding(.leading, 74) }
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
+
                     }
                 }
+                Divider()
+                activityDestination(
+                    title: "Downloads",
+                    subtitle: model.downloadJobs.isEmpty ? "Offline titles" : "\(model.downloadJobs.count) queued",
+                    systemImage: "arrow.down.circle"
+                ) { DownloadsView() }
             }
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, AhogeLayout.pagePadding)
             .padding(.top, 8)
             .padding(.bottom, 28)
@@ -108,22 +110,8 @@ struct ActivityView: View {
         @ViewBuilder destination: () -> Destination
     ) -> some View {
         NavigationLink(destination: destination()) {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.tint)
-                Spacer(minLength: 4)
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, minHeight: 118, alignment: .leading)
-            .padding(12)
-            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            AhogeActionRow(title: title, subtitle: subtitle, systemImage: systemImage)
+                .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
     }
@@ -135,18 +123,19 @@ struct ActivityView: View {
                 hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
                 allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false
             )
-            .frame(width: 50, height: 68)
+            .frame(width: 56, height: 80)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.manga.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(item.chapter.title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(item.chapter.releaseDate, style: .relative)
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -156,7 +145,8 @@ struct ActivityView: View {
                     .accessibilityLabel("Downloaded")
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 
     private func historyRow(entry: HistoryEntry, manga: Manga, chapter: Chapter) -> some View {
@@ -166,18 +156,19 @@ struct ActivityView: View {
                 hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
                 allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false
             )
-            .frame(width: 50, height: 68)
+            .frame(width: 56, height: 80)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(manga.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(chapter.title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(entry.timestamp, style: .relative)
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -186,14 +177,14 @@ struct ActivityView: View {
                 .foregroundStyle(.tint)
                 .accessibilityHidden(true)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 
     private func compactEmptyState(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
             .font(.subheadline)
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, minHeight: 82)
-            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
+            .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
     }
 }

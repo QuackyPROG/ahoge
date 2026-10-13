@@ -12,15 +12,18 @@ import UIKit
 struct SettingsHomeView: View {
     var body: some View {
         List {
-            Section("Core") {
-                settingsLink("Appearance", systemImage: "sun.max", destination: AppearanceSettingsView())
+            Section {
+                settingsLink("Search Settings", systemImage: "magnifyingglass", destination: SettingsSearchView())
+            }
+            Section("Reading preferences") {
                 settingsLink("Library", systemImage: "books.vertical", destination: LibrarySettingsView())
                 settingsLink("Reader", systemImage: "book.pages", destination: ReaderSettingsView())
                 settingsLink("Downloads", systemImage: "arrow.down.circle", destination: DownloadSettingsView())
                 settingsLink("Browse", systemImage: "globe", destination: BrowseSettingsView())
             }
 
-            Section("Privacy & Data") {
+            Section("App & privacy") {
+                settingsLink("Appearance", systemImage: "sun.max", destination: AppearanceSettingsView())
                 settingsLink("Security", systemImage: "faceid", destination: SecuritySettingsView())
                 settingsLink("Data & Storage", systemImage: "externaldrive", destination: DataStorageView())
                 settingsLink("Tracking", systemImage: "person.badge.clock", destination: TrackingCenterView())
@@ -28,11 +31,12 @@ struct SettingsHomeView: View {
 
             Section("Support") {
                 settingsLink("Advanced", systemImage: "wrench.and.screwdriver", destination: AdvancedSettingsView())
-                settingsLink("Search Settings", systemImage: "magnifyingglass", destination: SettingsSearchView())
                 settingsLink("About", systemImage: "info.circle", destination: AboutView())
             }
         }
         .listStyle(.insetGrouped)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Settings")
     }
 
@@ -41,7 +45,7 @@ struct SettingsHomeView: View {
         NavigationLink {
             destination
         } label: {
-            Label(title, systemImage: systemImage)
+            Label(title, systemImage: systemImage).frame(minHeight: 44)
         }
     }
 }
@@ -51,7 +55,12 @@ struct AppearanceSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Theme") {
+            Section {
+                Label("Make yourself at home", systemImage: "sun.max").font(.title3.weight(.semibold))
+                Text("Follow your device appearance or choose your preferred reading-room theme.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Section("Appearance") {
                 Toggle("Follow System Appearance", isOn: Binding(
                     get: { model.state.appSettings.useSystemColorScheme },
                     set: model.setUseSystemAppearance
@@ -70,6 +79,8 @@ struct AppearanceSettingsView: View {
                 LabeledContent("Current", value: model.currentLanguageLabel)
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Appearance")
     }
 }
@@ -80,6 +91,10 @@ struct AppLanguageView: View {
 
     var body: some View {
         List {
+            Section {
+                Text("Choose the app language").font(.title3.weight(.semibold))
+                Text("System Default follows your device language.").font(.subheadline).foregroundStyle(.secondary)
+            }
             ForEach(languages, id: \.self) { code in
                 Button {
                     model.setAppLanguageCode(code)
@@ -93,8 +108,12 @@ struct AppLanguageView: View {
                     }
                 }
                 .foregroundStyle(.primary)
+                .frame(minHeight: 44)
+                .accessibilityAddTraits(model.state.appSettings.appLanguageCode == code ? [.isSelected] : [])
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("App Language")
     }
 }
@@ -104,7 +123,12 @@ struct DownloadSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Queue") {
+            Section {
+                Label("Offline reading", systemImage: "arrow.down.circle").font(.title3.weight(.semibold))
+                Text("Choose how chapters join the download queue and which connection can be used.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Section("Queue & connection") {
                 Picker("Queue Policy", selection: Binding(
                     get: { model.state.downloadPreferences.queueStrategy },
                     set: model.setDownloadQueueStrategy
@@ -133,11 +157,13 @@ struct DownloadSettingsView: View {
                 .disabled(!model.state.downloadPreferences.autoDownloadNewChapters)
             }
 
-            Section("Storage") {
+            Section("On this device") {
                 LabeledContent("Storage Path", value: "On My iPhone / Ahoge")
                 LabeledContent("Local Runtime", value: model.localImportSummary())
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Downloads")
     }
 }
@@ -147,6 +173,11 @@ struct BrowseSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Label("Your source directory", systemImage: "globe").font(.title3.weight(.semibold))
+                Text("These filters determine the sources available in Explore and search.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
             Section("Source Visibility") {
                 Toggle("Hide adult sources", isOn: Binding(
                     get: { model.state.browsePreferences.hideAdultSources },
@@ -176,6 +207,8 @@ struct BrowseSettingsView: View {
                 LabeledContent("Visible Sources", value: "\(model.visibleSources.count)")
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Browse")
     }
 }
@@ -185,11 +218,6 @@ struct DataStorageView: View {
 
     var body: some View {
         List {
-            Section("Backup") {
-                NavigationLink("Create Backup", destination: CreateBackupView())
-                NavigationLink("Restore Backup", destination: RestoreBackupView())
-            }
-
             Section("Storage") {
                 LabeledContent("Summary", value: model.storageSummary())
                 LabeledContent("Imports", value: model.localImportSummary())
@@ -199,7 +227,12 @@ struct DataStorageView: View {
                 LabeledContent("Network Cache", value: ByteCountFormatter.string(fromByteCount: Int64(model.cacheStats.diskNetworkBytes), countStyle: .file))
             }
 
-            Section("Maintenance") {
+            Section("Backup") {
+                NavigationLink("Create Backup", destination: CreateBackupView())
+                NavigationLink("Restore Backup", destination: RestoreBackupView())
+            }
+
+            Section {
                 Button("Clear History", role: .destructive) {
                     model.clearHistory()
                 }
@@ -218,8 +251,12 @@ struct DataStorageView: View {
                 Button("Clear All Caches", role: .destructive) {
                     Task { await model.clearAllCaches() }
                 }
+            } header: { Label("Remove stored data", systemImage: "trash") } footer: {
+                Text("These actions clear the selected records or caches from this device.")
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Data & Storage")
     }
 }
@@ -229,11 +266,13 @@ struct SecuritySettingsView: View {
 
     var body: some View {
         Form {
-            Section("Privacy") {
+            Section("Reading privacy") {
                 Toggle("Incognito Mode", isOn: Binding(
                     get: { model.state.appSettings.incognitoMode },
                     set: model.setIncognitoMode
                 ))
+            }
+            Section("Device protection") {
                 Toggle("Lock with Face ID", isOn: Binding(
                     get: { model.state.securityPreferences.requireBiometricUnlock },
                     set: model.setBiometricUnlockEnabled
@@ -242,6 +281,8 @@ struct SecuritySettingsView: View {
                     get: { model.state.securityPreferences.blurAppSwitcher },
                     set: model.setBlurAppSwitcher
                 ))
+            }
+            Section("Cover privacy") {
                 Toggle("Hide Sensitive Covers", isOn: Binding(
                     get: { model.state.securityPreferences.hideSensitiveCovers },
                     set: model.setHideSensitiveCovers
@@ -258,6 +299,8 @@ struct SecuritySettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Security")
     }
 }
@@ -267,6 +310,11 @@ struct AdvancedSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Label("Advanced controls", systemImage: "wrench.and.screwdriver").font(.title3.weight(.semibold))
+                Text("Adjust reader requests, cache limits, and diagnostic visibility.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
             Section("Reader Networking") {
                 Stepper(
                     "Image prefetch window: \(model.state.advancedPreferences.imagePrefetchCount)",
@@ -342,6 +390,8 @@ struct AdvancedSettingsView: View {
                 }
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Advanced")
     }
 }
@@ -425,6 +475,8 @@ struct DiagnosticsLogView: View {
                         .font(.footnote.monospaced())
                 }
 
+            }
+            Section("Filter entries") {
                 Picker("Kind", selection: $selectedKindRawValue) {
                     Text("All").tag("all")
                     ForEach(DiagnosticLogKind.allCases) { kind in
@@ -445,6 +497,8 @@ struct DiagnosticsLogView: View {
                     }
                 }
 
+            }
+            Section("JSON export") {
                 Button("Copy JSON Export") {
                     UIPasteboard.general.string = jsonExport
                     copyConfirmationMessage = "Copied JSON export to clipboard."
@@ -464,6 +518,8 @@ struct DiagnosticsLogView: View {
                     }
                 }
 
+            }
+            Section("CSV export") {
                 Button("Copy CSV Export") {
                     UIPasteboard.general.string = csvExport
                     copyConfirmationMessage = "Copied CSV export to clipboard."
@@ -483,11 +539,13 @@ struct DiagnosticsLogView: View {
                     }
                 }
 
+            }
+            Section {
                 Button("Clear Logs", role: .destructive) {
                     model.clearDiagnostics()
                 }
                 .disabled(model.diagnosticLogs.isEmpty)
-            }
+            } header: { Text("Log maintenance") } footer: { Text("Clearing logs removes the recorded diagnostics from this device.") }
 
             Section("Entries") {
                 if filteredEntries.isEmpty {
@@ -501,15 +559,14 @@ struct DiagnosticsLogView: View {
                 } else {
                     ForEach(filteredEntries) { entry in
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
+                            VStack(alignment: .leading, spacing: 6) {
                                 Text(entry.title)
                                     .font(.headline)
-                                Spacer()
-                                Text(entry.severity.rawValue.uppercased())
-                                    .font(.caption.weight(.semibold))
+                                Label(entry.severity.rawValue.capitalized, systemImage: "exclamationmark.circle")
+                                    .font(.footnote.weight(.semibold))
                                     .foregroundStyle(severityColor(entry.severity))
-                                Text(entry.kind.rawValue.uppercased())
-                                    .font(.caption.weight(.semibold))
+                                Text(entry.kind.rawValue.capitalized)
+                                    .font(.footnote.weight(.semibold))
                                     .foregroundStyle(.secondary)
                             }
 
@@ -521,19 +578,19 @@ struct DiagnosticsLogView: View {
                                 ForEach(entry.metadata.keys.sorted(), id: \.self) { key in
                                     if let value = entry.metadata[key] {
                                         LabeledContent(key, value: value)
-                                            .font(.caption.monospaced())
+                                            .font(.footnote.monospaced())
                                     }
                                 }
                             }
 
                             if let errorCode = entry.errorCode {
                                 LabeledContent("errorCode", value: errorCode)
-                                    .font(.caption.monospaced())
+                                    .font(.footnote.monospaced())
                             }
 
                             if let module = entry.module {
                                 LabeledContent("module", value: module)
-                                    .font(.caption.monospaced())
+                                    .font(.footnote.monospaced())
                             }
 
                             if let resolutionHint = entry.resolutionHint {
@@ -542,7 +599,7 @@ struct DiagnosticsLogView: View {
                             }
 
                             Text(entry.timestamp.formatted(date: .abbreviated, time: .standard))
-                                .font(.caption.monospaced())
+                                .font(.footnote.monospaced())
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(.vertical, 4)
@@ -551,6 +608,8 @@ struct DiagnosticsLogView: View {
             }
         }
         .searchable(text: $query, prompt: "Search title, message, metadata")
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Error Logs")
         .alert("Diagnostics Export", isPresented: Binding(
             get: { copyConfirmationMessage != nil },
@@ -605,11 +664,26 @@ struct SettingsSearchView: View {
 
     var body: some View {
         List {
+            Section {
+                Label("Current preferences", systemImage: "slider.horizontal.3").font(.title3.weight(.semibold))
+                Text("Search the current values shown below. Change preferences in their settings screens.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            if !query.isEmpty && entries.filter({ $0.0.localizedCaseInsensitiveContains(query) }).isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
             ForEach(entries.filter { query.isEmpty || $0.0.localizedCaseInsensitiveContains(query) }, id: \.0) { entry in
-                LabeledContent(entry.0, value: entry.1)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(entry.0).font(.headline)
+                    Text(entry.1).font(.body).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
             }
         }
         .searchable(text: $query, prompt: "Find setting")
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Search Settings")
     }
 }
@@ -625,7 +699,11 @@ struct AboutView: View {
 
     var body: some View {
         List {
-            Section("App") {
+            Section {
+                Text("Ahoge").font(.system(.largeTitle, design: .rounded, weight: .bold))
+                Text("A home for your manga library.").font(.body).foregroundStyle(.secondary)
+            }
+            Section("Installed app") {
                 LabeledContent("Name", value: "Ahoge")
                 LabeledContent("Version", value: versionLabel)
                 NavigationLink("Open Source Licenses", destination: LicensesView())
@@ -636,13 +714,17 @@ struct AboutView: View {
                     blockedLinkMessage = "Website belum siap dibuka dari aplikasi. Tautan eksternal masih ditutup sementara."
                 }
                 .foregroundStyle(.primary)
+                .frame(minHeight: 44)
 
                 Button("Documentation") {
                     blockedLinkMessage = "Documentation belum siap dibuka dari aplikasi. Tautan eksternal masih ditutup sementara."
                 }
                 .foregroundStyle(.primary)
+                .frame(minHeight: 44)
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("About")
         .alert("Coming Soon", isPresented: Binding(
             get: { blockedLinkMessage != nil },
@@ -660,9 +742,13 @@ struct AboutView: View {
 struct LicensesView: View {
     var body: some View {
         List {
-            NavigationLink("SwiftUI", destination: LicenseDetailView(title: "SwiftUI", text: "Apple UI framework used for the iOS port."))
-            NavigationLink("Foundation", destination: LicenseDetailView(title: "Foundation", text: "System framework used for model and persistence plumbing."))
+            Section("Framework acknowledgments") {
+                NavigationLink("SwiftUI", destination: LicenseDetailView(title: "SwiftUI", text: "Apple UI framework used for the iOS port."))
+                NavigationLink("Foundation", destination: LicenseDetailView(title: "Foundation", text: "System framework used for model and persistence plumbing."))
+            }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Licenses")
     }
 }
@@ -673,10 +759,17 @@ private struct LicenseDetailView: View {
 
     var body: some View {
         ScrollView {
-            Text(text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+            VStack(alignment: .leading, spacing: 24) {
+                Text(title).font(.title.weight(.bold))
+                Text(text).font(.body).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(24)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle(title)
     }
 }
@@ -689,18 +782,25 @@ struct CreateBackupView: View {
 
     var body: some View {
         Form {
+            Section("Preview") {
+                let payload = model.createPayload()
+                LabeledContent("Items", value: "\(payload.itemCount)")
+                LabeledContent("Created", value: payload.createdAt.formatted(date: .abbreviated, time: .shortened))
+            }
             Section("Scope") {
                 Toggle("Include trackers", isOn: $includeTrackers)
                 Toggle("Include history", isOn: $includeHistory)
                 Toggle("Include preferences", isOn: $includePreferences)
             }
 
-            Section("Preview") {
-                let payload = model.createPayload()
-                LabeledContent("Items", value: "\(payload.itemCount)")
-                LabeledContent("Created", value: payload.createdAt.formatted(date: .abbreviated, time: .shortened))
+            Section {
+                Label("Backup preview", systemImage: "info.circle")
+                Text("Review the payload summary and scope options. File export is not available in this screen.")
+                    .font(.subheadline).foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Create Backup")
     }
 }
@@ -708,10 +808,10 @@ struct CreateBackupView: View {
 struct RestoreBackupView: View {
     var body: some View {
         List {
-            Text("Backup restore flow should accept exported files, validate schema, and support merge or replace behavior.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            ContentUnavailableView("Restore is not available yet", systemImage: "arrow.counterclockwise", description: Text("Importing a backup file and merging or replacing your library are not available in this screen."))
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("Restore Backup")
     }
 }

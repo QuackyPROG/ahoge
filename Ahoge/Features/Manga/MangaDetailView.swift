@@ -5,6 +5,8 @@ import SwiftUI
 
 struct MangaDetailView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let manga: Manga
 
@@ -38,25 +40,27 @@ struct MangaDetailView: View {
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AhogeLayout.sectionSpacing) {
-                hero(
-                    hideSensitiveCovers: hideSensitiveCovers,
-                    allowsAdultContent: allowsAdultContent
-                )
+                VStack(alignment: .leading, spacing: 16) {
+                    hero(
+                        hideSensitiveCovers: hideSensitiveCovers,
+                        allowsAdultContent: allowsAdultContent
+                    )
 
-                if let startChapter {
-                    NavigationLink {
-                        ReaderView(manga: displayManga, initialChapter: startChapter)
-                    } label: {
-                        Label(model.progress(for: displayManga) == nil ? "Start Reading" : "Resume Reading", systemImage: "play.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                    if let startChapter {
+                        NavigationLink {
+                            ReaderView(manga: displayManga, initialChapter: startChapter)
+                        } label: {
+                            Label(model.progress(for: displayManga) == nil ? "Start Reading" : "Resume Reading", systemImage: "play.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.roundedRectangle(radius: 15))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: 15))
-                }
 
-                actionRail
+                    actionRail
+                }
 
                 if !displayManga.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     descriptionSection
@@ -74,9 +78,10 @@ struct MangaDetailView: View {
                         AhogeSectionHeader("Tracking") {
                             NavigationLink("Manage") { MangaTrackingView(manga: displayManga) }
                                 .font(.subheadline.weight(.semibold))
+                                .frame(minHeight: 44)
                         }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 ForEach(bindings) { binding in
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(binding.service.rawValue)
@@ -85,12 +90,11 @@ struct MangaDetailView: View {
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                         Text("\(binding.progressText) · Score \(binding.score)")
-                                            .font(.caption2)
+                                            .font(.footnote)
                                             .foregroundStyle(.secondary)
                                     }
-                                    .padding(12)
-                                    .frame(minWidth: 160, alignment: .leading)
-                                    .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    Divider()
                                 }
                             }
                         }
@@ -102,6 +106,8 @@ struct MangaDetailView: View {
             .padding(.horizontal, AhogeLayout.pagePadding)
             .padding(.top, 8)
             .padding(.bottom, 32)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle(displayManga.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -145,22 +151,26 @@ struct MangaDetailView: View {
     }
 
     private func hero(hideSensitiveCovers: Bool, allowsAdultContent: Bool) -> some View {
-        HStack(alignment: .top, spacing: 18) {
-            MangaCoverView(
-                manga: displayManga,
-                hideSensitiveCover: hideSensitiveCovers,
-                allowsAdultContent: allowsAdultContent,
-                cornerRadius: 20
-            )
-            .frame(width: 132, height: 188)
-            .shadow(color: .black.opacity(0.16), radius: 14, y: 7)
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .onTapGesture { showCover = true }
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 20))
+        return layout {
+            Button { showCover = true } label: {
+                MangaCoverView(
+                    manga: displayManga,
+                    hideSensitiveCover: hideSensitiveCovers,
+                    allowsAdultContent: allowsAdultContent,
+                    cornerRadius: 12
+                )
+                .frame(width: 140, height: 200)
+                .shadow(color: .black.opacity(0.16), radius: 14, y: 7)
+            }
+            .buttonStyle(.plain)
             .accessibilityLabel("Open cover for \(displayManga.title)")
 
             VStack(alignment: .leading, spacing: 9) {
                 Text(displayManga.title)
-                    .font(.title2.weight(.bold))
+                    .font(.system(.title, design: .rounded, weight: .bold))
                     .fixedSize(horizontal: false, vertical: true)
 
                 if !displayManga.author.isEmpty {
@@ -169,7 +179,7 @@ struct MangaDetailView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     AhogeStatusBadge(title: displayManga.statusText, systemImage: "circle.fill")
                     if let source = model.source(for: displayManga.sourceID) {
                         AhogeStatusBadge(title: source.name, systemImage: source.systemImage)
@@ -181,7 +191,7 @@ struct MangaDetailView: View {
                     Text(displayManga.genres.prefix(4).joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if isLoading {
@@ -197,7 +207,10 @@ struct MangaDetailView: View {
 
     @ViewBuilder
     private var actionRail: some View {
-        HStack(spacing: 10) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 12))
+        layout {
             detailAction(
                 title: model.isInLibrary(displayManga) ? "In Library" : "Library",
                 systemImage: model.isInLibrary(displayManga) ? "bookmark.fill" : "bookmark"
@@ -212,14 +225,10 @@ struct MangaDetailView: View {
                 }
             }
 
-            NavigationLink {
-                MangaTrackingView(manga: displayManga)
-            } label: {
-                actionRailLabel(title: "Track", systemImage: "person.badge.clock")
-            }
-            .buttonStyle(.plain)
-
             Menu {
+                NavigationLink { MangaTrackingView(manga: displayManga) } label: {
+                    Label("Track", systemImage: "person.badge.clock")
+                }
                 NavigationLink {
                     MangaNotesView(manga: displayManga)
                 } label: {
@@ -275,22 +284,14 @@ struct MangaDetailView: View {
         Button(action: action) {
             actionRailLabel(title: title, systemImage: systemImage)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bordered)
     }
 
     private func actionRailLabel(title: String, systemImage: String) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.headline)
-            Text(title)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .foregroundStyle(.primary)
-        .frame(maxWidth: .infinity)
-        .frame(height: 62)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        Label(title, systemImage: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, minHeight: 44)
     }
 
     private var descriptionSection: some View {
@@ -304,9 +305,10 @@ struct MangaDetailView: View {
 
             if displayManga.summary.count > 240 {
                 Button(summaryExpanded ? "Show Less" : "Read More") {
-                    withAnimation(.easeInOut(duration: 0.18)) { summaryExpanded.toggle() }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { summaryExpanded.toggle() }
                 }
                 .font(.subheadline.weight(.semibold))
+                .frame(minHeight: 44)
             }
         }
     }
@@ -325,17 +327,18 @@ struct MangaDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AhogePalette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var chaptersSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             AhogeSectionHeader("Chapters", subtitle: sortedChapters.isEmpty ? nil : "\(sortedChapters.count) available") {
                 Button {
-                    withAnimation(.snappy) { sortDescending.toggle() }
+                    withAnimation(reduceMotion ? nil : .snappy) { sortDescending.toggle() }
                 } label: {
                     Label(sortDescending ? "Newest" : "Oldest", systemImage: "arrow.up.arrow.down")
                         .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
                 }
             }
 
@@ -399,11 +402,12 @@ struct MangaDetailView: View {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
 
                 if isCurrent, let progressText = model.progressDisplayText(for: displayManga, fallbackChapter: chapter) {
                     Text(progressText)
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
@@ -411,8 +415,10 @@ struct MangaDetailView: View {
                     ChapterDownloadInlineStatusView(job: job)
                 }
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -490,17 +496,19 @@ private struct MangaDownloadAggregateView: View {
             HStack {
                 Text("Downloads").font(.caption.weight(.semibold))
                 Spacer()
-                Text("\(completed)/\(total)").font(.caption2).foregroundStyle(.secondary)
+                Text("\(completed)/\(total)").font(.footnote).monospacedDigit().foregroundStyle(.secondary)
             }
             ProgressView(value: progress)
+                .accessibilityLabel("Chapter downloads")
+                .accessibilityValue("\(completed) of \(total) complete")
             if failed > 0 {
                 Text("\(failed) failed")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(.red)
             }
         }
         .padding(12)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(AhogePalette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -513,16 +521,17 @@ private struct ChapterDownloadInlineStatusView: View {
             switch job.state {
             case .queued:
                 ProgressView().controlSize(.small)
-                Text("Queued").font(.caption2).foregroundStyle(.secondary)
+                Text("Queued").font(.footnote).foregroundStyle(.secondary)
             case .downloading:
                 ProgressView(value: min(max(job.progress, 0), 1)).frame(maxWidth: 150)
-                Text("\(Int(job.progress * 100))%").font(.caption2).foregroundStyle(.secondary)
+                Text("\(Int(job.progress * 100))%").font(.footnote).foregroundStyle(.secondary)
             case .paused:
-                Label("Paused", systemImage: "pause.circle").font(.caption2).foregroundStyle(.secondary)
+                Label("Paused", systemImage: "pause.circle").font(.footnote).foregroundStyle(.secondary)
             case .failed:
-                Label("Failed", systemImage: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.red)
+                Label("Failed", systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.red)
                 Button("Retry") { model.retryDownload(jobID: job.id) }
-                    .font(.caption2.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
+                    .frame(minHeight: 44)
                     .buttonStyle(.borderless)
             case .complete:
                 EmptyView()
@@ -540,14 +549,18 @@ private struct CoverSheet: View {
 
     var body: some View {
         NavigationStack {
+            ScrollView {
             VStack(spacing: 20) {
+                Text(manga.title).font(.title2.weight(.bold))
+                    .fixedSize(horizontal: false, vertical: true)
                 MangaCoverView(
                     manga: manga,
                     hideSensitiveCover: hideSensitiveCover,
                     allowsAdultContent: allowsAdultContent,
-                    cornerRadius: 26
+                    cornerRadius: 12
                 )
-                .frame(maxHeight: 430)
+                .aspectRatio(0.70, contentMode: .fit)
+                .frame(maxWidth: 320)
                 .padding(.top, 20)
 
                 ShareLink(item: manga.title) {
@@ -558,6 +571,9 @@ private struct CoverSheet: View {
                 Spacer()
             }
             .padding(.horizontal, 24)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            }
             .navigationTitle("Cover")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -577,11 +593,17 @@ struct MangaNotesView: View {
 
     var body: some View {
         Form {
-            TextEditor(text: $note)
-                .frame(minHeight: 220)
-
-            Button("Save Note") {
-                model.saveNote(note, for: manga)
+            Section {
+                Text(manga.title).font(.headline)
+                TextEditor(text: $note)
+                    .frame(minHeight: 220)
+                    .accessibilityLabel("Notes for \(manga.title)")
+            } header: { Text("Reading notes") }
+            Section {
+                Button("Save Note") {
+                    model.saveNote(note, for: manga)
+                }
+                .frame(minHeight: 44)
             }
         }
         .navigationTitle("Notes")

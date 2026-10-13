@@ -130,19 +130,21 @@ struct ReaderBottomPill: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 8) {
                 Image(systemName: systemImage)
                     .font(.headline)
                 Text(title)
-                    .font(.caption2)
-                    .lineLimit(1)
+                    .font(.subheadline.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(foregroundColor)
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frame(minHeight: 60)
+            .padding(.vertical, 8)
+            .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 
     private var backgroundStyle: some ShapeStyle {
@@ -227,22 +229,29 @@ struct ReaderEmptyState: View {
     let retry: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
+        ScrollView {
+            VStack(spacing: 24) {
             Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 34))
+                .font(.largeTitle)
+                .accessibilityHidden(true)
                 .foregroundStyle(.white.opacity(0.7))
             Text("Chapter could not be displayed")
-                .font(.headline)
+                .font(.title2.weight(.bold))
                 .foregroundStyle(.white)
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.72))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 28)
-            Button("Retry", action: retry)
+            Button("Retry chapter", action: retry)
+                .frame(minHeight: 44)
                 .buttonStyle(.borderedProminent)
                 .tint(.white.opacity(0.18))
         }
+            }
+            .padding(.vertical, 32)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .ignoresSafeArea()

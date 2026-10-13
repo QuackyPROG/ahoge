@@ -11,14 +11,17 @@ struct LibraryView: View {
     }
 
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedCategoryID: String?
     @State private var searchText = ""
     @State private var sortMode: LibrarySortMode = .recent
     @State private var quickReadTarget: QuickReadTarget?
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 142, maximum: 190), spacing: 16, alignment: .top)
-    ]
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: horizontalSizeClass == .regular ? 160 : 132), spacing: 16, alignment: .top)]
+    }
 
     private var items: [LibraryManga] {
         model.libraryItems(selectedCategoryID: selectedCategoryID, searchText: searchText, sortMode: sortMode)
@@ -33,7 +36,9 @@ struct LibraryView: View {
                 if let item = continueItems.first,
                    let chapter = model.startChapter(for: item.manga) {
                     VStack(alignment: .leading, spacing: 12) {
-                        AhogeSectionHeader("Pick up where you left off")
+                        Text("Your reading room")
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                            .accessibilityAddTraits(.isHeader)
                         NavigationLink {
                             ReaderView(manga: item.manga, initialChapter: chapter)
                         } label: {
@@ -49,13 +54,36 @@ struct LibraryView: View {
                     }
                 }
 
+                if continueItems.count > 1 {
+                    VStack(alignment: .leading, spacing: 12) {
+                        AhogeSectionHeader("Recently read")
+                        if dynamicTypeSize.isAccessibilitySize {
+                            ForEach(Array(continueItems.dropFirst())) { item in
+                                NavigationLink { MangaDetailView(manga: item.manga) } label: {
+                                    recentTitle(item, hideSensitiveCovers: hideSensitiveCovers)
+                                }.buttonStyle(.plain)
+                            }
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(alignment: .top, spacing: 16) {
+                                    ForEach(Array(continueItems.dropFirst())) { item in
+                                        NavigationLink { MangaDetailView(manga: item.manga) } label: {
+                                            recentTitle(item, hideSensitiveCovers: hideSensitiveCovers).frame(width: 132)
+                                        }.buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if !model.categories.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        AhogeSectionHeader("Categories")
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
+                        Text("Browse your shelves").font(.subheadline).foregroundStyle(.secondary)
+                        ScrollView(dynamicTypeSize.isAccessibilitySize ? .vertical : .horizontal, showsIndicators: false) {
+                            (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
                                 AhogeFilterChip("All", systemImage: "square.grid.2x2", isSelected: selectedCategoryID == nil) {
-                                    withAnimation(.snappy) { selectedCategoryID = nil }
+                                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { selectedCategoryID = nil }
                                 }
                                 ForEach(model.categories) { category in
                                     AhogeFilterChip(
@@ -63,7 +91,7 @@ struct LibraryView: View {
                                         systemImage: category.systemImage,
                                         isSelected: selectedCategoryID == category.id
                                     ) {
-                                        withAnimation(.snappy) { selectedCategoryID = category.id }
+                                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { selectedCategoryID = category.id }
                                     }
                                 }
                             }
@@ -80,18 +108,18 @@ struct LibraryView: View {
 
                     if items.isEmpty {
                         ContentUnavailableView {
-                            Label(searchText.isEmpty ? "Library is Empty" : "No Matches", systemImage: "books.vertical")
+                            Label(searchText.isEmpty && selectedCategoryID == nil ? "Your collection starts here" : "No matching titles", systemImage: "books.vertical")
                         } description: {
-                            Text(searchText.isEmpty ? "Explore sources and add titles to build your collection." : "Try another title or category.")
+                            Text(searchText.isEmpty && selectedCategoryID == nil ? "Open the Explore tab, choose a source, and add a title to your Library." : "Try another search or return to all shelves.")
                         } actions: {
-                            if !searchText.isEmpty {
-                                Button("Clear Search") { searchText = "" }
+                            if !searchText.isEmpty || selectedCategoryID != nil {
+                                Button("Show All Titles") { searchText = ""; selectedCategoryID = nil }
                             }
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 48)
                     } else {
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                        LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : columns, alignment: .leading, spacing: 24) {
                             ForEach(items) { item in
                                 NavigationLink {
                                     MangaDetailView(manga: item.manga)
@@ -128,10 +156,13 @@ struct LibraryView: View {
                     }
                 }
             }
-            .padding(.horizontal, AhogeLayout.pagePadding)
+            .frame(maxWidth: 1200, alignment: .leading)
+            .padding(.horizontal, horizontalSizeClass == .regular ? 28 : AhogeLayout.pagePadding)
+            .frame(maxWidth: .infinity)
             .padding(.top, 8)
             .padding(.bottom, 28)
         }
+        .background(AhogePalette.canvas)
         .searchable(text: $searchText, prompt: "Search library")
         .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.large)
@@ -182,11 +213,20 @@ struct LibraryView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel("Library actions")
             }
         }
+    }
+
+    private func recentTitle(_ item: LibraryManga, hideSensitiveCovers: Bool) -> some View {
+        AhogeMangaGridCard(
+            manga: item.manga,
+            hideSensitiveCover: hideSensitiveCovers,
+            allowsAdultContent: model.source(for: item.manga.sourceID)?.allowsAdultContent ?? false,
+            progress: item.progress
+        )
     }
 
     private func unreadBadge(for item: LibraryManga) -> String? {

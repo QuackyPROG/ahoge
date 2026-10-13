@@ -475,59 +475,50 @@ struct ReaderView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(.white)
-            }
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(manga.title)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-
-                Text(currentChapter.title)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.74))
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
+        let close = Button {
+            dismiss()
+        } label: {
+            Image(systemName: "chevron.left")
+                .font(.headline)
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Close reader")
+        let identity = VStack(alignment: .leading, spacing: 4) {
+            Text(manga.title).font(.headline)
+            Text(currentChapter.title).font(.subheadline)
+                .foregroundStyle(readerChromeForegroundColor.opacity(0.8))
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+        let actions = HStack(spacing: 8) {
             Button {
                 showingActions = true
             } label: {
                 Image(systemName: "ellipsis.circle")
-                    .font(.body)
-                    .foregroundStyle(.white)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
             }
-
+            .accessibilityLabel("Chapter actions")
             Button {
                 showingSettings = true
             } label: {
                 Image(systemName: "slider.horizontal.3")
-                    .font(.body)
-                    .foregroundStyle(.white)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("Reader settings")
         }
+        return ReaderChromeIdentity(close: close, identity: identity, actions: actions)
+        .foregroundStyle(readerChromeForegroundColor)
         .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 6)
+        .padding(.vertical, 8)
         .background(readerBarBackground)
+        .modifier(ReaderChromePresentation(foreground: readerChromeForegroundColor))
     }
 
     private var chapterNavigator: some View {
         let total = max(logicalPages.count, 1)
         let boundedIndex = boundedPageIndex(for: pageIndex)
         let displayedPage = sliderActiveValue != nil ? Int(sliderActiveValue!.rounded()) : (boundedIndex + 1)
-        return HStack(spacing: 12) {
+        return HStack(spacing: 8) {
             Button {
                 if let chapter = previousChapterForCurrentMode() {
                     transitionToChapter(chapter, pageIndex: Self.chapterEndPageTarget)
@@ -535,18 +526,19 @@ struct ReaderView: View {
             } label: {
                 Image(systemName: chapterLeadingIcon)
                     .font(.headline)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .background(readerCapsuleBackground, in: Circle())
-            .foregroundStyle(.white)
+            .foregroundStyle(readerChromeForegroundColor)
+            .accessibilityLabel("Previous chapter")
             .disabled(previousChapterForCurrentMode() == nil)
             .opacity(previousChapterForCurrentMode() == nil ? 0.35 : 1)
 
             HStack(spacing: 12) {
                 Text("\(displayedPage)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(readerChromeForegroundColor)
                     .frame(minWidth: 22, alignment: .trailing)
 
                 if total > 1 {
@@ -571,20 +563,22 @@ struct ReaderView: View {
                             sliderActiveValue = nil
                         }
                     }
-                    .tint(.white)
+                    .tint(readerChromeForegroundColor)
+                    .accessibilityLabel("Chapter page")
+                    .accessibilityValue("Page \(displayedPage) of \(total)")
                 } else {
                     Capsule()
-                        .fill(Color.white.opacity(0.16))
+                        .fill(readerPillTintColor.opacity(0.2))
                         .frame(height: 4)
                 }
 
                 Text("\(total)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(readerChromeForegroundColor)
                     .frame(minWidth: 22, alignment: .leading)
             }
             .padding(.horizontal, 14)
-            .frame(height: 40)
+            .frame(minHeight: 44)
             .background(readerCapsuleBackground, in: Capsule())
 
             Button {
@@ -594,11 +588,12 @@ struct ReaderView: View {
             } label: {
                 Image(systemName: chapterTrailingIcon)
                     .font(.headline)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .background(readerCapsuleBackground, in: Circle())
-            .foregroundStyle(.white)
+            .foregroundStyle(readerChromeForegroundColor)
+            .accessibilityLabel("Next chapter")
             .disabled(nextChapterForCurrentMode() == nil)
             .opacity(nextChapterForCurrentMode() == nil ? 0.35 : 1)
         }
@@ -606,7 +601,8 @@ struct ReaderView: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 10) {
+        ScrollView(.vertical) {
+            ReaderChromeOptions {
             ReaderBottomPill(
                 systemImage: readingModeSymbol,
                 title: activeReaderMode.title,
@@ -653,6 +649,7 @@ struct ReaderView: View {
             ) {
                 model.setReaderPageNumberVisible(!model.state.readerPreferences.showPageNumber)
             }
+            .accessibilityValue(model.state.readerPreferences.showPageNumber ? "Page number shown" : "Page number hidden")
 
             ReaderBottomPill(
                 systemImage: "slider.horizontal.3",
@@ -665,10 +662,13 @@ struct ReaderView: View {
                 showingSettings = true
             }
         }
+            }
+        .frame(maxHeight: 220)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(readerBarBackground, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .padding(.horizontal, 12)
+        .modifier(ReaderChromePresentation(foreground: readerChromeForegroundColor))
     }
 
     private func handleTap(at point: CGPoint, in size: CGSize) {

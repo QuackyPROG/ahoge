@@ -5,27 +5,33 @@ import SwiftUI
 
 struct StatsView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ScrollView {
             if model.hasMeaningfulStats {
                 LazyVStack(alignment: .leading, spacing: AhogeLayout.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Your reading life").font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        Text("A snapshot of your library and reading activity.")
+                            .font(.body).foregroundStyle(.secondary)
+                    }
                     ForEach(model.statsSections()) { section in
                         VStack(alignment: .leading, spacing: 12) {
                             AhogeSectionHeader(section.title)
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 145), spacing: 12)],
-                                spacing: 12
-                            ) {
+                            VStack(spacing: 0) {
                                 ForEach(section.items) { item in
                                     metricCard(item)
+                                    Divider()
                                 }
                             }
                         }
                     }
                 }
                 .padding(.horizontal, AhogeLayout.pagePadding)
-                .padding(.vertical, 12)
+                .padding(.vertical, 24)
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity)
             } else {
                 ContentUnavailableView(
                     "No Reading Stats Yet",
@@ -40,25 +46,25 @@ struct StatsView: View {
     }
 
     private func metricCard(_ item: StatsItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: item.systemImage)
-                .font(.headline)
-                .foregroundStyle(model.chromeTint)
-            Text(item.value)
-                .font(.title2.weight(.semibold))
-                .minimumScaleFactor(0.8)
-            Text(item.title)
-                .font(.subheadline.weight(.medium))
-            if let detail = item.detail {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 20))
+        return layout {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(item.title, systemImage: item.systemImage)
+                    .font(.headline)
+                if let detail = item.detail {
+                    Text(detail).font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(item.value)
+                .font(.system(.title, design: .rounded, weight: .semibold))
+                .monospacedDigit().foregroundStyle(model.chromeTint)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
-        .padding(14)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
+        .padding(.vertical, 16)
         .accessibilityElement(children: .combine)
     }
 }
