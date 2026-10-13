@@ -19,11 +19,16 @@ struct DownloadQueueView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 70)
             } else {
-                LazyVStack(spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    AhogeSectionHeader("Transfers", subtitle: "Progress and available actions")
+                        .padding(.vertical, 24)
                     ForEach(jobs) { job in
                         downloadCard(job)
+                        Divider()
                     }
                 }
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, AhogeLayout.pagePadding)
                 .padding(.vertical, 12)
             }
@@ -38,29 +43,36 @@ struct DownloadQueueView: View {
                     manga: job.manga,
                     hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
                     allowsAdultContent: model.source(for: job.manga.sourceID)?.allowsAdultContent ?? false,
-                    cornerRadius: 10
+                    cornerRadius: AhogeLayout.coverRadius
                 )
-                .frame(width: 46, height: 64)
+                .frame(width: 56, height: 80)
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(job.manga.title)
                         .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(job.chapter.title)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     Label(job.state.rawValue.capitalized, systemImage: stateSymbol(job.state))
-                        .font(.caption2.weight(.semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(job.state == .failed ? .red : .secondary)
                 }
                 Spacer()
-                actionMenu(job)
+
             }
 
             if job.state == .downloading || job.state == .queued || job.state == .paused {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Transfer progress").font(.subheadline).foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Text(min(max(job.progress, 0), 1).formatted(.percent.precision(.fractionLength(0))))
+                        .font(.subheadline.monospacedDigit())
+                }
                 ProgressView(value: min(max(job.progress, 0), 1))
-                    .accessibilityLabel("Download progress")
+                    .accessibilityLabel("Download progress for \(job.chapter.title)")
                     .accessibilityValue("\(Int(job.progress * 100)) percent")
             }
 
@@ -70,14 +82,14 @@ struct DownloadQueueView: View {
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            actionMenu(job)
         }
-        .padding(14)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.vertical, 20)
     }
 
     @ViewBuilder
     private func actionMenu(_ job: DownloadJob) -> some View {
-        Menu {
+        VStack(alignment: .leading, spacing: 8) {
             switch job.state {
             case .queued, .downloading, .paused:
                 Button(role: .destructive) {
@@ -103,12 +115,10 @@ struct DownloadQueueView: View {
                     Label("Remove", systemImage: "trash")
                 }
             }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-                .foregroundStyle(.secondary)
         }
-        .accessibilityLabel("Actions for \(job.chapter.title)")
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+        .frame(minHeight: 44)
     }
 
     private func stateSymbol(_ state: DownloadState) -> String {

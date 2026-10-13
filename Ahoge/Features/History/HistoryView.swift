@@ -13,6 +13,12 @@ struct HistoryView: View {
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Reading history").font(.title2.weight(.bold))
+                    Text("Pick up a chapter you have read before.").font(.subheadline).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 24)
+
                 if entries.isEmpty {
                     ContentUnavailableView(
                         searchText.isEmpty ? "No history yet" : "No matching history",
@@ -24,10 +30,24 @@ struct HistoryView: View {
                 } else {
                     ForEach(Array(entries.enumerated()), id: \.offset) { index, item in
                         let (entry, manga, chapter) = item
+                        if index == 0 || !Calendar.current.isDate(entry.timestamp, inSameDayAs: entries[index - 1].0.timestamp) {
+                            Text(entry.timestamp.formatted(date: .complete, time: .omitted))
+                                .font(.headline).foregroundStyle(.secondary)
+                                .padding(.top, 24).padding(.bottom, 8)
+                                .accessibilityAddTraits(.isHeader)
+                        }
                         NavigationLink {
                             ReaderView(manga: manga, initialChapter: chapter)
                         } label: {
-                            historyRow(entry: entry, manga: manga, chapter: chapter)
+                            if index == 0 {
+                                AhogeContinueReadingCard(
+                                    manga: manga, chapter: chapter, progress: nil,
+                                    hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
+                                    allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false
+                                )
+                            } else {
+                                historyRow(entry: entry, manga: manga, chapter: chapter)
+                            }
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
@@ -44,6 +64,8 @@ struct HistoryView: View {
                     }
                 }
             }
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, AhogeLayout.pagePadding)
             .padding(.bottom, 28)
         }
@@ -79,18 +101,19 @@ struct HistoryView: View {
                 manga: manga,
                 hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
                 allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false,
-                cornerRadius: 12
+                cornerRadius: AhogeLayout.coverRadius
             )
-            .frame(width: 56, height: 78)
+            .frame(width: 56, height: 80)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(manga.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(chapter.title)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -99,9 +122,11 @@ struct HistoryView: View {
             Image(systemName: "play.circle.fill")
                 .font(.title2)
                 .foregroundStyle(.tint)
-                .accessibilityLabel("Resume reading")
+                .accessibilityHidden(true)
         }
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Resume this chapter")
     }
 }

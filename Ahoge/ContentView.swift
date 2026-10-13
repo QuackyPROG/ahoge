@@ -15,6 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         AppChromeView()
+            .background(AhogePalette.canvas)
             .tint(model.chromeTint)
             .preferredColorScheme(model.preferredColorScheme)
     }

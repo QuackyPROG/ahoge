@@ -171,21 +171,25 @@ struct NativeUpdateView: View {
 
     var body: some View {
         Form {
-            Section("Installed") {
+            statusSection
+
+            Section {
+                Label("Installed Ahoge", systemImage: "app.badge").font(.title3.weight(.semibold))
                 LabeledContent("Version", value: model.installedVersion)
                 LabeledContent("Build", value: model.installedBuild)
                 LabeledContent("Distribution", value: model.distributionChannel.title)
-            }
-
-            statusSection
+            } header: { Text("Your installation") }
 
             Section("Actions") {
                 Button("Check Again") {
                     Task { await model.check() }
                 }
+                .frame(minHeight: 44)
                 .disabled(isChecking)
             }
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .navigationTitle("App Updates")
         .task {
             if case .idle = model.state {
@@ -202,6 +206,7 @@ struct NativeUpdateView: View {
                 HStack {
                     ProgressView()
                     Text("Checking for a newer Ahoge release…")
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             case .upToDate(let manifest):
                 Label("Ahoge is up to date.", systemImage: "checkmark.circle")
@@ -227,6 +232,8 @@ struct NativeUpdateView: View {
                     Button(model.distributionChannel == .sideload ? "Open Ahoge in SideStore" : "View Release") {
                         openURL(updateURL)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .frame(minHeight: 44)
                 } else if model.distributionChannel == .appStore {
                     Text("This build uses App Store/TestFlight distribution. Update through that channel instead of sideloading an IPA.")
                         .font(.footnote)
@@ -249,13 +256,15 @@ struct NativeUpdateView: View {
         }
         if let notes = manifest.releaseNotes, !notes.isEmpty {
             Text(notes)
-                .font(.footnote)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
         if let releaseURL = model.releaseNotesURL(for: manifest) {
             Button("Release Notes") {
                 openURL(releaseURL)
             }
+            .frame(minHeight: 44)
         }
     }
 

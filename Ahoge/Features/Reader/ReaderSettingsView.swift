@@ -11,6 +11,13 @@ struct ReaderSettingsView: View {
         NavigationStack {
             Form {
                 Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Make the page yours").font(.title2.weight(.bold))
+                        Text("Reading direction, page layout and appearance.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }.padding(.vertical, 8)
+                }
+                Section {
                     Picker("Reading mode", selection: Binding(
                         get: { model.state.readerPreferences.mode },
                         set: model.setReaderMode
@@ -20,6 +27,13 @@ struct ReaderSettingsView: View {
                         }
                     }
 
+                } header: {
+                    Label("Reading direction", systemImage: "book.pages")
+                } footer: {
+                    Text("Choose paged reading, vertical scrolling, or continuous webtoon pages.")
+                }
+
+                Section {
                     Picker("Wide pages", selection: Binding(
                         get: { model.state.readerPreferences.spreadBehavior },
                         set: model.setReaderSpreadBehavior
@@ -38,7 +52,7 @@ struct ReaderSettingsView: View {
                         }
                     }
                 } header: {
-                    Label("Reading", systemImage: "book.pages")
+                    Label("Page layout", systemImage: "rectangle.split.1x2")
                 } footer: {
                     Text("Wide-page handling applies to paged reading modes.")
                 }
@@ -53,7 +67,9 @@ struct ReaderSettingsView: View {
                         set: model.setKeepAwake
                     ))
                 } header: {
-                    Label("Controls", systemImage: "slider.horizontal.3")
+                    Label("While reading", systemImage: "slider.horizontal.3")
+                } footer: {
+                    Text("Controls can be shown or hidden while the chapter remains on screen.")
                 }
 
                 Section {
@@ -68,6 +84,7 @@ struct ReaderSettingsView: View {
                             get: { model.state.readerPreferences.colorFilter.grayscale },
                             set: model.setColorFilterGrayscale
                         ), in: 0...1)
+                        .accessibilityLabel("Grayscale")
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -76,9 +93,12 @@ struct ReaderSettingsView: View {
                             get: { model.state.readerPreferences.colorFilter.dimming },
                             set: model.setColorFilterDimming
                         ), in: 0...1)
+                        .accessibilityLabel("Dimming")
                     }
                 } header: {
                     Label("Page Appearance", systemImage: "circle.lefthalf.filled")
+                } footer: {
+                    Text("The color filter adjusts chapter pages without changing the original images.")
                 }
             }
             .navigationTitle("Reader Settings")

@@ -8,6 +8,7 @@ struct AppChromeView: View {
     @Environment(\.scenePhase) private var scenePhase
     private let biometricLockEnabled = true
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var showBiometricRetryAlert = false
 
     private var isPrivacyOverlayActive: Bool {
@@ -43,7 +44,7 @@ struct AppChromeView: View {
 
             if isPrivacyOverlayActive {
                 Rectangle()
-                    .fill(.ultraThinMaterial)
+                    .fill(reduceTransparency ? AnyShapeStyle(AhogePalette.canvas) : AnyShapeStyle(.ultraThinMaterial))
                     .ignoresSafeArea()
                 VStack(spacing: 12) {
                     Image(systemName: "lock.fill")
@@ -107,34 +108,40 @@ struct AppChromeView: View {
 
 private struct BiometricLockView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let onBiometricFailure: () -> Void
 
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(.ultraThinMaterial)
+                .fill(reduceTransparency ? AnyShapeStyle(AhogePalette.canvas) : AnyShapeStyle(.ultraThinMaterial))
                 .ignoresSafeArea()
 
-            VStack(spacing: 18) {
-                Image(systemName: "faceid")
-                    .font(.system(size: 38, weight: .semibold))
-                    .foregroundStyle(.primary)
+            ScrollView {
+                VStack(spacing: 24) {
+                    Image(systemName: "faceid")
+                        .font(.largeTitle.weight(.semibold))
+                        .foregroundStyle(.primary)
 
-                Text("Ahoge Locked")
-                    .font(.title3.weight(.semibold))
+                    Text("Ahoge Locked")
+                        .font(.system(.title, design: .rounded, weight: .bold))
 
-                Text(model.biometricErrorMessage ?? "Unlock with Face ID to continue.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 28)
+                    Text(model.biometricErrorMessage ?? "Unlock with Face ID to continue.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 28)
 
-                Button("Unlock") {
-                    Task { await model.requestBiometricUnlock() }
+                    Button("Unlock") {
+                        Task { await model.requestBiometricUnlock() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 }
-                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: 560)
+                .padding(28)
+                .frame(maxWidth: .infinity)
             }
-            .padding(28)
         }
         .onChange(of: model.biometricErrorMessage) { _, newValue in
             guard let message = newValue, !message.isEmpty else { return }
@@ -146,22 +153,18 @@ private struct BiometricLockView: View {
 private struct LaunchView: View {
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color("LaunchGradientTop"), Color("LaunchGradientBottom")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            AhogePalette.canvas.ignoresSafeArea()
 
             VStack(spacing: 18) {
                 Image(systemName: "book.pages")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white)
+                    .font(.largeTitle)
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
                 ProgressView()
-                    .tint(.white)
+                    .tint(.accentColor)
                 Text("Loading Ahoge")
                     .font(.headline)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -182,55 +185,49 @@ private struct CrashView: View {
 private struct OnboardingView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page = 0
 
-    private let pageCount = 4
+    private let pageCount = 2
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                TabView(selection: $page) {
-                    onboardingPage(
-                        systemImage: "books.vertical.fill",
-                        title: "Build your library",
-                        message: "Keep the manga you care about together, organize it with categories, and jump back into what you were reading.",
-                        footnote: "Your library and reading progress stay on this device."
-                    )
-                    .tag(0)
-
-                    onboardingPage(
-                        systemImage: "sparkle.magnifyingglass",
-                        title: "Explore your sources",
-                        message: "Search across enabled sources or browse each catalog directly. Source controls stay available without getting in the way of discovery.",
-                        footnote: "Ahoge uses the sources you configure; it doesn't add a recommendation account or cloud service."
-                    )
-                    .tag(1)
-
-                    onboardingPage(
-                        systemImage: "book.pages.fill",
-                        title: "Read your way",
-                        message: "Resume from your last page and choose the reading mode, orientation, spread handling, and display filters that fit the chapter.",
-                        footnote: "Reader progress is saved locally as you read."
-                    )
-                    .tag(2)
-
-                    onboardingPage(
-                        systemImage: "arrow.down.circle.fill",
-                        title: "Keep chapters available",
-                        message: "Download chapters for offline reading and manage transfers from Activity or the manga page.",
-                        footnote: model.currentLanguageLabel.isEmpty ? nil : "Current language: \(model.currentLanguageLabel)"
-                    )
-                    .tag(3)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 28) {
+                        Text("Step \(page + 1) of \(pageCount)")
+                            .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                        if page == 0 {
+                            onboardingPage(
+                                systemImage: "books.vertical",
+                                title: "A place for your next chapter",
+                                message: "Find manga in Explore, then add the titles you love to your Library. Use shelves to keep your collection organized.",
+                                footnote: "Your library and reading progress stay on this device."
+                            )
+                            onboardingTip("Explore your sources", message: "Search enabled sources or open a catalog. You choose the sources Ahoge uses.", systemImage: "safari")
+                        } else {
+                            onboardingPage(
+                                systemImage: "book.pages",
+                                title: "Make time to read",
+                                message: "Continue from your last page and choose the reading mode, orientation, and display settings that feel right for each chapter.",
+                                footnote: model.currentLanguageLabel.isEmpty ? nil : "Current language: \(model.currentLanguageLabel)"
+                            )
+                            onboardingTip("Take chapters with you", message: "Download chapters from a manga page. Manage offline reading and transfers in Activity.", systemImage: "arrow.down.circle")
+                        }
+                    }
+                    .frame(maxWidth: 560, alignment: .leading)
+                    .padding(24)
+                    .frame(maxWidth: .infinity)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .always))
-                .animation(.easeInOut(duration: 0.2), value: page)
+                Divider()
 
                 HStack(spacing: 12) {
                     if page > 0 {
                         Button("Back") {
-                            withAnimation { page -= 1 }
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { page -= 1 }
                         }
                         .buttonStyle(.bordered)
+                        .controlSize(.large)
                     }
 
                     Button(page == pageCount - 1 ? "Start Reading" : "Continue") {
@@ -238,14 +235,15 @@ private struct OnboardingView: View {
                             model.markOnboardingCompleted()
                             dismiss()
                         } else {
-                            withAnimation { page += 1 }
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { page += 1 }
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                     .frame(maxWidth: .infinity)
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 24)
+                .padding(.vertical, 16)
             }
             .navigationTitle("Welcome to Ahoge")
             .navigationBarTitleDisplayMode(.inline)
@@ -259,38 +257,29 @@ private struct OnboardingView: View {
         message: String,
         footnote: String?
     ) -> some View {
-        VStack(spacing: 24) {
-            Spacer(minLength: 28)
-
+        VStack(alignment: .leading, spacing: 20) {
             Image(systemName: systemImage)
-                .font(.system(size: 58, weight: .medium))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(model.chromeTint)
-                .accessibilityHidden(true)
-
-            VStack(spacing: 12) {
-                Text(title)
-                    .font(.title2.weight(.bold))
-                    .multilineTextAlignment(.center)
-                Text(message)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                .font(.largeTitle).foregroundStyle(model.chromeTint).accessibilityHidden(true)
+            Text(title).font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+            Text(message).font(.body).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let footnote {
+                Text(footnote).font(.footnote).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if let footnote {
-                    Text(footnote)
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
-            .padding(.horizontal, 32)
-
-            Spacer()
         }
-        .accessibilityElement(children: .combine)
     }
+
+    private func onboardingTip(_ title: String, message: String, systemImage: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Label(title, systemImage: systemImage).font(.headline)
+            Text(message).font(.body).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
 }
 
 private struct ReleaseNotesView: View {
@@ -305,8 +294,8 @@ private struct ReleaseNotesView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Native UI/UX overhaul")
-                            .font(.title3.weight(.bold))
+                        Text("Your reading room")
+                            .font(.system(.title, design: .rounded, weight: .bold))
                         if !currentVersion.isEmpty {
                             Text("Ahoge \(currentVersion)")
                                 .font(.subheadline)
@@ -320,8 +309,11 @@ private struct ReleaseNotesView: View {
                     releaseItem("Redesigned manga details, chapter list, downloads, More, Stats, onboarding, and reader controls.", systemImage: "sparkles")
                     releaseItem("Refined native iOS materials, spacing, accessibility, and light/dark appearance.", systemImage: "iphone")
                 }
+                .frame(maxWidth: 760, alignment: .leading)
                 .padding(24)
+                .frame(maxWidth: .infinity)
             }
+            .background(AhogePalette.canvas)
             .navigationTitle("What's New")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -337,6 +329,7 @@ private struct ReleaseNotesView: View {
             Image(systemName: systemImage)
                 .font(.title3)
                 .frame(width: 28)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
