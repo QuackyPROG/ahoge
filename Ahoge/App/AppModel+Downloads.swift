@@ -17,22 +17,17 @@ extension AppModel {
     }
 
     func isChapterDownloaded(manga: Manga, chapter: Chapter) -> Bool {
-        guard chapter.isDownloaded else { return false }
-        if chapter.pages.isEmpty {
-            return true
+        if manga.sourceID == "local-files" {
+            return !chapter.pages.isEmpty && chapter.pages.allSatisfy { $0.assetKind == .text || readerAssetRepository.fileURL(for: $0).map { FileManager.default.fileExists(atPath: $0.path) } == true }
         }
-        if let any = chapter.pages.first(where: { $0.assetKind == .image && ($0.assetPath?.isEmpty == false) }) {
-            return FileManager.default.fileExists(atPath: any.assetPath ?? "")
+        guard chapter.isDownloaded, !chapter.pages.isEmpty else { return false }
+        return chapter.pages.allSatisfy { page in
+            page.assetKind == .text || readerAssetRepository.fileURL(for: page).map { FileManager.default.fileExists(atPath: $0.path) } == true
         }
-        if let any = chapter.pages.first(where: { $0.assetPath?.isEmpty == false }) {
-            return FileManager.default.fileExists(atPath: any.assetPath ?? "")
-        }
-        let folder = chapterDownloadDirectoryURL(sourceID: manga.sourceID, mangaID: manga.id, chapterID: chapter.id)
-        return FileManager.default.fileExists(atPath: folder.path)
     }
 
     func isTitleDownloaded(manga: Manga) -> Bool {
-        chapters(for: manga).contains { $0.isDownloaded }
+        chapters(for: manga).contains { isChapterDownloaded(manga: manga, chapter: $0) }
     }
 
     func downloadJob(for manga: Manga, chapter: Chapter) -> DownloadJob? {
@@ -59,6 +54,7 @@ extension AppModel {
             errorMessage: nil
         )
         downloadJobs.append(job)
+        persist()
         startNextDownloadIfNeeded()
     }
 
@@ -82,6 +78,7 @@ extension AppModel {
             )
             downloadJobs.append(job)
         }
+        persist()
         startNextDownloadIfNeeded()
     }
 
@@ -123,9 +120,10 @@ extension AppModel {
     func retryDownload(jobID: UUID) {
         guard let index = downloadJobs.firstIndex(where: { $0.id == jobID }) else { return }
         guard downloadJobs[index].state == .failed else { return }
-        downloadJobs[index].state = .queued
-        downloadJobs[index].progress = 0
-        downloadJobs[index].errorMessage = nil
+        let old = downloadJobs[index]
+        downloadJobs[index] = DownloadJob(id: UUID(), mangaID: old.mangaID, chapterID: old.chapterID, sourceID: old.sourceID,
+            queuedAt: old.queuedAt, manga: old.manga, chapter: old.chapter, progress: 0, state: .queued, errorMessage: nil)
+        persist()
         startNextDownloadIfNeeded()
     }
 
@@ -137,10 +135,9 @@ extension AppModel {
         downloadJobs[index].errorMessage = "Cancelled"
         downloadJobs[index].progress = max(downloadJobs[index].progress, 0)
 
-        cleanupPartialDownload(for: job)
-        if wasActive {
-            startNextDownloadIfNeeded()
-        }
+        if !wasActive { cleanupPartialDownload(for: job) }
+        persist()
+        if wasActive { startNextDownloadIfNeeded() }
     }
 
     func removeDownloaded(manga: Manga, chapter: Chapter) {
@@ -183,7 +180,50 @@ extension AppModel {
         persist()
     }
 
+    func pauseDownloadQueue() {
+        state.downloadQueuePaused = true
+        if let id = downloadQueueCoordinator.activeJobID { pauseDownload(jobID: id) }
+        persist()
+    }
+
+    func resumeDownloadQueue() {
+        state.downloadQueuePaused = false
+        for id in downloadJobs.filter({ $0.state == .paused }).map(\.id) { resumeDownload(jobID: id) }
+        persist()
+        startNextDownloadIfNeeded()
+    }
+
+    func pauseDownload(jobID: UUID) {
+        guard let index = downloadJobs.firstIndex(where: { $0.id == jobID }), [.queued, .downloading].contains(downloadJobs[index].state) else { return }
+        downloadJobs[index].state = .paused
+        downloadJobs[index].progress = 0
+        _ = downloadQueueCoordinator.cancelIfActive(jobID: jobID)
+        // The canceled transport owns cleanup; no new transfer can reuse this UUID.
+        persist()
+    }
+
+    func resumeDownload(jobID: UUID) {
+        guard let index = downloadJobs.firstIndex(where: { $0.id == jobID }), downloadJobs[index].state == .paused else { return }
+        let old = downloadJobs[index]
+        downloadJobs[index] = DownloadJob(id: UUID(), mangaID: old.mangaID, chapterID: old.chapterID, sourceID: old.sourceID,
+            queuedAt: old.queuedAt, manga: old.manga, chapter: old.chapter, progress: 0, state: .queued, errorMessage: nil)
+        persist()
+        startNextDownloadIfNeeded()
+    }
+
+    func movePendingDownload(jobID: UUID, earlier: Bool) {
+        guard let index = downloadJobs.firstIndex(where: { $0.id == jobID }), [.queued, .paused].contains(downloadJobs[index].state) else { return }
+        let eligible = downloadJobs.indices.filter { [.queued, .paused].contains(downloadJobs[$0].state) }
+        guard let offset = eligible.firstIndex(of: index) else { return }
+        let target = offset + (earlier ? -1 : 1)
+        guard eligible.indices.contains(target) else { return }
+        downloadJobs.swapAt(index, eligible[target]); persist()
+    }
+
+    func removeDownloadJob(_ id: UUID) { cancelDownload(jobID: id); downloadJobs.removeAll { $0.id == id }; persist() }
+
     private func startNextDownloadIfNeeded() {
+        guard !state.downloadQueuePaused else { return }
         guard let nextID = downloadQueueCoordinator.startIfIdle(jobs: downloadJobs, run: { [weak self] jobID in
             guard let self else { return }
             await self.performDownload(jobID: jobID)
@@ -215,10 +255,14 @@ extension AppModel {
             return
         }
 
+        var serviceCommittedURL: URL?
         do {
             let pages = try await resolveDownloadPages(for: job)
             let (updatedPages, committedDirectoryURL) = try await downloadAndStorePages(job: job, pages: pages)
+            serviceCommittedURL = committedDirectoryURL
+            try Task.checkCancellation()
             await MainActor.run {
+                guard self.downloadQueueCoordinator.activeJobID == jobID, self.downloadJobs.first(where: { $0.id == jobID })?.state == .downloading else { return }
                 self.commitDownloadedChapter(job: job, pages: updatedPages)
                 self.updateJob(jobID) { item in
                     item.progress = 1
@@ -228,7 +272,9 @@ extension AppModel {
                 _ = committedDirectoryURL
             }
         } catch is CancellationError {
+            if let serviceCommittedURL { try? FileManager.default.removeItem(at: serviceCommittedURL) }
             await MainActor.run {
+                guard self.downloadQueueCoordinator.activeJobID == jobID, self.downloadJobs.first(where: { $0.id == jobID })?.state == .downloading else { return }
                 self.updateJob(jobID) { item in
                     item.state = .failed
                     item.errorMessage = "Cancelled"
@@ -248,6 +294,7 @@ extension AppModel {
             }
         } catch {
             await MainActor.run {
+                guard self.downloadQueueCoordinator.activeJobID == jobID, self.downloadJobs.first(where: { $0.id == jobID })?.state == .downloading else { return }
                 self.updateJob(jobID) { item in
                     item.state = .failed
                     item.errorMessage = error.localizedDescription
@@ -292,10 +339,12 @@ extension AppModel {
         let committed = chapterBase.appendingPathComponent(chapterComponent, isDirectory: true)
         let committedPages = try await downloadsService.downloadAndStorePages(
             pages: pages,
+            wifiOnly: state.downloadPreferences.wifiOnly,
             chapterBaseDirectory: chapterBase,
             chapterComponent: chapterComponent
         ) { progress in
             await MainActor.run {
+                guard self.downloadQueueCoordinator.activeJobID == job.id else { return }
                 self.updateJob(job.id) { item in
                     item.progress = progress
                 }

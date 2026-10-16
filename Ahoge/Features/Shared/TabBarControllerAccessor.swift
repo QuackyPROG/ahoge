@@ -1,66 +1,49 @@
 // Modified for Ahoge from an Apache-2.0-licensed prior implementation.
 // See THIRD_PARTY_NOTICES.md for attribution and license information.
 
-//
-//  TabBarControllerAccessor.swift
-//  Ahoge
-//
-
 import SwiftUI
 import UIKit
 
-/// - Note: **DEPRECATED** (Fix #6) — RootTabView no longer uses this UIKit bridge.
-/// Pop-to-root on tab reselection is now handled natively via `.onChange(of: selectedTab)`.
-/// This file is kept for reference and can safely be deleted in a clean-up pass.
-/// Provides access to the hosting UITabBarController so we can detect re-taps on the active tab.
-
+/// A single associated delegate proxy per tab controller preserves SwiftUI's delegate.
 struct TabBarControllerAccessor: UIViewControllerRepresentable {
     let onReselect: (Int) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onReselect: onReselect)
-    }
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        let controller = UIViewController()
-        controller.view.backgroundColor = .clear
-        DispatchQueue.main.async {
-            context.coordinator.attachIfPossible(from: controller)
-        }
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        DispatchQueue.main.async {
-            context.coordinator.attachIfPossible(from: uiViewController)
-        }
-    }
-
-    final class Coordinator: NSObject, UITabBarControllerDelegate {
-        private let onReselect: (Int) -> Void
-        private weak var tabBarController: UITabBarController?
-        private var lastSelectedIndex: Int = 0
-
-        init(onReselect: @escaping (Int) -> Void) {
-            self.onReselect = onReselect
-        }
-
-        func attachIfPossible(from controller: UIViewController) {
-            guard let tab = controller.tabBarController else { return }
-            if tabBarController !== tab {
-                tabBarController = tab
-                lastSelectedIndex = tab.selectedIndex
-                tab.delegate = self
+    func makeUIViewController(context: Context) -> Probe { Probe(onReselect: onReselect) }
+    func updateUIViewController(_ controller: Probe, context: Context) { controller.onReselect = onReselect; controller.attach() }
+    final class Probe: UIViewController {
+        var onReselect: (Int) -> Void
+        init(onReselect: @escaping (Int) -> Void) { self.onReselect = onReselect; super.init(nibName: nil, bundle: nil) }
+        required init?(coder: NSCoder) { fatalError() }
+        override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); attach() }
+        override func didMove(toParent parent: UIViewController?) { super.didMove(toParent: parent); DispatchQueue.main.async { [weak self] in self?.attach() } }
+        func attach() {
+            guard let tab = tabBarController else { return }
+            if let proxy = objc_getAssociatedObject(tab, &DelegateProxy.key) as? DelegateProxy {
+                proxy.onReselect = onReselect
+                if tab.delegate !== proxy { proxy.original = tab.delegate; tab.delegate = proxy }
+                return
             }
+            let proxy = DelegateProxy()
+            proxy.original = tab.delegate
+            proxy.onReselect = onReselect
+            objc_setAssociatedObject(tab, &DelegateProxy.key, proxy, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            tab.delegate = proxy
         }
-
+    }
+    final class DelegateProxy: NSObject, UITabBarControllerDelegate {
+        static var key: UInt8 = 0
+        weak var original: UITabBarControllerDelegate?
+        var onReselect: ((Int) -> Void)?
+        private var reselected = false
+        func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+            reselected = tabBarController.selectedViewController === viewController
+            return original?.tabBarController?(tabBarController, shouldSelect: viewController) ?? true
+        }
         func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-            let index = tabBarController.selectedIndex
-            if index == lastSelectedIndex {
-                onReselect(index)
-            }
-            lastSelectedIndex = index
+            original?.tabBarController?(tabBarController, didSelect: viewController)
+            if reselected { onReselect?(tabBarController.selectedIndex) }
+            reselected = false
         }
+        override func responds(to selector: Selector!) -> Bool { super.responds(to: selector) || original?.responds(to: selector) == true }
+        override func forwardingTarget(for selector: Selector!) -> Any? { original?.responds(to: selector) == true ? original : super.forwardingTarget(for: selector) }
     }
 }
-

@@ -15,9 +15,9 @@ protocol SourceRepository {
     func mangas(for sourceID: String) -> [Manga]
     func chapters(for mangaID: String) -> [Chapter]
     func activeSources() -> [Source]
-    func popularManga(sourceID: String) async throws -> [Manga]
-    func latestManga(sourceID: String) async throws -> [Manga]
-    func searchManga(sourceID: String, query: String, filters: [SourceFilterValue]) async throws -> [Manga]
+    func popularManga(sourceID: String, page: Int) async throws -> [Manga]
+    func latestManga(sourceID: String, page: Int) async throws -> [Manga]
+    func searchManga(sourceID: String, query: String, filters: [SourceFilterValue], page: Int) async throws -> [Manga]
     func mangaDetails(sourceID: String, mangaIDOrURL: String) async throws -> SourceMangaDetails
     func chapters(sourceID: String, manga: Manga) async throws -> SourceChapterDetails
     func pages(sourceID: String, chapter: Chapter) async throws -> SourcePageAsset
@@ -73,4 +73,13 @@ protocol LocalContentRepository {
 
 protocol ReaderAssetRepository {
     func fileURL(for page: ReaderPage) -> URL?
+}
+
+// Existing consumers retain page-one behavior; runtime-aware consumers request later pages.
+extension SourceRepository {
+    func popularManga(sourceID: String) async throws -> [Manga] { try await popularManga(sourceID: sourceID, page: 1) }
+    func latestManga(sourceID: String) async throws -> [Manga] { try await latestManga(sourceID: sourceID, page: 1) }
+    func searchManga(sourceID: String, query: String, filters: [SourceFilterValue]) async throws -> [Manga] {
+        try await searchManga(sourceID: sourceID, query: query, filters: filters, page: 1)
+    }
 }

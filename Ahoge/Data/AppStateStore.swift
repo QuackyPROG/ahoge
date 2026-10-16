@@ -42,6 +42,12 @@ struct AppStateStore {
         return state
     }
 
+    func loadThrowing() throws -> PersistedState {
+        guard let data = defaults.data(forKey: key) else { return .default }
+        let decoded = try decoder.decode(PersistedState.self, from: data)
+        return decoded.schemaVersion == PersistedState.currentSchemaVersion ? decoded : migrate(decoded)
+    }
+
     func save(_ state: PersistedState) {
         guard let data = try? encoder.encode(state) else { return }
         defaults.set(data, forKey: key)

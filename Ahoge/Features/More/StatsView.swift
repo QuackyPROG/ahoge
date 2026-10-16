@@ -11,11 +11,6 @@ struct StatsView: View {
         ScrollView {
             if model.hasMeaningfulStats {
                 LazyVStack(alignment: .leading, spacing: AhogeLayout.sectionSpacing) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Your reading life").font(.system(.largeTitle, design: .rounded, weight: .bold))
-                        Text("A snapshot of your library and reading activity.")
-                            .font(.body).foregroundStyle(.secondary)
-                    }
                     ForEach(model.statsSections()) { section in
                         VStack(alignment: .leading, spacing: 12) {
                             AhogeSectionHeader(section.title)
@@ -29,7 +24,7 @@ struct StatsView: View {
                     }
                 }
                 .padding(.horizontal, AhogeLayout.pagePadding)
-                .padding(.vertical, 24)
+                .padding(.vertical, 8)
                 .frame(maxWidth: 760, alignment: .leading)
                 .frame(maxWidth: .infinity)
             } else {
@@ -52,7 +47,7 @@ struct StatsView: View {
         return layout {
             VStack(alignment: .leading, spacing: 8) {
                 Label(item.title, systemImage: item.systemImage)
-                    .font(.headline)
+                    .font(.body)
                 if let detail = item.detail {
                     Text(detail).font(.subheadline).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -60,11 +55,11 @@ struct StatsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(item.value)
-                .font(.system(.title, design: .rounded, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .monospacedDigit().foregroundStyle(model.chromeTint)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
     }
 }

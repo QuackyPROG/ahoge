@@ -5,7 +5,6 @@ import SwiftUI
 
 struct MoreView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var blockedLinkMessage: String?
 
     var body: some View {
         List {
@@ -18,14 +17,7 @@ struct MoreView: View {
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
         .navigationTitle("More")
-        .alert("Coming Soon", isPresented: Binding(
-            get: { blockedLinkMessage != nil },
-            set: { if !$0 { blockedLinkMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { blockedLinkMessage = nil }
-        } message: {
-            Text(blockedLinkMessage ?? "")
-        }
+
     }
 
     private var modesSection: some View {
@@ -44,8 +36,9 @@ struct MoreView: View {
     }
 
     private var libraryToolsSection: some View {
-        Section("Library tools") {
-            NavigationLink { DownloadsView() } label: { Label("Downloads", systemImage: "arrow.down.circle") }
+        Section("Library") {
+            NavigationLink { DownloadQueueView() } label: { Label("Download Queue", systemImage: "arrow.down.circle") }
+            NavigationLink { DownloadsView() } label: { Label("Downloaded chapters", systemImage: "arrow.down.circle.fill") }
             NavigationLink { CategoryManagementView() } label: { Label("Categories", systemImage: "folder") }
             NavigationLink { LibraryBatchMigrationView() } label: { Label("Migrate library titles", systemImage: "arrow.triangle.swap") }
             NavigationLink { TrackingCenterView() } label: { Label("Tracking", systemImage: "person.badge.clock") }
@@ -64,18 +57,13 @@ struct MoreView: View {
     }
 
     private var advancedSection: some View {
-        Section("Advanced & help") {
+        Section("Support & About") {
             NavigationLink { DiagnosticsLogView() } label: { Label("Error Logs", systemImage: "exclamationmark.bubble") }
             NavigationLink { NativeUpdateView() } label: { Label("App Updates", systemImage: "arrow.triangle.2.circlepath") }
             NavigationLink { AboutView() } label: { Label("About", systemImage: "info.circle") }
-            Button {
-                blockedLinkMessage = "Help belum siap. Tautan eksternal masih ditutup sementara."
-            } label: { Label("Help", systemImage: "questionmark.circle").frame(minHeight: 44) }
-            .foregroundStyle(.primary)
-            Button {
-                blockedLinkMessage = "Donate belum siap. Tautan eksternal masih ditutup sementara."
-            } label: { Label("Donate", systemImage: "heart.circle").frame(minHeight: 44) }
-            .foregroundStyle(.primary)
+            NavigationLink { AhogeHelpView() } label: { Label("Help & setup", systemImage: "questionmark.circle") }
+            LabeledContent("Donations", value: "Unavailable")
+
         }
     }
 
@@ -92,5 +80,29 @@ struct MoreView: View {
             }
         }
         .frame(minHeight: 44)
+    }
+}
+
+struct AhogeHelpView: View {
+    var body: some View {
+        List {
+            Section("Set up your library") {
+                NavigationLink("Choose sources") { SourcesView() }
+                NavigationLink("Source repositories") { SourceReposView() }
+                NavigationLink("Import local files") { LocalImportsView() }
+                NavigationLink("Restore an Ahoge backup") { RestoreBackupView() }
+            }
+            Section("Reading & data") {
+                Text("Add a title to Library from its details page. Use Updates for new chapters and History to resume reading.")
+                NavigationLink("Reader preferences") { ReaderSettingsView() }
+                NavigationLink("Download Queue") { DownloadQueueView() }
+                NavigationLink("Create a backup") { CreateBackupView() }
+            }
+            Section("Troubleshooting") {
+                Text("If a source is unavailable, cached metadata and downloaded chapters remain accessible. Re-enable the source or migrate the title from its details page.")
+                NavigationLink("Error Logs") { DiagnosticsLogView() }
+                NavigationLink("App Updates") { NativeUpdateView() }
+            }
+        }.navigationTitle("Help & Setup")
     }
 }

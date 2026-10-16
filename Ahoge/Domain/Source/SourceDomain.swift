@@ -284,6 +284,14 @@ struct SourceRepoRecord: Identifiable, Codable, Hashable {
     let lastError: String?
 }
 
+extension SourceRepoRecord {
+    func retainingCatalog(after error: Error) -> SourceRepoRecord {
+        SourceRepoRecord(id: id, url: url, title: title, fetchedAt: fetchedAt,
+            packages: packages, importedSources: importedSources,
+            lastError: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+    }
+}
+
 enum SourceRepoImportError: String, Codable, Hashable, Error {
     case invalidURL
     case unreadablePayload
@@ -309,3 +317,12 @@ struct SourcePreference: Identifiable, Hashable {
     let value: String
 }
 
+
+/// Shared refresh boundary used by the importer; failures only change error state.
+enum RepositoryRefreshPolicy {
+    static func refresh(_ record: SourceRepoRecord,
+        fetch: (String) async throws -> SourceRepoRecord) async -> SourceRepoRecord {
+        do { return try await fetch(record.url) }
+        catch { return record.retainingCatalog(after: error) }
+    }
+}

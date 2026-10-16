@@ -40,3 +40,41 @@ jobs:
           else
             echo "No XCTest target found. Skipping test step."
           fi
+      - name: Run domain and reader regression harnesses
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 Scripts/run_mihon_domain_regressions.py
+      - name: Build unsigned sideload app
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath .derivedData-device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            INFOPLIST_KEY_AhogeDistributionChannel=sideload build
+      - name: Package and validate sideload IPA
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find .derivedData-device/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          PLIST="$APP_PATH/Info.plist"
+          EXECUTABLE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$PLIST")"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = com.quackyprog.ahoge
+          test -f "$APP_PATH/Assets.car"
+          ARCHS="$(lipo -archs "$APP_PATH/$EXECUTABLE_NAME")"
+          [[ " $ARCHS " == *" arm64 "* ]]
+          [[ " $ARCHS " != *" x86_64 "* ]]
+          mkdir -p sideload-staging/Payload sideload-artifacts
+          cp -R "$APP_PATH" sideload-staging/Payload/
+          (cd sideload-staging && zip -qry ../sideload-artifacts/Ahoge.ipa Payload)
+          unzip -t sideload-artifacts/Ahoge.ipa
+          (cd sideload-artifacts && shasum -a 256 Ahoge.ipa > Ahoge.ipa.sha256)
+      - name: Upload unsigned IPA for Sideloadly
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ahoge-sideload-${{ github.run_id }}
+          path: sideload-artifacts/
+          if-no-files-found: error
+          retention-days: 7

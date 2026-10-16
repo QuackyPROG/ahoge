@@ -84,6 +84,10 @@ extension AppModel {
         do {
             let details = try await repository.mangaDetails(sourceID: manga.sourceID, mangaIDOrURL: manga.id)
             replaceCachedManga(details.manga, for: manga.sourceID)
+            if let index = state.persistedMangas.firstIndex(where: { $0.id == details.manga.id }) {
+                state.persistedMangas[index] = details.manga
+                persist()
+            }
             sourceErrors[manga.sourceID] = nil
             await refreshCacheStats()
             return details.manga
@@ -98,6 +102,7 @@ extension AppModel {
         if manga.sourceID == "local-files" {
             return chapters(for: manga)
         }
+        guard supportsLiveSource(sourceID: manga.sourceID) else { return chapters(for: manga) }
         appendDiagnostic(kind: .stateTransition, severity: .info, title: "Chapter Load Started", message: "Refreshing chapter list.", module: "SourceCaching", metadata: ["manga": manga.title, "sourceID": manga.sourceID])
         do {
             let details = try await repository.chapters(sourceID: manga.sourceID, manga: manga)
@@ -123,6 +128,7 @@ extension AppModel {
                 mergeDownloadedChapters(existing: peekCachedChapters(for: manga.id) ?? [], incoming: details.chapters)
             )
             setCachedChapters(merged, for: manga.id)
+            persist()
             sourceErrors[manga.sourceID] = nil
             trimSourceCachesIfNeeded()
             await refreshCacheStats()
@@ -139,6 +145,10 @@ extension AppModel {
             setCachedPages(chapter.pages, for: chapter.id)
             pageLoadErrors[chapter.id] = nil
             return chapter.pages
+        }
+        guard supportsLiveSource(sourceID: sourceID) else {
+            pageLoadErrors[chapter.id] = "Source is disabled or has no supported runtime. Use an offline chapter or restore the source package."
+            return []
         }
         appendDiagnostic(kind: .stateTransition, severity: .info, title: "Page Load Started", message: "Refreshing chapter pages.", module: "SourceCaching", metadata: ["sourceID": sourceID, "chapterID": chapter.id])
         do {

@@ -9,7 +9,7 @@
 import Foundation
 
 struct PersistedState: Codable, Hashable {
-    static let currentSchemaVersion = 6
+    static let currentSchemaVersion = 7
 
     var schemaVersion: Int
     var categories: [Category]
@@ -19,6 +19,14 @@ struct PersistedState: Codable, Hashable {
     // Tracks last "seen" chapter per manga for Updates tab unread badge.
     // If missing for a given mangaID, updates are considered unread.
     var updatesLastSeenChapterIDByMangaID: [String: String]
+    var packageInstallations: [String: PackageInstallation]? = nil
+    var pendingDownloadJobs: [DownloadJob] = []
+    var downloadQueuePaused: Bool = false
+    var knownChapters: [String: [Chapter]] = [:]
+    var chapterStates: [String: ChapterState] = [:]
+    var updatesSeenChapterIDs: Set<String> = []
+    var sourceEnabledOverrides: [String: Bool] = [:]
+    var sourcePinnedOverrides: [String: Bool] = [:]
     var readerPreferences: ReaderPreferences
     var libraryPreferences: LibraryPreferences
     var appSettings: AppSettings
@@ -96,6 +104,7 @@ struct PersistedState: Codable, Hashable {
     )
 
     enum CodingKeys: String, CodingKey {
+        case packageInstallations, pendingDownloadJobs, downloadQueuePaused, knownChapters, chapterStates, updatesSeenChapterIDs, sourceEnabledOverrides, sourcePinnedOverrides
         case schemaVersion
         case categories
         case library
@@ -161,6 +170,15 @@ struct PersistedState: Codable, Hashable {
         let defaults = PersistedState.default
 
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard schemaVersion <= Self.currentSchemaVersion else { throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container, debugDescription: "Unsupported future state schema") }
+        packageInstallations = try container.decodeIfPresent([String: PackageInstallation].self, forKey: .packageInstallations)
+        pendingDownloadJobs = try container.decodeIfPresent([DownloadJob].self, forKey: .pendingDownloadJobs) ?? []
+        downloadQueuePaused = try container.decodeIfPresent(Bool.self, forKey: .downloadQueuePaused) ?? false
+        knownChapters = try container.decodeIfPresent([String: [Chapter]].self, forKey: .knownChapters) ?? [:]
+        chapterStates = try container.decodeIfPresent([String: ChapterState].self, forKey: .chapterStates) ?? [:]
+        updatesSeenChapterIDs = try container.decodeIfPresent(Set<String>.self, forKey: .updatesSeenChapterIDs) ?? []
+        sourceEnabledOverrides = try container.decodeIfPresent([String: Bool].self, forKey: .sourceEnabledOverrides) ?? [:]
+        sourcePinnedOverrides = try container.decodeIfPresent([String: Bool].self, forKey: .sourcePinnedOverrides) ?? [:]
         categories = try container.decodeIfPresent([Category].self, forKey: .categories) ?? defaults.categories
         library = try container.decodeIfPresent([LibraryEntry].self, forKey: .library) ?? []
         progress = try container.decodeIfPresent([ReadingProgress].self, forKey: .progress) ?? []
@@ -182,6 +200,14 @@ struct PersistedState: Codable, Hashable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(packageInstallations, forKey: .packageInstallations)
+        try container.encode(pendingDownloadJobs, forKey: .pendingDownloadJobs)
+        try container.encode(downloadQueuePaused, forKey: .downloadQueuePaused)
+        try container.encode(knownChapters, forKey: .knownChapters)
+        try container.encode(chapterStates, forKey: .chapterStates)
+        try container.encode(updatesSeenChapterIDs, forKey: .updatesSeenChapterIDs)
+        try container.encode(sourceEnabledOverrides, forKey: .sourceEnabledOverrides)
+        try container.encode(sourcePinnedOverrides, forKey: .sourcePinnedOverrides)
         try container.encode(schemaVersion, forKey: .schemaVersion)
         try container.encode(categories, forKey: .categories)
         try container.encode(library, forKey: .library)

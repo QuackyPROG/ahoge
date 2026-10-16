@@ -355,8 +355,7 @@ final class SourceRepoImporter {
     }
 
     func refresh(_ record: SourceRepoRecord) async -> SourceRepoRecord {
-        do { return try await importRepo(from: record.url) }
-        catch { return failedRecord(for: record.url, error: error) }
+        await RepositoryRefreshPolicy.refresh(record) { try await self.importRepo(from: $0) }
     }
 
     private func normalizeURLString(_ value: String) -> String {
@@ -491,12 +490,14 @@ final class SourceRepoImporter {
 
     private func runtimeIsAvailable(family: SourceEngineFamily, overrides: [String: String]) -> Bool {
         switch family {
-        case .asuraScans, .natsuId, .madara, .mangaThemesia:
+        case .asuraScans:
+            return overrides["apiURL"]?.isEmpty == false
+        case .natsuId, .madara, .mangaThemesia:
             return true
         case .mangaBox:
             return overrides["adapter"] == "mangabox"
         case .api:
-            return ["ezmanhwa", "heancms", "mangadex", "weebcentral"].contains(overrides["adapter"] ?? "") && overrides["apiURL"] != nil
+            return ["ezmanhwa", "heancms", "mangadex", "weebcentral"].contains(overrides["adapter"] ?? "") && overrides["apiURL"]?.isEmpty == false
         default:
             return false
         }

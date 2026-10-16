@@ -50,6 +50,9 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
         missCount: 0
     )
     @Published internal(set) var downloadJobs: [DownloadJob] = []
+    @Published internal(set) var storageUsage: StorageUsage?
+    @Published internal(set) var isRefreshingLibrary = false
+    @Published internal(set) var libraryRefreshErrors: [String: String] = [:]
     @Published var releaseNotesPresented = false
 
     private let databaseCoordinator: FileDatabaseCoordinator
@@ -104,7 +107,7 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
         )
         self.chapterRuntimeCache = RuntimeCacheStore(
             countLimit: max(Self.defaultChapterCacheEntries, snapshot.downloadedChapters.count),
-            seed: snapshot.downloadedChapters
+            seed: snapshot.state.knownChapters.merging(snapshot.downloadedChapters) { known, offline in let ids = Set(offline.map(\.id)); return known.filter { !ids.contains($0.id) } + offline }
         )
         self.pageRuntimeCache = RuntimeCacheStore(
             countLimit: Self.defaultPageCacheEntries
@@ -122,10 +125,32 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
                 )
             }
             : snapshot.repoRecords
-        self.repository = repository ?? RuntimeSourceRepository(repoRecords: hydratedRepoRecords, cache: cacheController)
         var persistedState = snapshot.state
+        if persistedState.packageInstallations == nil {
+            var installations: [String: PackageInstallation] = [:]
+            var order = 0
+            for record in hydratedRepoRecords {
+                for package in record.packages {
+                    installations[record.id + "::" + package.id] = PackageInstallation(package: package, trusted: false, enabled: false, admissionOrder: order)
+                    order += 1
+                }
+            }
+            persistedState.packageInstallations = installations
+        }
+        self.repository = repository ?? RuntimeSourceRepository(repoRecords: Self.admittedRecords(hydratedRepoRecords, installations: persistedState.packageInstallations ?? [:]), cache: cacheController)
         persistedState.sourceRepos = hydratedRepoRecords.map(\.url)
+        let categoryIDs = Set(persistedState.categories.map(\.id)).union([""])
+        for index in persistedState.library.indices {
+            persistedState.library[index].categoryIDs.formIntersection(categoryIDs)
+            if persistedState.library[index].categoryIDs.isEmpty { persistedState.library[index].categoryIDs = [""] }
+            persistedState.library[index].categoryID = persistedState.library[index].categoryIDs.sorted().first ?? ""
+        }
         self.state = persistedState
+        self.downloadJobs = persistedState.pendingDownloadJobs.map { job in
+            var restored = job
+            if restored.state == .downloading { restored.state = .paused; restored.progress = 0 }
+            return restored
+        }
         self.importRecords = snapshot.imports
         self.importJobsState = snapshot.importJobs
         self.repoRecords = hydratedRepoRecords
@@ -149,7 +174,7 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
             // Cannot call normal class methods yet, but init covers initial state; we will call persist after init formally completes or rely on subsequent persists.
         }
 
-        bootState = .ready
+        bootState = self.databaseCoordinator.loadError.map { .failed($0) } ?? .ready
         Task { await applyCacheConfiguration() }
         Task { await refreshCacheStats() }
 
@@ -214,6 +239,8 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
     }
 
     func persist() {
+        guard databaseCoordinator.loadError == nil else { return }
+        state.pendingDownloadJobs = downloadJobs.filter { $0.state != .complete }
         state.schemaVersion = PersistedState.currentSchemaVersion
         state.sourceRepos = repoRecords.map(\.url)
         diagnosticLogs = Self.normalizedDiagnostics(diagnosticLogs)
@@ -231,8 +258,24 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
         legacyStore.save(state)
     }
 
+    // Write the proposed snapshot before changing any published state. Atomic replacement
+    // preserves the previous file on failure, and callers retain their rollback state.
+    func commitState(_ candidate: PersistedState, repositories: [SourceRepoRecord]? = nil) throws {
+        var next = candidate
+        let records = repositories ?? repoRecords
+        next.schemaVersion = PersistedState.currentSchemaVersion
+        next.sourceRepos = records.map(\.url)
+        let snapshot = DatabaseSnapshot(state: next, imports: importRecords, importJobs: importJobsState,
+            repoRecords: records, diagnostics: diagnosticLogs, sourceErrors: sourceErrors,
+            pageLoadErrors: pageLoadErrors, downloadedChapters: persistedDownloadedChapters())
+        try databaseCoordinator.saveSnapshotThrowing(snapshot)
+        state = next
+        repoRecords = records
+        legacyStore.save(next)
+    }
+
     func rebuildSourceRepository() {
-        repository = RuntimeSourceRepository(repoRecords: repoRecords, cache: cacheController)
+        repository = RuntimeSourceRepository(repoRecords: Self.admittedRecords(repoRecords, installations: state.packageInstallations ?? [:]), cache: cacheController)
         sources = repository.sources()
     }
 
@@ -302,6 +345,8 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
         cacheStats = await cacheController.stats()
     }
 
+    var storageDirectoryURLs: [URL] { [databaseCoordinator.importsDirectoryURL, databaseCoordinator.downloadsDirectoryURL] }
+
     var downloadsDirectoryURL: URL {
         databaseCoordinator.downloadsDirectoryURL
     }
@@ -348,6 +393,16 @@ final class AppModel: ObservableObject, LibraryRepository, ReaderProgressReposit
     }
 
     func setCachedChapters(_ chapters: [Chapter], for mangaID: String) {
+        if let legacy = state.updatesLastSeenChapterIDByMangaID[mangaID] {
+            let ordered = normalizedChapters(chapters)
+            if let position = ordered.firstIndex(where: { $0.id == legacy }) {
+                state.updatesSeenChapterIDs.formUnion(ordered[position...].map(\.id))
+            }
+        }
+        state.knownChapters[mangaID] = chapters.map { chapter in
+            Chapter(id: chapter.id, mangaID: chapter.mangaID, title: chapter.title, number: chapter.number,
+                releaseDate: chapter.releaseDate, isDownloaded: false, pages: [])
+        }
         chapterRuntimeCache.setValue(normalizedChapters(chapters), forKey: mangaID)
         chapterCache = chapterRuntimeCache.snapshot()
     }

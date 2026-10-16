@@ -27,38 +27,61 @@ struct ReaderPagedContainer<Content: View>: View {
     @Binding var currentIndex: Int
     let itemCount: Int
     let pageWidth: CGFloat
+    var vertical: Bool = false
+    var animatePages: Bool = true
     let allowsInteractivePaging: Bool
     let shouldCaptureDrag: (CGFloat, CGFloat) -> Bool
     let onDragChanged: (CGFloat) -> Void
     let onDragEnded: (CGFloat, CGFloat, CGFloat) -> Void
+    let onDragCancelled: () -> Void
     @ViewBuilder let content: Content
 
     @GestureState private var dragTranslation: CGFloat = 0
+    @GestureState private var gestureActive = false
+    @State private var capturedDrag = false
 
     var body: some View {
         GeometryReader { _ in
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .offset(x: -CGFloat(currentIndex) * pageWidth + (allowsInteractivePaging ? dragTranslation : 0))
-                .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.9), value: currentIndex)
+                .offset(x: vertical ? 0 : -CGFloat(currentIndex) * pageWidth + (allowsInteractivePaging ? dragTranslation : 0),
+                        y: vertical ? -CGFloat(currentIndex) * pageWidth + (allowsInteractivePaging ? dragTranslation : 0) : 0)
+                .animation(animatePages ? .interactiveSpring(response: 0.28, dampingFraction: 0.9) : nil, value: currentIndex)
                 .contentShape(Rectangle())
                 .clipped()
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                        .updating($gestureActive) { _, active, _ in active = true }
                         .updating($dragTranslation) { value, state, _ in
-                            guard shouldCaptureDrag(value.translation.width, value.translation.height) else { return }
-                            state = allowsInteractivePaging ? value.translation.width : 0
+                            guard shouldCaptureDrag(vertical ? value.translation.height : value.translation.width, vertical ? value.translation.width : value.translation.height) else { return }
+                            state = allowsInteractivePaging ? (vertical ? value.translation.height : value.translation.width) : 0
                         }
                         .onChanged { value in
-                            guard shouldCaptureDrag(value.translation.width, value.translation.height) else { return }
-                            onDragChanged(value.translation.width)
+                            guard shouldCaptureDrag(vertical ? value.translation.height : value.translation.width, vertical ? value.translation.width : value.translation.height) else { return }
+                            capturedDrag = true
+                            onDragChanged(vertical ? value.translation.height : value.translation.width)
                         }
                         .onEnded { value in
-                            guard shouldCaptureDrag(value.translation.width, value.translation.height) else { return }
+                            let wasCaptured = capturedDrag
+                            capturedDrag = false
+                            guard wasCaptured else { return }
+                            guard shouldCaptureDrag(vertical ? value.translation.height : value.translation.width, vertical ? value.translation.width : value.translation.height) else {
+                                onDragCancelled()
+                                return
+                            }
                             onDragChanged(0)
-                            onDragEnded(value.translation.width, value.predictedEndTranslation.width, pageWidth)
+                            onDragEnded(vertical ? value.translation.height : value.translation.width, vertical ? value.predictedEndTranslation.height : value.predictedEndTranslation.width, pageWidth)
                         }
                 )
+                .onChange(of: gestureActive) { _, active in
+                    if !active, capturedDrag {
+                        capturedDrag = false
+                        onDragCancelled()
+                    }
+                }
+                .onDisappear {
+                    if capturedDrag { capturedDrag = false; onDragCancelled() }
+                }
         }
     }
 }
@@ -156,9 +179,9 @@ struct ReaderBottomPill: View {
 }
 
 struct ReaderVisiblePageFramesPreferenceKey: PreferenceKey {
-    static var defaultValue: [Int: CGRect] = [:]
+    static var defaultValue: [String: CGRect] = [:]
 
-    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
@@ -255,5 +278,57 @@ struct ReaderEmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .ignoresSafeArea()
+    }
+}
+
+struct ReaderPageStack<Content: View>: View {
+    let vertical: Bool
+    @ViewBuilder let content: Content
+    var body: some View {
+        if vertical { VStack(spacing: 0) { content } }
+        else { HStack(spacing: 0) { content } }
+    }
+}
+
+struct ReaderFullscreenPresentation: ViewModifier {
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled { content.ignoresSafeArea() } else { content }
+    }
+}
+
+// Native phases include outer-scroll tracking, drag, deceleration and programmatic
+// ScrollViewReader animation. Captured identities prevent old containers releasing
+// replacement ownership. This uses the same reducer as image surfaces.
+struct ReaderContinuousScrollLifecycle: ViewModifier {
+    let epoch: UUID
+    let onEvent: (ReaderSurfaceIdentity, ReaderSurfaceEvent) -> Void
+    @State private var host = UUID()
+
+    func body(content: Content) -> some View {
+        let identity = ReaderSurfaceIdentity(epoch: epoch, member: ReaderSurfaceVisibility.continuousScrollMember,
+            host: host, generation: 0)
+        content
+            .onAppear { onEvent(identity, .register) }
+            .onScrollPhaseChange { _, phase in
+                let observed: ReaderContinuousScrollPhase
+                switch phase {
+                case .idle: observed = .idle
+                case .tracking: observed = .tracking
+                case .interacting: observed = .interacting
+                case .decelerating: observed = .decelerating
+                case .animating: observed = .animating
+                @unknown default: observed = .tracking
+                }
+                // A programmatic initial scroll may report its phase before
+                // onAppear. Repeated registration is idempotent; retired/old
+                // identities are still rejected by the production reducer.
+                onEvent(identity, .register)
+                onEvent(identity, observed.event)
+            }
+            .onDisappear {
+                onEvent(identity, .retire)
+                host = UUID() // A later appearance is a fresh mount, never a retired token.
+            }
     }
 }

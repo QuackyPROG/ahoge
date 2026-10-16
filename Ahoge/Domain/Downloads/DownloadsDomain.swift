@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum DownloadState: String, Hashable {
+enum DownloadState: String, Codable, Hashable {
     case queued
     case downloading
     case paused
@@ -16,7 +16,7 @@ enum DownloadState: String, Hashable {
     case failed
 }
 
-struct DownloadJob: Identifiable, Hashable {
+struct DownloadJob: Identifiable, Codable, Hashable {
     let id: UUID
     let mangaID: String
     let chapterID: String

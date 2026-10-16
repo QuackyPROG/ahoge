@@ -19,6 +19,32 @@ struct LibraryEntry: Identifiable, Codable, Hashable {
     let mangaID: String
     var categoryID: String
     let addedAt: Date
+    var categoryIDs: Set<String>
+
+    init(mangaID: String, categoryID: String, addedAt: Date, categoryIDs: Set<String>? = nil) {
+        self.mangaID = mangaID
+        self.categoryIDs = categoryIDs.flatMap { $0.isEmpty ? nil : $0 } ?? [categoryID]
+        self.categoryID = self.categoryIDs.contains(categoryID) ? categoryID : self.categoryIDs.sorted().first ?? ""
+        self.addedAt = addedAt
+    }
+
+    enum CodingKeys: String, CodingKey { case mangaID, categoryID, categoryIDs, addedAt }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(mangaID: try c.decode(String.self, forKey: .mangaID),
+                  categoryID: try c.decodeIfPresent(String.self, forKey: .categoryID) ?? "",
+                  addedAt: try c.decode(Date.self, forKey: .addedAt),
+                  categoryIDs: try c.decodeIfPresent(Set<String>.self, forKey: .categoryIDs))
+    }
+}
+
+struct ChapterState: Codable, Hashable {
+    var mangaID: String
+    var chapterID: String
+    var isRead: Bool = false
+    var isBookmarked: Bool = false
+    var pageIndex: Int = 0
+    var totalPages: Int = 0
 }
 
 struct ReadingProgress: Identifiable, Codable, Hashable {

@@ -10,11 +10,9 @@ import SwiftUI
 
 extension ReaderView {
     func updatePagerViewportSize(_ size: CGSize) {
-        let boundedWidth = max(size.width, 1)
-        let boundedHeight = max(size.height, 1)
-        let didChange = exactPagerWidth != boundedWidth || exactPagerHeight != boundedHeight
-        exactPagerWidth = boundedWidth
-        exactPagerHeight = boundedHeight
+        let measurement = ReaderViewportMeasurement(size)
+        let didChange = pagerViewport != measurement
+        pagerViewport = measurement
         guard didChange, !isVerticalReader, !currentPages.isEmpty else { return }
         refreshCommittedSnapshot(preferredPageIndex: nil, animatedSync: false)
     }
@@ -33,10 +31,16 @@ extension ReaderView {
     }
 
     func updateSurfaceInteractionState(_ state: ReaderInteractionState, for itemID: String) {
-        if surfaceInteractionStates[itemID] == state {
-            return
-        }
-        surfaceInteractionStates[itemID] = state
+        guard let identity = state.identity, identity.member == itemID,
+              surfaceOwnership.receive(state.event, from: identity, epoch: interactionEpoch, visible: visibleSurfaceIDs) else { return }
+        if state.event == .retire { surfaceInteractionStates[itemID] = nil }
+        else { surfaceInteractionStates[itemID] = state }
+        flushDeferredSnapshotIfPossible()
+    }
+
+    func reconcileSurfaceInteractions() {
+        surfaceOwnership.reconcile(visible: visibleSurfaceIDs)
+        surfaceInteractionStates = surfaceInteractionStates.filter { visibleSurfaceIDs.contains($0.key) }
     }
 
     func registerPageLuminance(_ luminance: CGFloat, for itemID: String) {

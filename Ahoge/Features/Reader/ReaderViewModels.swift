@@ -8,8 +8,18 @@
 
 enum ReaderPagerItem: Identifiable {
     case previousChapter
-    case render(ReaderRenderItem)
+    case render(ReaderDisplayGroup)
     case nextChapter
+
+    static func build(groups: [ReaderDisplayGroup], rtl: Bool) -> [ReaderPagerItem] {
+        [rtl ? .nextChapter : .previousChapter] + groups.map(ReaderPagerItem.render)
+            + [rtl ? .previousChapter : .nextChapter]
+    }
+
+    func contains(logicalIndex: Int) -> Bool {
+        guard case .render(let group) = self else { return false }
+        return group.contains(logicalIndex)
+    }
 
     var id: String {
         switch self {

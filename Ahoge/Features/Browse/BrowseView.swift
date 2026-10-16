@@ -6,136 +6,25 @@ import UniformTypeIdentifiers
 
 struct BrowseView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    private var sourceColumns: [GridItem] {
-        [GridItem(.flexible(), alignment: .leading)]
-    }
-
-    private var discoverySources: [Source] {
-        model.visibleSources.filter { !model.mangas(for: $0).isEmpty }
-    }
-
+    @State private var section = 0
+    @State private var showingSearch = false
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: AhogeLayout.sectionSpacing) {
-                NavigationLink {
-                    GlobalSearchView()
-                } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.tint)
-                            .frame(width: 42, height: 42)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Search across sources")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text("Find manga by title, author, or genre")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(14)
-                    .background(AhogePalette.surface, in: RoundedRectangle(cornerRadius: AhogeLayout.cardRadius, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("On the shelves")
-                        .font(.title2.weight(.bold))
-                    Text("Titles already available from your sources")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    if discoverySources.isEmpty {
-                        ContentUnavailableView("Discover your next read", systemImage: "books.vertical", description: Text("Open a source below to browse its catalog. Available titles will appear here."))
-                    } else {
-                        ForEach(discoverySources.prefix(3)) { source in
-                            VStack(alignment: .leading, spacing: 12) {
-                                NavigationLink { SourceView(source: source) } label: {
-                                    Label(source.name, systemImage: source.systemImage)
-                                        .font(.headline).frame(minHeight: 44)
-                                }
-                                LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 132), spacing: 16)], alignment: .leading, spacing: 20) {
-                                    ForEach(model.mangas(for: source).prefix(4)) { manga in
-                                        NavigationLink { MangaDetailView(manga: manga) } label: {
-                                            AhogeMangaGridCard(manga: manga, hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers, allowsAdultContent: source.allowsAdultContent, badgeText: source.name)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if !model.visibleSources.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        AhogeSectionHeader("Quick sources", subtitle: "Jump straight into a catalog") {
-                            NavigationLink("All Sources") { SourcesView() }
-                                .font(.subheadline.weight(.semibold))
-                        }
-
-                        LazyVGrid(columns: sourceColumns, alignment: .leading, spacing: 12) {
-                            ForEach(model.visibleSources.prefix(6)) { source in
-                                NavigationLink {
-                                    SourceView(source: source)
-                                } label: {
-                                    SourceRow(source: source)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                } else {
-                    ContentUnavailableView(
-                        "No sources available",
-                        systemImage: "globe.badge.chevron.backward",
-                        description: Text("Review the source catalog and filters to make sources available.")
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    AhogeSectionHeader("Manage discovery", subtitle: "Choose catalogs and organize your sources")
-                    VStack(spacing: 0) {
-                        NavigationLink {
-                            SourcesView()
-                        } label: {
-                            AhogeActionRow(title: "Sources", subtitle: "Browse and filter enabled sources", systemImage: "globe")
-                        }
-                        .buttonStyle(.plain)
-                        Divider().padding(.leading, 56)
-
-                        NavigationLink {
-                            SourceCatalogView()
-                        } label: {
-                            AhogeActionRow(title: "Source Catalog", subtitle: "Install and manage source definitions", systemImage: "shippingbox")
-                        }
-                        .buttonStyle(.plain)
-                        Divider().padding(.leading, 56)
-
-                        NavigationLink {
-                            MigrationSourcesView()
-                        } label: {
-                            AhogeActionRow(title: "Migration", subtitle: "Move library titles between sources", systemImage: "arrow.triangle.swap")
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.vertical, 8)
+        VStack(spacing: 0) {
+            Picker("Browse section", selection: $section) {
+                Text("Sources").tag(0); Text("Extensions").tag(1); Text("Migrate").tag(2)
+            }.pickerStyle(.segmented).padding(.horizontal)
+            Group {
+                switch section {
+                case 1: SourceCatalogView()
+                case 2: MigrationSourcesView()
+                default: SourcesView()
                 }
             }
-            .padding(.horizontal, AhogeLayout.pagePadding)
-            .padding(.top, 8)
-            .padding(.bottom, 28)
-            .frame(maxWidth: 1200, alignment: .leading)
-            .frame(maxWidth: .infinity)
         }
-        .navigationTitle("Explore")
+        .navigationTitle("Browse")
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showingSearch = true } label: { Label("Global search", systemImage: "magnifyingglass") } } }
+        .onReceive(NotificationCenter.default.publisher(for: .ahogeBrowseReselected)) { _ in showingSearch = true }
+        .sheet(isPresented: $showingSearch) { NavigationStack { GlobalSearchView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showingSearch = false } } } } }
     }
 }
 
@@ -155,14 +44,22 @@ struct SourcesView: View {
             if filteredSources.isEmpty {
                 ContentUnavailableView.search(text: query)
             } else {
-                Section {
-                    ForEach(filteredSources) { source in
-                        NavigationLink { SourceView(source: source) } label: {
-                            SourceRow(source: source)
+                ForEach(SourceLanguage.allCases) { language in
+                    let grouped = filteredSources.filter { $0.language == language }.sorted { lhs, rhs in
+                        let left = model.sourceIsPinned(lhs), right = model.sourceIsPinned(rhs)
+                        return left == right ? lhs.name < rhs.name : left
+                    }
+                    if !grouped.isEmpty {
+                        Section(language.rawValue) {
+                            ForEach(grouped) { source in
+                                NavigationLink { SourceView(source: source) } label: { SourceRow(source: source) }
+                                .contextMenu {
+                                    Button(model.sourceIsPinned(source) ? "Unpin" : "Pin") { model.setSourcePinned(source, pinned: !model.sourceIsPinned(source)) }
+                                    Button(model.sourceIsEnabled(source) ? "Disable" : "Enable") { model.setSourceEnabled(source, enabled: !model.sourceIsEnabled(source)) }
+                                }
+                            }
                         }
                     }
-                } header: { Text("Available catalogs") } footer: {
-                    Text("Source filters control language, visibility, and enabled or pinned sources.")
                 }
             }
         }
@@ -190,18 +87,23 @@ struct SourceView: View {
     let source: Source
     @State private var query = ""
     @State private var showingImporter = false
+    @State private var listDisplay = false
     @State private var feedKind: SourceFeedKind = .popular
     @State private var showingFilters = false
-    @State private var isLoading = false
     @State private var runtimeManga: [Manga] = []
-    @State private var sortValue = "popular"
+    @State private var feedSession = SourceFeedSession()
+    private var isLoading: Bool { feedSession.isLoading }
+    private var reachedEnd: Bool { feedSession.reachedEnd }
+    @State private var feedTask: Task<Void, Never>?
+    @State private var feedError: String?
+    @State private var sortValue = ""
     @State private var orderAscending = false
     @State private var selectedTypes: Set<String> = []
     @State private var includedGenres: Set<String> = []
     @State private var excludedGenres: Set<String> = []
 
     private var columns: [GridItem] {
-        dynamicTypeSize.isAccessibilitySize
+        (dynamicTypeSize.isAccessibilitySize || listDisplay)
             ? [GridItem(.flexible(), alignment: .top)]
             : [GridItem(.adaptive(minimum: 132), spacing: 16, alignment: .top)]
     }
@@ -233,11 +135,22 @@ struct SourceView: View {
                     }
                     .pickerStyle(.menu)
                     .frame(minHeight: 44)
+                    if feedKind != .search {
+                        Button("Search with filters") { feedKind = .search }
+                        Text("Popular and Latest use the source's fixed ordering. Filters apply in Search when supported.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else if !searchFilters.allowsPagination {
+                        Text("This link looks up one title directly. Filters and additional pages do not apply.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else if !searchFilters.isAvailable {
+                        Text("This source's text search does not support editable filters.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
 
-                if isLoading {
+                if isLoading && displayedManga.isEmpty {
                     loadingGrid
-                } else if let error = model.sourceError(for: source.id), displayedManga.isEmpty {
+                } else if let error = feedError ?? model.sourceError(for: source.id), displayedManga.isEmpty {
                     ContentUnavailableView(
                         "Source unavailable",
                         systemImage: "wifi.exclamationmark",
@@ -245,6 +158,10 @@ struct SourceView: View {
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 48)
+                    Button("Retry") { startReload() }
+                } else if model.supportsLiveSource(source) && feedKind == .search && feedSession.descriptor == nil {
+                    ContentUnavailableView("Submit search", systemImage: "magnifyingglass",
+                        description: Text("Submit the search field to load this query from page one."))
                 } else if displayedManga.isEmpty {
                     ContentUnavailableView(
                         query.isEmpty ? "No titles available" : "No results",
@@ -256,8 +173,15 @@ struct SourceView: View {
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(displayedManga) { manga in
-                            mangaGridLink(for: manga)
+                            if listDisplay { NavigationLink { MangaDetailView(manga: manga) } label: { MangaRow(manga: manga, hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers, allowsAdultContent: source.allowsAdultContent) } } else { mangaGridLink(for: manga) }
                         }
+                    }
+                    if model.supportsLiveSource(source) && !reachedEnd {
+                        Button(isLoading ? "Loading..." : "Load more") { loadNextPage() }.disabled(isLoading)
+                    }
+                    if let feedError { Label(feedError, systemImage: "exclamationmark.triangle")
+                        Button("Retry") { if runtimeManga.isEmpty { startReload() } else { loadNextPage() } }
+
                     }
                 }
             }
@@ -277,12 +201,25 @@ struct SourceView: View {
         }
         .onChange(of: feedKind) { _, _ in
             guard model.supportsLiveSource(source) else { return }
-            Task { await reloadRuntimeFeed() }
+            showingFilters = false
+            startReload()
         }
         .onSubmit(of: .search) {
             guard model.supportsLiveSource(source) else { return }
-            Task { await reloadRuntimeFeed() }
+            if feedKind != .search { feedKind = .search }
+            else { startReload() }
         }
+        .onChange(of: query) { _, _ in
+            guard model.supportsLiveSource(source), feedKind == .search else { return }
+            showingFilters = false
+            invalidateFeed()
+        }
+        .onChange(of: selectedRuntimeFilters) { _, _ in
+            guard model.supportsLiveSource(source), feedKind == .search, searchFilters.isAvailable else { return }
+            startReload()
+        }
+        .onDisappear { invalidateFeed() }
+        .refreshable { await reloadRuntimeFeed() }
         .fileImporter(
             isPresented: $showingImporter,
             allowedContentTypes: [.folder, .image, .zip, .ahogeCBZ, .ahogeEPUB],
@@ -300,14 +237,15 @@ struct SourceView: View {
                     selectedTypes: $selectedTypes,
                     includedGenres: $includedGenres,
                     excludedGenres: $excludedGenres,
-                    genres: model.genreTags(for: source.id)
+                    genres: model.genreTags(for: source.id),
+                    supported: searchFilters
                 )
             }
             .presentationDetents([.medium, .large])
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if model.supportsLiveSource(source) {
+                if model.supportsLiveSource(source) && feedKind == .search && searchFilters.isAvailable {
                     Button {
                         showingFilters = true
                     } label: {
@@ -318,6 +256,7 @@ struct SourceView: View {
                 }
 
                 Menu {
+                    Toggle("List display", isOn: $listDisplay)
                     NavigationLink {
                         SourcePreferencesView(source: source)
                     } label: {
@@ -415,20 +354,73 @@ struct SourceView: View {
         }
     }
 
-    private func reloadRuntimeFeed() async {
-        isLoading = true
-        let filters: [SourceFilterValue] = [
-            .sort(feedKind == .latest ? "updated" : sortValue),
-            .orderAscending(orderAscending),
-            .types(Array(selectedTypes).sorted()),
-            .genreInclude(mode: "OR", slugs: Array(includedGenres).sorted()),
-            .genreExclude(mode: "OR", slugs: Array(excludedGenres).sorted()),
-        ]
-        let effectiveQuery = feedKind == .search ? query : ""
-        await model.refreshSourceFeed(for: source, mode: feedKind, query: effectiveQuery, filters: filters)
-        runtimeManga = model.mangas(for: source)
-        isLoading = false
+    private var runtimeFilters: [SourceFilterValue] {
+        guard feedKind == .search else { return [] }
+        return searchFilters.applying(selectedRuntimeFilters)
     }
+
+    private var selectedRuntimeFilters: [SourceFilterValue] {
+        [.sort(sortValue), .orderAscending(orderAscending),
+         .types(Array(selectedTypes).sorted()), .genreInclude(mode: "OR", slugs: Array(includedGenres).sorted()),
+         .genreExclude(mode: "OR", slugs: Array(excludedGenres).sorted())]
+    }
+
+    private var searchFilters: SourceSearchFilters {
+        let descriptor = model.descriptor(for: source.id)
+        return SourceSearchFilters.supported(family: descriptor?.engineFamily,
+            adapter: descriptor?.overrides["adapter"], query: query, baseURL: descriptor?.context?.baseURL)
+    }
+
+    private var submittedDescriptor: SourceFeedDescriptor {
+        SourceFeedDescriptor(sourceID: source.id, mode: feedKind,
+            query: feedKind == .search ? query : "", filters: runtimeFilters,
+            allowsPagination: feedKind != .search || searchFilters.allowsPagination)
+    }
+
+    private func invalidateFeed() {
+        feedTask?.cancel(); feedSession.invalidate()
+        runtimeManga = []; feedError = nil
+    }
+
+    private func beginReload() -> SourceFeedSession.Request {
+        invalidateFeed()
+        return feedSession.begin(submittedDescriptor)
+    }
+
+    private func startReload() {
+        // Reset synchronously, before the new task can yield or Load more can run.
+        let request = beginReload()
+        feedTask = Task { await performFeedRequest(request) }
+    }
+
+    private func reloadRuntimeFeed() async {
+        let request = beginReload()
+        await performFeedRequest(request)
+    }
+
+    private func loadNextPage() {
+        guard let request = feedSession.nextRequest() else { return }
+        feedError = nil
+        feedTask = Task { await performFeedRequest(request) }
+    }
+
+    private func performFeedRequest(_ request: SourceFeedSession.Request) async {
+        let descriptor = request.descriptor
+        do {
+            let items = try await model.sourceFeed(source, mode: descriptor.mode, query: descriptor.query,
+                filters: descriptor.filters, page: request.page)
+            guard !Task.isCancelled, feedSession.accepts(request) else { return }
+            var ids = Set(runtimeManga.map(\.id))
+            let added = items.filter { ids.insert($0.id).inserted }
+            runtimeManga.append(contentsOf: added)
+            feedSession.finish(request, addedCount: added.count)
+            model.setCachedSourceManga(runtimeManga, for: descriptor.sourceID)
+        } catch {
+            guard !Task.isCancelled, feedSession.accepts(request) else { return }
+            feedSession.fail(request); feedError = error.localizedDescription
+        }
+    }
+
 }
 
 struct SourcesFilterView: View {
@@ -495,40 +487,41 @@ private struct RuntimeSourceFiltersView: View {
     @Binding var includedGenres: Set<String>
     @Binding var excludedGenres: Set<String>
     let genres: [GenreTag]
+    let supported: SourceSearchFilters
 
     private let typeOptions = ["manga", "manhwa", "manhua"]
-    private let sortOptions: [(String, String)] = [
-        ("Popular", "popular"),
-        ("Rating", "rating"),
-        ("Updated", "updated"),
-        ("Bookmarked", "bookmarked"),
-        ("Title", "title"),
-    ]
 
     var body: some View {
         Form {
             Section {
-                Picker("Sort by", selection: $sortValue) {
-                    ForEach(sortOptions, id: \.1) { option in
-                        Text(option.0).tag(option.1)
+                if !supported.sorts.isEmpty {
+                    Picker("Sort by", selection: $sortValue) {
+                        Text("Source default").tag("")
+                        ForEach(supported.sorts, id: \.self) { option in
+                            Text(option.replacingOccurrences(of: "_", with: " ").capitalized).tag(option)
+                        }
                     }
                 }
-                Toggle("Ascending", isOn: $orderAscending)
-            } header: { Text("Ordering") } footer: { Text("Filters apply with the next feed request or search.") }
+                if supported.ascending { Toggle("Ascending", isOn: $orderAscending) }
+            } header: { Text("Search ordering") } footer: { Text("Changing a supported filter starts Search from page one. Other filter kinds are unavailable for this source.") }
 
-            Section("Type") {
-                ForEach(typeOptions, id: \.self) { option in
-                    Toggle(option.capitalized, isOn: binding(for: option, in: $selectedTypes))
+            if supported.types {
+                Section("Type") {
+                    ForEach(typeOptions, id: \.self) { option in
+                        Toggle(option.capitalized, isOn: binding(for: option, in: $selectedTypes))
+                    }
                 }
             }
 
-            if !genres.isEmpty {
+            if supported.includeGenres && !genres.isEmpty {
                 Section("Include Genres") {
                     ForEach(genres.prefix(12)) { genre in
                         Toggle(genre.name, isOn: binding(for: genre.slug, in: $includedGenres))
                     }
                 }
 
+            }
+            if supported.excludeGenres && !genres.isEmpty {
                 Section("Exclude Genres") {
                     ForEach(genres.prefix(12)) { genre in
                         Toggle(genre.name, isOn: binding(for: genre.slug, in: $excludedGenres))

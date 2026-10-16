@@ -54,7 +54,7 @@ final class NatsuIdSourceEngine: SourceRuntime {
     }
 
     func searchManga(_ request: SourceSearchRequest) async throws -> [Manga] {
-        if let deepLinkSlug = Self.deepLinkSlug(from: request.query, baseURL: configuration.baseURL) {
+        if let deepLinkSlug = NatsuSearchQuery.deepLinkSlug(from: request.query, baseURL: configuration.baseURL) {
             return try await fetchMangaList(slugs: [deepLinkSlug])
         }
 
@@ -71,7 +71,7 @@ final class NatsuIdSourceEngine: SourceRuntime {
             return SourceMangaDetails(manga: manga)
         }
 
-        if let slug = Self.deepLinkSlug(from: mangaIDOrURL, baseURL: configuration.baseURL) {
+        if let slug = NatsuSearchQuery.deepLinkSlug(from: mangaIDOrURL, baseURL: configuration.baseURL) {
             guard let manga = try await fetchMangaList(slugs: [slug]).first else {
                 throw RuntimeSourceError.mangaNotFound
             }
@@ -355,19 +355,6 @@ final class NatsuIdSourceEngine: SourceRuntime {
             return "[]"
         }
         return string
-    }
-
-    private static func deepLinkSlug(from query: String, baseURL: String) -> String? {
-        guard
-            let url = URL(string: query.trimmingCharacters(in: .whitespacesAndNewlines)),
-            let base = URL(string: baseURL),
-            url.host == base.host
-        else {
-            return nil
-        }
-        let parts = url.pathComponents.filter { $0 != "/" }
-        guard parts.count >= 2, parts[0] == "manga" else { return nil }
-        return parts[1]
     }
 
     private static func parseRuntimeMangaID(_ value: String) -> (id: Int, slug: String)? {

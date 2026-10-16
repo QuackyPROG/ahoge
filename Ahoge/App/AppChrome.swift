@@ -200,19 +200,24 @@ private struct OnboardingView: View {
                         if page == 0 {
                             onboardingPage(
                                 systemImage: "books.vertical",
-                                title: "A place for your next chapter",
-                                message: "Find manga in Explore, then add the titles you love to your Library. Use shelves to keep your collection organized.",
+                                title: "Build your library",
+                                message: "Choose sources in Browse, or import local files, then add titles to Library and organize them with categories.",
                                 footnote: "Your library and reading progress stay on this device."
                             )
-                            onboardingTip("Explore your sources", message: "Search enabled sources or open a catalog. You choose the sources Ahoge uses.", systemImage: "safari")
+                            onboardingTip("Choose your sources", message: "Search enabled sources or add a source repository. Local imports work with files you choose.", systemImage: "safari")
+                            NavigationLink("Choose Sources") { SourcesView() }
+                            NavigationLink("Import Local Files") { LocalImportsView() }
+                            NavigationLink("Restore an Ahoge Backup") { RestoreBackupView() }
                         } else {
                             onboardingPage(
                                 systemImage: "book.pages",
-                                title: "Make time to read",
+                                title: "Read and keep your data",
                                 message: "Continue from your last page and choose the reading mode, orientation, and display settings that feel right for each chapter.",
                                 footnote: model.currentLanguageLabel.isEmpty ? nil : "Current language: \(model.currentLanguageLabel)"
                             )
-                            onboardingTip("Take chapters with you", message: "Download chapters from a manga page. Manage offline reading and transfers in Activity.", systemImage: "arrow.down.circle")
+                            onboardingTip("Take chapters with you", message: "Download chapters from a title’s chapter list. Manage the Download Queue from More or by tapping Updates again.", systemImage: "arrow.down.circle")
+                            NavigationLink("Reader Preferences") { ReaderSettingsView() }
+                            NavigationLink("Backup & Storage") { DataStorageView() }
                         }
                     }
                     .frame(maxWidth: 560, alignment: .leading)
@@ -260,7 +265,7 @@ private struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 20) {
             Image(systemName: systemImage)
                 .font(.largeTitle).foregroundStyle(model.chromeTint).accessibilityHidden(true)
-            Text(title).font(.system(.largeTitle, design: .rounded, weight: .bold))
+            Text(title).font(.title.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
             Text(message).font(.body).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -294,7 +299,7 @@ private struct ReleaseNotesView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Your reading room")
+                        Text("Ahoge")
                             .font(.system(.title, design: .rounded, weight: .bold))
                         if !currentVersion.isEmpty {
                             Text("Ahoge \(currentVersion)")
@@ -303,11 +308,11 @@ private struct ReleaseNotesView: View {
                         }
                     }
 
-                    releaseItem("Rebuilt Library around cover art, Continue Reading, categories, and adaptive grids.", systemImage: "books.vertical.fill")
-                    releaseItem("New Explore experience with global search and source-first discovery.", systemImage: "sparkle.magnifyingglass")
-                    releaseItem("New Activity hub brings Updates, History, and Downloads together.", systemImage: "clock.arrow.circlepath")
-                    releaseItem("Redesigned manga details, chapter list, downloads, More, Stats, onboarding, and reader controls.", systemImage: "sparkles")
-                    releaseItem("Refined native iOS materials, spacing, accessibility, and light/dark appearance.", systemImage: "iphone")
+                    releaseItem("Library now offers categories, compact grid/list views, chapter filters and selection actions.", systemImage: "books.vertical.fill")
+                    releaseItem("Browse sources and search enabled sources from Browse.", systemImage: "sparkle.magnifyingglass")
+                    releaseItem("Updates and History have separate tabs; tap Updates again to open the Download Queue.", systemImage: "clock.arrow.circlepath")
+                    releaseItem("Manage chapter read state, bookmarks and downloads from a title’s chapter list.", systemImage: "sparkles")
+                    releaseItem("More includes local tracking records, statistics, backup, storage and preferences.", systemImage: "iphone")
                 }
                 .frame(maxWidth: 760, alignment: .leading)
                 .padding(24)

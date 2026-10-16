@@ -19,15 +19,7 @@ extension AppModel {
                 return chapter
             }
 
-            return Chapter(
-                id: progress.chapterID,
-                mangaID: manga.id,
-                title: progress.chapterTitle ?? "Chapter",
-                number: 0,
-                releaseDate: .distantPast,
-                isDownloaded: false,
-                pages: []
-            )
+            return nil
         }
 
         return latestChapter(for: manga)
@@ -82,11 +74,13 @@ extension AppModel {
     }
 
     func clearProgress() {
+        guard !state.securityPreferences.lockLibraryEdits else { return }
         state.progress.removeAll()
         persist()
     }
 
     func clearNotes() {
+        guard !state.securityPreferences.lockLibraryEdits else { return }
         state.mangaNotes.removeAll()
         persist()
     }
@@ -97,22 +91,13 @@ extension AppModel {
     }
 
     var updateFeed: [UpdateFeedItem] {
-        let trackedMangaIDs = Set(state.trackers.map(\.mangaID))
-        return libraryItems(selectedCategoryID: nil)
-            .compactMap { item -> UpdateFeedItem? in
-                guard let chapter = item.latestChapter else { return nil }
-                let entry = UpdateEntry(
-                    id: "\(item.manga.id)-\(chapter.id)",
-                    mangaID: item.manga.id,
-                    chapterID: chapter.id,
-                    sourceID: item.manga.sourceID,
-                    isBookmarked: trackedMangaIDs.contains(item.manga.id)
-                )
-                return UpdateFeedItem(id: entry.id, manga: item.manga, chapter: chapter, entry: entry)
+        return libraryItems(selectedCategoryID: nil).flatMap { item in
+            chapters(for: item.manga).map { chapter in
+                let entry = UpdateEntry(id: chapter.id, mangaID: item.id, chapterID: chapter.id,
+                    sourceID: item.manga.sourceID, isBookmarked: chapterState(for: chapter.id, mangaID: item.id).isBookmarked)
+                return UpdateFeedItem(id: chapter.id, manga: item.manga, chapter: chapter, entry: entry)
             }
-            .sorted { (lhs: UpdateFeedItem, rhs: UpdateFeedItem) in
-                lhs.chapter.releaseDate > rhs.chapter.releaseDate
-            }
+        }.sorted { $0.chapter.releaseDate > $1.chapter.releaseDate }
     }
 
     func updateFeed(searchText: String, downloadedOnly: Bool) -> [UpdateFeedItem] {
@@ -138,11 +123,16 @@ extension AppModel {
         return items[index + 1]
     }
 
-    func updateProgress(for manga: Manga, chapter: Chapter, pageIndex: Int, totalPages: Int? = nil) {
+    func updateProgress(for manga: Manga, chapter: Chapter, pageIndex: Int, totalPages: Int? = nil, selection: ReaderProgressSelection? = nil) {
         let previous = state.progress.first(where: { $0.mangaID == manga.id })
-        let previousTotalPages = previous?.chapterID == chapter.id ? previous?.totalPages ?? 0 : 0
-        let effectiveTotalPages = max(totalPages ?? chapter.pages.count, previousTotalPages)
-        let boundedPage = min(max(pageIndex, 0), max(effectiveTotalPages - 1, 0))
+        var chapterState = self.chapterState(for: chapter.id, mangaID: manga.id)
+        let decision = ReaderProgressPolicy.decision(pageIndex: pageIndex,
+            totalPages: totalPages ?? chapter.pages.count, previousChapterMatches: previous?.chapterID == chapter.id,
+            previousTotal: previous?.totalPages ?? 0, wasRead: chapterState.isRead,
+            incognito: state.appSettings.incognitoMode,
+            finalSourceVisible: selection?.chapterID == chapter.id && selection?.focusedIndex == pageIndex && selection?.finalSourceVisible == true)
+        let effectiveTotalPages = decision.totalPages
+        let boundedPage = decision.pageIndex
         let record = ReadingProgress(
             mangaID: manga.id,
             chapterID: chapter.id,
@@ -158,7 +148,18 @@ extension AppModel {
             state.progress.append(record)
         }
 
-        if !state.appSettings.incognitoMode {
+        chapterState.pageIndex = boundedPage
+        chapterState.totalPages = effectiveTotalPages
+        chapterState.isRead = decision.isRead
+        state.chapterStates[chapter.id] = chapterState
+        if chapterState.isRead {
+            let completed = state.chapterStates.values.filter { $0.mangaID == manga.id && $0.isRead }.count
+            for index in state.trackers.indices where state.trackers[index].mangaID == manga.id {
+                let previous = Int(state.trackers[index].progressText) ?? 0
+                state.trackers[index].progressText = String(max(previous, completed))
+            }
+        }
+        if decision.writesHistory {
             let existingID = state.history.first(where: { $0.mangaID == manga.id && $0.chapterID == chapter.id })?.id ?? UUID()
             state.history.removeAll { $0.mangaID == manga.id && $0.chapterID == chapter.id }
             state.history.insert(

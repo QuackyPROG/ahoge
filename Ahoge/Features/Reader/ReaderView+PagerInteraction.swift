@@ -12,8 +12,7 @@ extension ReaderView {
     func pagerDisplayIndex(for actualIndex: Int) -> Int {
         let boundedActualIndex = boundedPageIndex(for: actualIndex)
         return pagerItems.firstIndex { item in
-            guard case .render(let renderItem) = item else { return false }
-            return renderItem.logicalPageIndex == boundedActualIndex
+            item.contains(logicalIndex: boundedActualIndex)
         } ?? 1
     }
 
@@ -21,7 +20,7 @@ extension ReaderView {
         guard !isVerticalReader else { return }
         let targetIndex = pagerDisplayIndex(for: pageIndex)
         guard targetIndex != pagerDisplayIndex else { return }
-        if animated {
+        if animated && shouldAnimatePages {
             beginPagerSettling()
             withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.9)) {
                 pagerDisplayIndex = targetIndex
@@ -33,31 +32,32 @@ extension ReaderView {
 
     func handlePagerDisplayIndexChange(_ newIndex: Int) {
         guard pagerItems.indices.contains(newIndex) else { return }
+        pendingPublication.focusChanged()
+        reconcileSurfaceInteractions()
         switch pagerItems[newIndex] {
         case .render(let renderItem):
-            if renderItem.logicalPageIndex != pageIndex {
-                pageIndex = renderItem.logicalPageIndex
+            if !renderItem.contains(pageIndex) {
+                pageIndex = renderItem.first.logicalPageIndex
             }
         case .previousChapter, .nextChapter:
             break
         }
+        flushDeferredSnapshotIfPossible()
     }
 
     var canRouteTapPageTurn: Bool {
         if currentPagerTransitionDirection != nil {
             return false
         }
-        return !currentPagerInteractionState.consumesTapNavigation
+        return ReaderSurfaceNavigationPolicy(surfaceOwned: surfaceInteractionOwned,
+            spread: visibleDisplayGroup?.members.count == 2, scale: Double(currentPagerInteractionState.scale),
+            edgeReady: !currentPagerInteractionState.readyDirections.isEmpty).permitsTap
     }
 
     var allowsInteractivePagerDragging: Bool {
-        if currentPagerTransitionDirection != nil {
-            return true
-        }
-        if currentPagerInteractionState.scale <= 1.01 {
-            return true
-        }
-        return !currentPagerInteractionState.readyDirections.isEmpty
+        ReaderSurfaceNavigationPolicy(surfaceOwned: surfaceInteractionOwned,
+            spread: visibleDisplayGroup?.members.count == 2, scale: Double(currentPagerInteractionState.scale),
+            edgeReady: !currentPagerInteractionState.readyDirections.isEmpty).permitsCapture
     }
 
     func isForwardPagerTranslation(_ translationWidth: CGFloat) -> Bool {
@@ -65,11 +65,10 @@ extension ReaderView {
     }
 
     func stepPager(movingLeft: Bool) {
-        beginPagerSettling()
         let nextIndex = min(max(pagerDisplayIndex + (movingLeft ? 1 : -1), 0), max(pagerItems.count - 1, 0))
         guard nextIndex != pagerDisplayIndex else { return }
+        beginPagerSettling()
         pagerDisplayIndex = nextIndex
-        handlePagerDisplayIndexChange(nextIndex)
         resetTransitionState()
     }
 
@@ -103,6 +102,7 @@ extension ReaderView {
     func shouldCapturePagerDrag(translationWidth: CGFloat, translationHeight: CGFloat) -> Bool {
         guard abs(translationWidth) > abs(translationHeight) else { return false }
         guard allowsInteractivePagerDragging else { return false }
+        if activeReaderMode == .verticalPaged { return currentPagerInteractionState.scale <= 1.01 }
 
         if currentPagerInteractionState.scale <= 1.01 {
             return true
@@ -157,7 +157,9 @@ extension ReaderView {
             try? await Task.sleep(nanoseconds: 320_000_000)
             guard !Task.isCancelled else { return }
             readerInteractionPhase = .idle
+            let hadPending = pendingPublication.snapshot != nil
             flushDeferredSnapshotIfPossible()
+            if !hadPending, canPersistPageProgress, pageLoadState == .loaded { persistProgress() }
         }
     }
 }

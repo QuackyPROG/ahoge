@@ -18,6 +18,14 @@ struct MangaDetailView: View {
     @State private var showDownloadAllConfirm = false
     @State private var showRemoveAllDownloadsConfirm = false
     @State private var summaryExpanded = false
+    @State private var chapterSearch = ""
+    @State private var readFilter: CollectionFilter = .any
+    @State private var downloadedFilter: CollectionFilter = .any
+    @State private var bookmarkFilter: CollectionFilter = .any
+    @State private var selecting = false
+    @State private var selected = Set<String>()
+    @State private var showCategories = false
+    @State private var deleteSelected = false
 
     init(manga: Manga) {
         self.manga = manga
@@ -27,7 +35,11 @@ struct MangaDetailView: View {
 
     private var sortedChapters: [Chapter] {
         let items = loadedChapters.isEmpty ? model.chapters(for: displayManga) : loadedChapters
-        return sortDescending ? items : Array(items.reversed())
+        let filtered = items.filter { chapter in
+            let state = model.chapterState(for: chapter.id, mangaID: displayManga.id)
+            return (chapterSearch.isEmpty || chapter.title.localizedCaseInsensitiveContains(chapterSearch)) && readFilter.matches(state.isRead) && bookmarkFilter.matches(state.isBookmarked) && downloadedFilter.matches(model.isChapterDownloaded(manga: displayManga, chapter: chapter))
+        }
+        return sortDescending ? filtered : Array(filtered.reversed())
     }
 
     private var startChapter: Chapter? {
@@ -46,7 +58,7 @@ struct MangaDetailView: View {
                         allowsAdultContent: allowsAdultContent
                     )
 
-                    if let startChapter {
+                    if let startChapter, model.canReadChapter(startChapter, manga: displayManga) {
                         NavigationLink {
                             ReaderView(manga: displayManga, initialChapter: startChapter)
                         } label: {
@@ -84,7 +96,7 @@ struct MangaDetailView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 ForEach(bindings) { binding in
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text(binding.service.rawValue)
+                                        Text("Local record · \(binding.service.rawValue)")
                                             .font(.subheadline.weight(.semibold))
                                         Text(binding.status)
                                             .font(.caption)
@@ -112,6 +124,12 @@ struct MangaDetailView: View {
         .navigationTitle(displayManga.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        .sheet(isPresented: $showCategories) { CollectionCategoryPicker(mangaIDs: [displayManga.id]) }
+        .onChange(of: sortedChapters.map(\.id)) { _, ids in selected.formIntersection(ids) }
+        .confirmationDialog("Delete \(selectedDownloads.count) downloaded chapters?", isPresented: $deleteSelected) {
+            Button("Delete downloads", role: .destructive) { for chapter in selectedDownloads { model.removeDownloaded(manga: displayManga, chapter: chapter) } }
+        }
+        .refreshable { displayManga = await model.refreshMangaDetails(for: displayManga); loadedChapters = await model.refreshChapters(for: displayManga) }
         .sheet(isPresented: $showCover) {
             CoverSheet(
                 manga: displayManga,
@@ -119,13 +137,13 @@ struct MangaDetailView: View {
                 allowsAdultContent: allowsAdultContent
             )
         }
-        .confirmationDialog("Download all chapters?", isPresented: $showDownloadAllConfirm) {
-            Button("Download all") {
+        .confirmationDialog("Download displayed chapters?", isPresented: $showDownloadAllConfirm) {
+            Button("Download displayed chapters") {
                 model.enqueueDownloadAllChapters(manga: displayManga, chapters: sortedChapters)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will enqueue up to \(sortedChapters.count) chapter downloads.")
+            Text("This will enqueue up to \(sortedChapters.filter { !model.isChapterDownloaded(manga: displayManga, chapter: $0) }.count) chapter downloads, using the current filters.")
         }
         .confirmationDialog("Remove all downloads?", isPresented: $showRemoveAllDownloadsConfirm) {
             Button("Remove all", role: .destructive) {
@@ -133,7 +151,7 @@ struct MangaDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will delete offline files for \(sortedChapters.count) chapters.")
+            Text("This will delete offline files for \(model.chapters(for: displayManga).filter { model.isChapterDownloaded(manga: displayManga, chapter: $0) }.count) chapters.")
         }
         .onChange(of: model.chapterCache[displayManga.id]) { _, newValue in
             if let newValue, !newValue.isEmpty { loadedChapters = newValue }
@@ -163,14 +181,14 @@ struct MangaDetailView: View {
                     cornerRadius: 12
                 )
                 .frame(width: 140, height: 200)
-                .shadow(color: .black.opacity(0.16), radius: 14, y: 7)
+
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open cover for \(displayManga.title)")
 
             VStack(alignment: .leading, spacing: 9) {
                 Text(displayManga.title)
-                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .font(.title2.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
 
                 if !displayManga.author.isEmpty {
@@ -216,12 +234,11 @@ struct MangaDetailView: View {
                 systemImage: model.isInLibrary(displayManga) ? "bookmark.fill" : "bookmark"
             ) {
                 model.toggleLibrary(displayManga)
-            }
+            }.disabled(model.state.securityPreferences.lockLibraryEdits)
 
             if displayManga.sourceID != "local-files", !sortedChapters.isEmpty {
                 detailAction(title: "Download", systemImage: "arrow.down.circle") {
-                    if sortedChapters.count > 20 { showDownloadAllConfirm = true }
-                    else { model.enqueueDownloadAllChapters(manga: displayManga, chapters: sortedChapters) }
+                    showDownloadAllConfirm = true
                 }
             }
 
@@ -235,15 +252,10 @@ struct MangaDetailView: View {
                     Label("Notes", systemImage: "note.text")
                 }
 
-                if model.isInLibrary(displayManga), !model.categories.isEmpty {
-                    Menu("Category", systemImage: "folder") {
-                        ForEach(model.categories) { category in
-                            Button(category.name, systemImage: category.systemImage) {
-                                model.assignCategory(category.id, to: displayManga)
-                            }
-                        }
-                    }
+                if model.isInLibrary(displayManga) {
+                    Button("Categories", systemImage: "folder") { showCategories = true }.disabled(model.state.securityPreferences.lockLibraryEdits)
                 }
+                ShareLink(item: displayManga.title) { Label("Share title", systemImage: "square.and.arrow.up") }
 
                 if let migrationSource = model.migrationSource(for: displayManga) {
                     NavigationLink {
@@ -262,8 +274,7 @@ struct MangaDetailView: View {
 
                 if displayManga.sourceID != "local-files" && model.isTitleDownloaded(manga: displayManga) {
                     Button(role: .destructive) {
-                        if sortedChapters.count > 20 { showRemoveAllDownloadsConfirm = true }
-                        else { model.removeAllDownloads(manga: displayManga) }
+                        showRemoveAllDownloadsConfirm = true
                     } label: {
                         Label("Remove Downloads", systemImage: "trash")
                     }
@@ -342,6 +353,29 @@ struct MangaDetailView: View {
                 }
             }
 
+            TextField("Search chapters", text: $chapterSearch).textFieldStyle(.roundedBorder).accessibilityLabel("Search chapters")
+            HStack {
+                Menu("Filter", systemImage: "line.3.horizontal.decrease.circle") {
+                    CollectionFilterPicker(title: "Read", value: $readFilter)
+                    CollectionFilterPicker(title: "Downloaded", value: $downloadedFilter)
+                    CollectionFilterPicker(title: "Bookmarked", value: $bookmarkFilter)
+                }
+                Spacer()
+                Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }
+                if selecting {
+                    Menu("\(selected.count) selected") {
+                        Button("Select all") { selected = Set(sortedChapters.map(\.id)) }
+                        Button("Invert selection") { selected = Set(sortedChapters.map(\.id)).subtracting(selected) }
+                        Button("Mark read") { model.setChaptersRead(Array(selected), mangaID: displayManga.id, read: true) }.disabled(selected.isEmpty || model.state.securityPreferences.lockLibraryEdits)
+                        Button("Mark unread") { model.setChaptersRead(Array(selected), mangaID: displayManga.id, read: false) }.disabled(selected.isEmpty || model.state.securityPreferences.lockLibraryEdits)
+                        Button("Bookmark") { model.setChaptersBookmarked(Array(selected), mangaID: displayManga.id, bookmarked: true) }.disabled(selected.isEmpty || model.state.securityPreferences.lockLibraryEdits)
+                        Button("Remove bookmarks") { model.setChaptersBookmarked(Array(selected), mangaID: displayManga.id, bookmarked: false) }.disabled(selected.isEmpty || model.state.securityPreferences.lockLibraryEdits)
+                        Button("Download") { model.enqueueDownloadAllChapters(manga: displayManga, chapters: sortedChapters.filter { selected.contains($0.id) }) }.disabled(selected.isEmpty || displayManga.sourceID == "local-files")
+                        Button("Delete downloads", role: .destructive) { deleteSelected = true }.disabled(selectedDownloads.isEmpty)
+                    }
+                }
+            }.font(.subheadline)
+
             if isLoading && sortedChapters.isEmpty {
                 HStack(spacing: 10) {
                     ProgressView()
@@ -359,8 +393,12 @@ struct MangaDetailView: View {
                 .padding(.vertical, 30)
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(sortedChapters.enumerated()), id: \.offset) { index, chapter in
-                        chapterLink(chapter)
+                    ForEach(Array(sortedChapters.enumerated()), id: \.element.id) { index, chapter in
+                        if selecting {
+                            Button { if !selected.insert(chapter.id).inserted { selected.remove(chapter.id) } } label: {
+                                HStack { Image(systemName: selected.contains(chapter.id) ? "checkmark.circle.fill" : "circle"); Text(chapter.title); Spacer() }.frame(minHeight: 44)
+                            }.buttonStyle(.plain)
+                        } else { chapterLink(chapter) }
                         if index < sortedChapters.count - 1 {
                             Divider().padding(.leading, 4)
                         }
@@ -375,7 +413,8 @@ struct MangaDetailView: View {
         let isCurrent = progress?.chapterID == chapter.id
 
         return NavigationLink {
-            ReaderView(manga: displayManga, initialChapter: chapter)
+            if model.canReadChapter(chapter, manga: displayManga) { ReaderView(manga: displayManga, initialChapter: chapter) }
+            else { ContentUnavailableView("Chapter unavailable", systemImage: "wifi.exclamationmark", description: Text("Restore its source or download this chapter when the source is available.")) }
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -394,7 +433,9 @@ struct MangaDetailView: View {
                             .foregroundStyle(.tint)
                             .accessibilityLabel("Current chapter")
                     }
-                    if chapter.isDownloaded {
+                    if model.chapterState(for: chapter.id, mangaID: displayManga.id).isRead { Image(systemName: "checkmark").accessibilityLabel("Read") }
+                    if model.chapterState(for: chapter.id, mangaID: displayManga.id).isBookmarked { Image(systemName: "bookmark.fill").accessibilityLabel("Bookmarked") }
+                    if model.isChapterDownloaded(manga: displayManga, chapter: chapter) {
                         Image(systemName: "arrow.down.circle.fill")
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Downloaded")
@@ -411,7 +452,7 @@ struct MangaDetailView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if !chapter.isDownloaded, let job = model.downloadJob(for: displayManga, chapter: chapter) {
+                if !model.isChapterDownloaded(manga: displayManga, chapter: chapter), let job = model.downloadJob(for: displayManga, chapter: chapter) {
                     ChapterDownloadInlineStatusView(job: job)
                 }
             }
@@ -426,12 +467,17 @@ struct MangaDetailView: View {
         }
     }
 
+    private var selectedDownloads: [Chapter] { model.chapters(for: displayManga).filter { selected.contains($0.id) && model.isChapterDownloaded(manga: displayManga, chapter: $0) } }
+
     @ViewBuilder
     private func chapterContextMenu(_ chapter: Chapter) -> some View {
+        Button("Select") { selecting = true; selected.insert(chapter.id) }
+        Button(model.chapterState(for: chapter.id, mangaID: displayManga.id).isRead ? "Mark unread" : "Mark read") { model.setChaptersRead([chapter.id], mangaID: displayManga.id, read: !model.chapterState(for: chapter.id, mangaID: displayManga.id).isRead) }
+        Button(model.chapterState(for: chapter.id, mangaID: displayManga.id).isBookmarked ? "Remove bookmark" : "Bookmark") { model.setChaptersBookmarked([chapter.id], mangaID: displayManga.id, bookmarked: !model.chapterState(for: chapter.id, mangaID: displayManga.id).isBookmarked) }
         if displayManga.sourceID != "local-files" {
-            if chapter.isDownloaded {
+            if model.isChapterDownloaded(manga: displayManga, chapter: chapter) {
                 Button(role: .destructive) {
-                    model.removeDownloaded(manga: displayManga, chapter: chapter)
+                    selected = [chapter.id]; deleteSelected = true
                 } label: {
                     Label("Remove download", systemImage: "trash")
                 }
@@ -456,7 +502,7 @@ struct MangaDetailView: View {
                     }
                 case .complete:
                     Button(role: .destructive) {
-                        model.removeDownloaded(manga: displayManga, chapter: chapter)
+                        selected = [chapter.id]; deleteSelected = true
                     } label: {
                         Label("Remove download", systemImage: "trash")
                     }
@@ -598,11 +644,12 @@ struct MangaNotesView: View {
                 TextEditor(text: $note)
                     .frame(minHeight: 220)
                     .accessibilityLabel("Notes for \(manga.title)")
+                    .disabled(model.state.securityPreferences.lockLibraryEdits)
             } header: { Text("Reading notes") }
             Section {
                 Button("Save Note") {
                     model.saveNote(note, for: manga)
-                }
+                }.disabled(model.state.securityPreferences.lockLibraryEdits)
                 .frame(minHeight: 44)
             }
         }

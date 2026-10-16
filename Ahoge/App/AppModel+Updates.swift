@@ -1,49 +1,19 @@
-// Modified for Ahoge from an Apache-2.0-licensed prior implementation.
-// See THIRD_PARTY_NOTICES.md for attribution and license information.
-
-//
-//  AppModel+Updates.swift
-//  Ahoge
-//
-
 import Foundation
 
 extension AppModel {
-    var unreadUpdatesCount: Int {
-        updateFeed.reduce(0) { partial, item in
-            let lastSeen = state.updatesLastSeenChapterIDByMangaID[item.manga.id]
-            let isUnread = lastSeen != item.chapter.id
-            return partial + (isUnread ? 1 : 0)
-        }
+    var unreadUpdatesCount: Int { updateFeed.filter { !isUpdateSeen($0) }.count }
+
+    func isUpdateSeen(_ item: UpdateFeedItem) -> Bool {
+        state.updatesSeenChapterIDs.contains(item.chapter.id) ||
+            state.updatesLastSeenChapterIDByMangaID[item.manga.id] == item.chapter.id
     }
 
     func markUpdatesSeen(_ items: [UpdateFeedItem]) {
-        guard !items.isEmpty else { return }
-        var changed = false
-        for item in items {
-            if state.updatesLastSeenChapterIDByMangaID[item.manga.id] != item.chapter.id {
-                state.updatesLastSeenChapterIDByMangaID[item.manga.id] = item.chapter.id
-                changed = true
-            }
-        }
-        if changed {
-            persist()
-        }
+        let ids = Set(items.map { $0.chapter.id })
+        guard !ids.isSubset(of: state.updatesSeenChapterIDs) else { return }
+        state.updatesSeenChapterIDs.formUnion(ids)
+        persist()
     }
 
-    func markAllUpdatesSeen() {
-        let items = updateFeed
-        guard !items.isEmpty else { return }
-        var changed = false
-        for item in items {
-            if state.updatesLastSeenChapterIDByMangaID[item.manga.id] != item.chapter.id {
-                state.updatesLastSeenChapterIDByMangaID[item.manga.id] = item.chapter.id
-                changed = true
-            }
-        }
-        if changed {
-            persist()
-        }
-    }
+    func markAllUpdatesSeen() { markUpdatesSeen(updateFeed) }
 }
-

@@ -66,15 +66,15 @@ struct InternalSourceRepository: SourceRepository {
         sourcesData.filter(\.isEnabled)
     }
 
-    func popularManga(sourceID: String) async throws -> [Manga] {
+    func popularManga(sourceID: String, page: Int = 1) async throws -> [Manga] {
         []
     }
 
-    func latestManga(sourceID: String) async throws -> [Manga] {
+    func latestManga(sourceID: String, page: Int = 1) async throws -> [Manga] {
         []
     }
 
-    func searchManga(sourceID: String, query: String, filters: [SourceFilterValue]) async throws -> [Manga] {
+    func searchManga(sourceID: String, query: String, filters: [SourceFilterValue], page: Int = 1) async throws -> [Manga] {
         []
     }
 

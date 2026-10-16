@@ -13,6 +13,7 @@ enum ReaderMode: String, Codable, CaseIterable, Identifiable {
     case pagerLTR
     case pagerRTL
     case vertical
+    case verticalPaged
     case webtoon
 
     var id: String { rawValue }
@@ -22,7 +23,8 @@ enum ReaderMode: String, Codable, CaseIterable, Identifiable {
         case .pagerDefault: return "Paged"
         case .pagerLTR: return "Paged LTR"
         case .pagerRTL: return "Paged RTL"
-        case .vertical: return "Vertical"
+        case .vertical: return "Long strip"
+        case .verticalPaged: return "Paged vertical"
         case .webtoon: return "Webtoon"
         }
     }
@@ -62,6 +64,7 @@ struct ReaderPreferences: Codable, Hashable {
     var keepAwake: Bool
     var orientation: ReaderOrientation
     var showPageNumber: Bool
+    var parity: ReaderParityPreferences = .default
     var colorFilter: ReaderColorFilter
 
     init(
@@ -86,11 +89,13 @@ struct ReaderPreferences: Codable, Hashable {
         case keepAwake
         case orientation
         case showPageNumber
+        case parity
         case colorFilter
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        parity = try container.decodeIfPresent(ReaderParityPreferences.self, forKey: .parity) ?? .default
         mode = try container.decodeIfPresent(ReaderMode.self, forKey: .mode) ?? .pagerDefault
         spreadBehavior = try container.decodeIfPresent(ReaderSpreadBehavior.self, forKey: .spreadBehavior) ?? .fullPage
         keepAwake = try container.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? true
@@ -102,6 +107,7 @@ struct ReaderPreferences: Codable, Hashable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(parity, forKey: .parity)
         try container.encode(mode, forKey: .mode)
         try container.encode(spreadBehavior, forKey: .spreadBehavior)
         try container.encode(keepAwake, forKey: .keepAwake)
@@ -117,6 +123,25 @@ struct LibraryPreferences: Codable, Hashable {
     var showDownloadedBadge: Bool
     var showUnreadBadge: Bool
     var sortMode: LibrarySortMode
+    var displayList: Bool = false
+    var sortDescending: Bool = true
+    var filters: [String: String] = [:]
+    init(showContinueReading: Bool, defaultCategoryID: String, showDownloadedBadge: Bool, showUnreadBadge: Bool, sortMode: LibrarySortMode) {
+        self.showContinueReading = showContinueReading; self.defaultCategoryID = defaultCategoryID
+        self.showDownloadedBadge = showDownloadedBadge; self.showUnreadBadge = showUnreadBadge; self.sortMode = sortMode
+    }
+    enum CodingKeys: String, CodingKey { case showContinueReading, defaultCategoryID, showDownloadedBadge, showUnreadBadge, sortMode, displayList, sortDescending, filters }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        showContinueReading = try c.decodeIfPresent(Bool.self, forKey: .showContinueReading) ?? true
+        defaultCategoryID = try c.decodeIfPresent(String.self, forKey: .defaultCategoryID) ?? ""
+        showDownloadedBadge = try c.decodeIfPresent(Bool.self, forKey: .showDownloadedBadge) ?? true
+        showUnreadBadge = try c.decodeIfPresent(Bool.self, forKey: .showUnreadBadge) ?? true
+        sortMode = try c.decodeIfPresent(LibrarySortMode.self, forKey: .sortMode) ?? .recent
+        displayList = try c.decodeIfPresent(Bool.self, forKey: .displayList) ?? false
+        sortDescending = try c.decodeIfPresent(Bool.self, forKey: .sortDescending) ?? true
+        filters = try c.decodeIfPresent([String: String].self, forKey: .filters) ?? [:]
+    }
 }
 
 struct AppSettings: Codable, Hashable {

@@ -16,8 +16,16 @@ extension ReaderView {
         return progress
     }
 
+    var currentProgressSelection: ReaderProgressSelection? {
+        ReaderProgressPolicy.selection(snapshot: committedSnapshot, chapterID: currentChapter.id,
+            focusedIndex: pageIndex, visibleGroup: visibleDisplayGroup,
+            visibilityCommitted: readerInteractionPhase == .idle && transitionState == nil && !isChapterTransitioning)
+    }
+
     func persistProgress() {
-        model.updateProgress(for: manga, chapter: currentChapter, pageIndex: pageIndex, totalPages: logicalPages.count)
+        guard let selection = currentProgressSelection else { return }
+        model.updateProgress(for: manga, chapter: currentChapter, pageIndex: selection.focusedIndex,
+            totalPages: selection.totalPages, selection: selection)
     }
 
     func startPageLoad(forceRefresh: Bool) {
@@ -29,6 +37,12 @@ extension ReaderView {
             finalizeResolvedPages()
             return
         }
+        // A new page request invalidates the old session's ownership/pending work.
+        interactionEpoch = UUID()
+        continuousFrames = [:]
+        surfaceOwnership = .init()
+        surfaceInteractionStates = [:]
+        pendingPublication = .init()
         let requestID = UUID()
         activeLoadRequestID = requestID
         let chapterSnapshot = currentChapter
@@ -86,6 +100,7 @@ extension ReaderView {
                 chapterID: committedSnapshot.chapterID,
                 logicalPages: committedSnapshot.renderData.logicalPages,
                 currentIndex: pageIndex,
+                visibleIndices: visibleDisplayGroup?.members.map(\.logicalPageIndex) ?? [pageIndex],
                 lookahead: prefetchCount
             )
         }
@@ -94,6 +109,11 @@ extension ReaderView {
     func finalizeResolvedPages() {
         let snapshot = buildReaderSnapshot()
         guard !snapshot.renderData.logicalPages.isEmpty else {
+            interactionEpoch = UUID()
+            continuousFrames = [:]
+            surfaceOwnership = .init()
+            surfaceInteractionStates = [:]
+            pendingPublication = .init()
             committedSnapshot = snapshot
             canPersistPageProgress = false
             return
@@ -110,9 +130,7 @@ extension ReaderView {
         hasAppliedResumeProgress = true
         pendingPageIndexAfterChapterChange = nil
         resetTransitionState()
-        commitSnapshot(snapshot, preferredPageIndex: targetIndex, animatedSync: false)
-        prefetchAroundCurrentPage()
-        persistProgress()
         canPersistPageProgress = true
+        requestSnapshot(snapshot, preferredPageIndex: targetIndex, animatedSync: false)
     }
 }
