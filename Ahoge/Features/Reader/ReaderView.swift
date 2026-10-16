@@ -88,7 +88,7 @@ struct ReaderView: View {
         _pageIndex = State(initialValue: 0)
     }
 
-    var body: some View {
+    private var readerPresentation: some View {
         ZStack {
             pageBackground.modifier(ReaderFullscreenPresentation(enabled: parity.fullscreen))
 
@@ -144,6 +144,10 @@ struct ReaderView: View {
         .alert("Page export unavailable", isPresented: Binding(get: { pageExportError != nil }, set: { if !$0 { pageExportError = nil } })) {
             Button("OK") { pageExportError = nil }
         } message: { Text(pageExportError ?? "The page image could not be resolved.") }
+    }
+
+    var body: some View {
+        readerPresentation
         .onAppear {
             canPersistPageProgress = false
             if let progress = model.progress(for: manga), progress.chapterID == currentChapter.id {
@@ -216,7 +220,10 @@ struct ReaderView: View {
         .onChange(of: pagerDisplayIndex) { _, index in handlePagerDisplayIndexChange(index) }
         .onChange(of: transitionState == nil) { _, _ in flushDeferredSnapshotIfPossible() }
         .onChange(of: isChapterTransitioning) { _, _ in flushDeferredSnapshotIfPossible() }
-        .onDisappear {
+        .onDisappear(perform: handleReaderDisappearance)
+    }
+
+    private func handleReaderDisappearance() {
             interactionEpoch = UUID()
             continuousFrames = [:]
             surfaceOwnership = .init()
@@ -230,7 +237,6 @@ struct ReaderView: View {
             Task {
                 await imagePipeline.cancelWindow(for: currentChapter.id)
             }
-        }
     }
 
     @ViewBuilder
