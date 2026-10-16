@@ -21,20 +21,32 @@ extension ReaderView {
         let action = {
             proxy.scrollTo(pageAnchorID(for: firstRenderIndex), anchor: .top)
         }
-        if animated {
+        if animated && shouldAnimatePages {
             withAnimation(.easeInOut(duration: 0.2), action)
         } else {
             action()
         }
     }
 
-    func updateVerticalPageIndex(from frames: [Int: CGRect], viewportHeight: CGFloat) {
+    func updateVerticalPageIndex(from memberFrames: [String: CGRect], viewportSize: CGSize, epoch: UUID) {
+        guard epoch == interactionEpoch, isVerticalReader else { return }
+        continuousFrames = memberFrames
+        continuousViewportSize = viewportSize
+        // Reconcile even during slider movement or with no visible page. Retire
+        // departed owners before retrying the same pending-publication gate.
+        reconcileSurfaceInteractions()
+        flushDeferredSnapshotIfPossible()
+        guard epoch == interactionEpoch, isVerticalReader else { return }
+        guard let measuredSize = ReaderViewportMeasurement(viewportSize).measuredSize else { return }
+        let frames = Dictionary(uniqueKeysWithValues: verticalRenderItems.enumerated().compactMap { offset, item in
+            memberFrames[item.id].map { (offset, $0) }
+        })
+        let viewportHeight = measuredSize.height
         guard isVerticalReader, pageLoadState == .loaded, !frames.isEmpty else { return }
         guard sliderActiveValue == nil else { return }
         
-        let viewport = CGRect(x: 0, y: 0, width: 1, height: viewportHeight)
-        let visibleFrames = frames.filter { _, frame in
-            !frame.intersection(viewport).isNull
+        let visibleFrames = frames.filter { offset, _ in
+            visibleSurfaceIDs.contains(verticalRenderItems[offset].id)
         }
 
         if visibleFrames.isEmpty {

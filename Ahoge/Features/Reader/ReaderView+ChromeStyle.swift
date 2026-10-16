@@ -9,10 +9,14 @@ extension ReaderView {
     }
 
     var readerChromeLuminance: CGFloat {
+        if isVerticalReader, logicalPages.indices.contains(pageIndex),
+           let item = verticalRenderItems.first(where: { $0.logicalPageIndex == pageIndex }),
+           let luminance = pageLuminanceByRenderItemID[item.id] { return luminance }
         guard !isVerticalReader,
               pagerItems.indices.contains(pagerDisplayIndex),
               case .render(let item) = pagerItems[pagerDisplayIndex],
-              let luminance = pageLuminanceByRenderItemID[item.id] else {
+              let focused = item.members.first(where: { $0.logicalPageIndex == pageIndex }),
+              let luminance = pageLuminanceByRenderItemID[focused.id] else {
             return 0.5
         }
         return luminance
@@ -50,6 +54,8 @@ extension ReaderView {
             return "text.book.closed"
         case .pagerRTL:
             return "text.book.closed.fill"
+        case .verticalPaged:
+            return "rectangle.portrait"
         case .vertical:
             return "rectangle.stack"
         case .webtoon:

@@ -31,7 +31,6 @@ final class DownloadQueueCoordinator: DownloadQueueCoordinating {
         guard activeTask == nil else { return nil }
         guard let next = jobs
             .filter({ $0.state == .queued })
-            .sorted(by: { $0.queuedAt < $1.queuedAt })
             .first
         else { return nil }
 
@@ -45,8 +44,8 @@ final class DownloadQueueCoordinator: DownloadQueueCoordinating {
     func cancelIfActive(jobID: UUID) -> Bool {
         guard activeJobID == jobID else { return false }
         activeTask?.cancel()
-        activeTask = nil
-        activeJobID = nil
+        // Retain transport ownership until its cancellation unwinds. A new job
+        // must not reuse the partial directory while this task still writes.
         return true
     }
 

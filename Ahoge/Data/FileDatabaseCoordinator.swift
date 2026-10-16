@@ -105,6 +105,7 @@ struct DatabaseSnapshot: Codable, Hashable {
 
 final class FileDatabaseCoordinator: DatabaseCoordinator {
     let databaseDirectoryURL: URL
+    private(set) var loadError: String?
 
     private let stateStore: AppStateStore
     private let fileManager: FileManager
@@ -138,16 +139,22 @@ final class FileDatabaseCoordinator: DatabaseCoordinator {
 
     func loadSnapshot() -> DatabaseSnapshot {
         guard fileManager.fileExists(atPath: snapshotURL.path) else {
-            let migrated = DatabaseSnapshot(state: migratedState(), imports: [], importJobs: [], repoRecords: [], diagnostics: [], sourceErrors: [:], pageLoadErrors: [:])
-            saveSnapshot(migrated)
-            return migrated
+            do {
+                let migrated = DatabaseSnapshot(state: try migratedState(), imports: [], importJobs: [], repoRecords: [], diagnostics: [], sourceErrors: [:], pageLoadErrors: [:])
+                try saveSnapshotThrowing(migrated)
+                return migrated
+            } catch {
+                loadError = "Stored data could not be read safely. Original data is preserved. " + error.localizedDescription
+                return .empty
+            }
         }
-
-        guard
-            let data = try? Data(contentsOf: snapshotURL),
-            let snapshot = try? decoder.decode(DatabaseSnapshot.self, from: data)
-        else {
-            return DatabaseSnapshot(state: migratedState(), imports: [], importJobs: [], repoRecords: [], diagnostics: [], sourceErrors: [:], pageLoadErrors: [:])
+        let snapshot: DatabaseSnapshot
+        do {
+            let data = try Data(contentsOf: snapshotURL)
+            snapshot = try decoder.decode(DatabaseSnapshot.self, from: data)
+        } catch {
+            loadError = "Stored data could not be read safely. Original snapshot is preserved. " + error.localizedDescription
+            return .empty
         }
 
         var normalized = snapshot
@@ -158,6 +165,7 @@ final class FileDatabaseCoordinator: DatabaseCoordinator {
     }
 
     func saveSnapshot(_ snapshot: DatabaseSnapshot) {
+        guard loadError == nil else { return }
         ensureDirectories()
         var normalized = snapshot
         normalized.diagnostics = normalizeDiagnostics(normalized.diagnostics)
@@ -165,8 +173,17 @@ final class FileDatabaseCoordinator: DatabaseCoordinator {
         try? data.write(to: snapshotURL, options: .atomic)
     }
 
-    private func migratedState() -> PersistedState {
-        var state = stateStore.load()
+    func saveSnapshotThrowing(_ snapshot: DatabaseSnapshot) throws {
+        guard loadError == nil else { throw BackupError.invalid(loadError ?? "Stored data is unavailable.") }
+        try fileManager.createDirectory(at: databaseDirectoryURL, withIntermediateDirectories: true)
+        var normalized = snapshot
+        normalized.diagnostics = normalizeDiagnostics(normalized.diagnostics)
+        let data = try encoder.encode(normalized)
+        try AtomicSnapshotWriter.write(data, to: snapshotURL)
+    }
+
+    private func migratedState() throws -> PersistedState {
+        var state = try stateStore.loadThrowing()
         state.schemaVersion = PersistedState.currentSchemaVersion
         return state
     }

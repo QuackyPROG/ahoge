@@ -30,8 +30,8 @@ extension AppModel {
 
             return matchesLanguage &&
             (!hideAdultSources || !source.allowsAdultContent) &&
-            (!enabledSourcesOnly || source.isEnabled) &&
-            (!pinnedSourcesOnly || source.isPinned)
+            (!enabledSourcesOnly || sourceIsEnabled(source)) &&
+            (!pinnedSourcesOnly || sourceIsPinned(source))
         }
     }
 
@@ -42,23 +42,9 @@ extension AppModel {
     func sourceCatalogItems() -> [SourceCatalogItem] {
         let builtInItems = [
             SourceCatalogItem(
-                id: "official-json",
-                title: "Official JSON Catalog",
-                summary: "Primary source catalog metadata package for browse and source discovery on iOS.",
-                version: "1.0.0",
-                isInstalled: true,
-                hasUpdate: false,
-                isTrusted: true,
-                languages: [.multi, .english],
-                languageCodes: ["all", "multi", "en"],
-                sources: visibleSources.filter { $0.kind == .remote && descriptor(for: $0.id)?.origin == "built-in" },
-                originLabel: "Built-in",
-                supportStatus: .live
-            ),
-            SourceCatalogItem(
                 id: "local-tooling",
                 title: "Local Import Toolkit",
-                summary: "Local archive and folder importer for CBZ, ZIP, EPUB metadata, and image directories.",
+                summary: "Local image and folder import. Archive extraction availability is shown by each import job.",
                 version: "1.1.0",
                 isInstalled: true,
                 hasUpdate: false,
@@ -84,9 +70,9 @@ extension AppModel {
                     title: package.name,
                     summary: record.lastError ?? "Imported from \(record.title) with \(package.sources.count) source(s).",
                     version: package.version,
-                    isInstalled: true,
-                    hasUpdate: false,
-                    isTrusted: record.url.hasPrefix("https://"),
+                    isInstalled: packageInstallation("\(record.id)::\(package.id)") != nil,
+                    hasUpdate: packageInstallation("\(record.id)::\(package.id)").map { PackageVersion.newer(package.version, than: $0.package.version) } ?? false,
+                    isTrusted: packageInstallation("\(record.id)::\(package.id)")?.trusted ?? false,
                     languages: Array(Set(package.sources.map(\.language))).sorted { $0.rawValue < $1.rawValue },
                     languageCodes: Array(Set(package.sources.map { normalizeLanguageCode($0.languageCode) })).sorted(),
                     sources: packageSources,
@@ -117,6 +103,20 @@ extension AppModel {
         ]
     }
 
+    func changeSourceRepoURL(_ oldURL: String, to newURL: String) async {
+        let trimmed = newURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != oldURL, importingRepoURL == nil else { return }
+        importingRepoURL = trimmed
+        defer { importingRepoURL = nil }
+        do {
+            let record = try await repoImporter.importRepo(from: trimmed)
+            repoRecords.removeAll { $0.url == oldURL || $0.url == record.url }
+            repoRecords.append(record)
+            repoImportErrorMessage = nil
+            rebuildSourceRepository(); persist()
+        } catch { repoImportErrorMessage = error.localizedDescription }
+    }
+
     func addSourceRepo(_ url: String) async {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -126,8 +126,8 @@ extension AppModel {
 
         do {
             let record = try await repoImporter.importRepo(from: trimmed)
-            repoRecords.removeAll { $0.url == record.url }
-            repoRecords.insert(record, at: 0)
+            if let index = repoRecords.firstIndex(where: { $0.url == record.url }) { repoRecords[index] = record }
+            else { repoRecords.append(record) }
             state.sourceRepos = repoRecords.map(\.url)
             repoImportErrorMessage = nil
             appendDiagnostic(
@@ -146,8 +146,9 @@ extension AppModel {
             persist()
         } catch {
             let failed = repoImporter.failedRecord(for: trimmed, error: error)
-            repoRecords.removeAll { $0.url == failed.url }
-            repoRecords.insert(failed, at: 0)
+            if let index = repoRecords.firstIndex(where: { $0.url == failed.url }) {
+                repoRecords[index] = repoRecords[index].retainingCatalog(after: error)
+            } else { repoRecords.insert(failed, at: 0) }
             state.sourceRepos = repoRecords.map(\.url)
             repoImportErrorMessage = failed.lastError
             appendDiagnostic(
@@ -175,8 +176,7 @@ extension AppModel {
         defer { importingRepoURL = nil }
 
         let refreshed = await repoImporter.refresh(existing)
-        repoRecords.removeAll { $0.url == existing.url }
-        repoRecords.insert(refreshed, at: 0)
+        if let index = repoRecords.firstIndex(where: { $0.url == existing.url }) { repoRecords[index] = refreshed }
         state.sourceRepos = repoRecords.map(\.url)
         repoImportErrorMessage = refreshed.lastError
         appendDiagnostic(
@@ -260,7 +260,7 @@ extension AppModel {
 
     func supportsLiveSource(_ source: Source) -> Bool {
         guard let descriptor = repository.descriptor(for: source.id) else { return false }
-        return source.kind == .remote && descriptor.supportStatus == .live
+        return source.kind == .remote && sourceIsEnabled(source) && descriptor.supportStatus == .live && (repository as? RuntimeSourceRepository)?.hasRuntime(for: source.id) == true
     }
 
     func supportsLiveSource(sourceID: String) -> Bool {

@@ -14,6 +14,11 @@ struct ReaderPageSurface: View {
     let item: ReaderRenderItem
     let localFileURL: URL?
     let filter: ReaderColorFilter
+    var parity: ReaderParityPreferences = .default
+    var background: Color = .black
+    var isRTL: Bool = false
+    let interactionEpoch: UUID
+    let interactionVisible: Bool
     let imageSizingMode: ReaderPageSizingMode
     let fillViewport: Bool
     let allowsImagePan: Bool
@@ -21,22 +26,33 @@ struct ReaderPageSurface: View {
     let onImageMetadataResolved: (CGSize) -> Void
     let onLuminanceResolved: (CGFloat) -> Void
     let onInteractionStateChanged: (ReaderInteractionState) -> Void
+    @State private var resolvedCropAspectRatio: CGFloat?
     @State private var resolvedSourcePixelSize: CGSize = .zero
     @State private var loadFailureMessage: String?
+    @State private var lastInteraction: ReaderInteractionState?
     @State private var retryToken = 0
 
     var body: some View {
         ZStack {
-            Color.black
+            background
 
-            content
+            if shouldRotate {
+                GeometryReader { geometry in
+                    content
+                        .frame(width: geometry.size.height, height: geometry.size.width)
+                        .rotationEffect(.degrees(parity.rotateClockwise ? 90 : -90))
+                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                }
+            } else { content }
         }
         .frame(maxWidth: .infinity, maxHeight: fillViewport ? .infinity : nil)
-        .onAppear {
-            onInteractionStateChanged(.default)
-        }
+        .modifier(OptionalAspectRatio(aspectRatio: shouldRotate && !fillViewport ? resolvedDisplayAspectRatio.map { 1 / $0 } : nil))
         .onDisappear {
-            onInteractionStateChanged(.default)
+            if var state = lastInteraction {
+                state.event = .retire
+                onInteractionStateChanged(state)
+            }
+            lastInteraction = nil
         }
     }
 
@@ -70,12 +86,19 @@ struct ReaderPageSurface: View {
                     allowsZoom: allowsImagePan,
                     allowsDetailTiles: allowsImagePan || allowsHighDetailAtRest,
                     sizingMode: imageSizingMode,
+                    zoomStart: parity.zoomStart == .automatic ? (isRTL ? .right : .left) : parity.zoomStart,
+                    cropBorders: parity.cropBorders,
+                    doubleTapZoom: fillViewport || parity.doubleTapZoom,
+                    allowZoomOut: !fillViewport && parity.allowZoomOut,
+                    animateZoom: parity.animatePages,
                     retryToken: retryToken,
+                    epoch: interactionEpoch, memberID: item.id, isVisible: interactionVisible,
                     onSourceSizeResolved: { size in
                         resolvedSourcePixelSize = size
                         loadFailureMessage = nil
                         onImageMetadataResolved(size)
                     },
+                    onDisplayAspectRatioResolved: { resolvedCropAspectRatio = $0 },
                     onPreviewLuminanceResolved: { luminance in
                         onLuminanceResolved(luminance)
                     },
@@ -87,20 +110,18 @@ struct ReaderPageSurface: View {
                         if viewportState.isRightEdgeReadyForPageTurn {
                             readyDirections.insert(.leftDrag)
                         }
-                        onInteractionStateChanged(
-                            ReaderInteractionState(
+                        let state = ReaderInteractionState(
+                                identity: viewportState.identity, event: viewportState.event,
                                 scale: viewportState.scale,
                                 offset: CGSize(width: viewportState.contentOffset.x, height: viewportState.contentOffset.y),
                                 edgeDirection: nil,
                                 readyDirections: readyDirections
                             )
-                        )
+                        lastInteraction = state
+                        onInteractionStateChanged(state)
                     },
                     onFailureChanged: { message in
                         loadFailureMessage = message
-                        if message != nil {
-                            onInteractionStateChanged(.default)
-                        }
                     }
                 )
                 .frame(maxWidth: .infinity, maxHeight: fillViewport ? .infinity : nil)
@@ -138,6 +159,11 @@ struct ReaderPageSurface: View {
         }
     }
 
+    private var shouldRotate: Bool {
+        guard parity.rotateWidePages, item.logicalPageID.hasSuffix("|full") else { return false }
+        return resolvedSourcePixelSize.width > resolvedSourcePixelSize.height
+    }
+
     private var imageSource: ReaderImageAssetSource? {
         let remoteURL = item.page.remoteURL.flatMap(URL.init(string:))
         guard localFileURL != nil || remoteURL != nil else { return nil }
@@ -161,6 +187,7 @@ struct ReaderPageSurface: View {
     }
 
     private var resolvedDisplayAspectRatio: CGFloat? {
+        if let resolvedCropAspectRatio { return resolvedCropAspectRatio }
         guard resolvedSourcePixelSize.width > 0, resolvedSourcePixelSize.height > 0 else { return nil }
         let displayWidth = resolvedSourcePixelSize.width * normalizedCropRect.width
         let displayHeight = resolvedSourcePixelSize.height * normalizedCropRect.height
@@ -401,6 +428,8 @@ struct ReaderInteractionState: Equatable {
     static let resistanceThreshold: CGFloat = 72
     static let `default` = ReaderInteractionState(scale: 1, offset: .zero, edgeDirection: nil, readyDirections: [])
 
+    var identity: ReaderSurfaceIdentity? = nil
+    var event: ReaderSurfaceEvent = .viewport
     let scale: CGFloat
     let offset: CGSize
     let edgeDirection: ReaderPanEdgeState?

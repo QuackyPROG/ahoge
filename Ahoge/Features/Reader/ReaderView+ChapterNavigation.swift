@@ -36,6 +36,7 @@ extension ReaderView {
     }
 
     func advancePageForward() {
+        if !isVerticalReader { stepPager(movingLeft: !isRTLPager); return }
         if pageIndex + 1 < logicalPages.count {
             let newIndex = pageIndex + 1
             pageIndex = newIndex
@@ -56,6 +57,7 @@ extension ReaderView {
     }
 
     func advancePageBackward() {
+        if !isVerticalReader { stepPager(movingLeft: isRTLPager); return }
         if pageIndex > 0 {
             let newIndex = pageIndex - 1
             pageIndex = newIndex
@@ -92,6 +94,11 @@ extension ReaderView {
         readerInteractionPhase = .idle
         pagerSettleTask?.cancel()
         pagerSettleTask = nil
+        interactionEpoch = UUID()
+        continuousFrames = [:]
+        surfaceOwnership = .init()
+        surfaceInteractionStates = [:]
+        pendingPublication = .init()
         currentChapter = chapter
     }
 
@@ -134,6 +141,7 @@ extension ReaderView {
             withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.86, blendDuration: 0.12)) {
                 transitionState = nil
             }
+            flushDeferredSnapshotIfPossible()
         }
     }
 

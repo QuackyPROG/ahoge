@@ -24,6 +24,10 @@ extension AppModel {
     }
 
     func statsSections() -> [StatsSection] {
+        let libraryIDs = Set(state.library.map(\.mangaID))
+        let chapterStates = state.chapterStates.values.filter { libraryIDs.contains($0.mangaID) }
+        let knownChapterCount = libraryIDs.reduce(0) { $0 + (state.knownChapters[$1]?.count ?? 0) }
+        let offlineCount = libraryItems(selectedCategoryID: nil).reduce(0) { count, item in count + chapters(for: item.manga).filter { isChapterDownloaded(manga: item.manga, chapter: $0) }.count }
         let recentHistory = historyDisplayEntries
         let uniqueReadTitles = Set(state.history.map(\.mangaID)).count
         let latestHistory = recentHistory.first
@@ -49,8 +53,13 @@ extension AppModel {
                     StatsItem(title: "Library Titles", value: "\(state.library.count)", systemImage: "books.vertical"),
                     StatsItem(title: "Titles In Progress", value: "\(state.progress.count)", systemImage: "book"),
                     StatsItem(title: "History Entries", value: "\(state.history.count)", systemImage: "clock.arrow.circlepath"),
-                    StatsItem(title: "Tracked Titles", value: "\(state.trackers.count)", systemImage: "person.badge.clock"),
+                    StatsItem(title: "Locally Tracked Titles", value: "\(Set(state.trackers.map(\.mangaID)).count)", systemImage: "person.badge.clock"),
                     StatsItem(title: "Imported Titles", value: "\(importRecords.count)", systemImage: "tray.and.arrow.down"),
+                    StatsItem(title: "Known Chapters", value: "\(knownChapterCount)", systemImage: "list.bullet"),
+                    StatsItem(title: "Read Chapters", value: "\(chapterStates.filter(\.isRead).count)", systemImage: "checkmark"),
+                    StatsItem(title: "Bookmarked Chapters", value: "\(chapterStates.filter(\.isBookmarked).count)", systemImage: "bookmark"),
+                    StatsItem(title: "Offline Chapters", value: "\(offlineCount)", systemImage: "arrow.down.circle"),
+                    StatsItem(title: "Cached Image Storage", value: ByteCountFormatter.string(fromByteCount: Int64(cacheStats.diskImageBytes), countStyle: .file), systemImage: "internaldrive"),
                     StatsItem(title: "Categories", value: "\(state.categories.count)", systemImage: "folder")
                 ]
             ),
@@ -89,6 +98,12 @@ extension AppModel {
             sections.append(StatsSection(title: "Recent Titles", items: recentTitles))
         }
 
+        if let usage = storageUsage {
+            sections.append(StatsSection(title: "Device Storage", items: [
+                StatsItem(title: "Local import files", value: ByteCountFormatter.string(fromByteCount: usage.importedBytes, countStyle: .file), systemImage: "internaldrive"),
+                StatsItem(title: "Download files", value: ByteCountFormatter.string(fromByteCount: usage.downloadedBytes, countStyle: .file), systemImage: "arrow.down.circle")
+            ]))
+        }
         return sections.filter { !$0.items.isEmpty }
     }
 

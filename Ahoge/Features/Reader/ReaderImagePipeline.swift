@@ -31,6 +31,7 @@ protocol ReaderImagePipelining: Actor, Sendable {
         chapterID: String,
         logicalPages: [ReaderLogicalPage],
         currentIndex: Int,
+        visibleIndices: [Int],
         lookahead: Int
     ) async
 
@@ -128,13 +129,14 @@ actor ReaderImagePipeline: ReaderImagePipelining {
         chapterID: String,
         logicalPages: [ReaderLogicalPage],
         currentIndex: Int,
+        visibleIndices: [Int],
         lookahead: Int
     ) async {
         let boundedLookahead = max(lookahead, 0)
         
         let urlDistances: [(url: URL, distanceScore: Int)] = logicalPages.enumerated().compactMap { index, logicalPage in
             let distance = abs(index - currentIndex)
-            guard distance <= boundedLookahead else { return nil }
+            guard distance <= boundedLookahead || visibleIndices.contains(index) else { return nil }
             guard let remoteURL = logicalPage.sourcePage.remoteURL, let url = URL(string: remoteURL) else { return nil }
             
             // Prioritize closer pages. Break ties based on reading direction (assume reverse if we started near the end)

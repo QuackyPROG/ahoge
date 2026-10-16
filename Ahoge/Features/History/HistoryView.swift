@@ -5,128 +5,52 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var searchText = ""
-    @State private var showClearConfirmation = false
-
-    var body: some View {
-        let entries = model.historyEntries(searchText: searchText)
-
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Reading history").font(.title2.weight(.bold))
-                    Text("Pick up a chapter you have read before.").font(.subheadline).foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 24)
-
-                if entries.isEmpty {
-                    ContentUnavailableView(
-                        searchText.isEmpty ? "No history yet" : "No matching history",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("Read a chapter and it will appear here for quick resuming.")
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 80)
-                } else {
-                    ForEach(Array(entries.enumerated()), id: \.offset) { index, item in
-                        let (entry, manga, chapter) = item
-                        if index == 0 || !Calendar.current.isDate(entry.timestamp, inSameDayAs: entries[index - 1].0.timestamp) {
-                            Text(entry.timestamp.formatted(date: .complete, time: .omitted))
-                                .font(.headline).foregroundStyle(.secondary)
-                                .padding(.top, 24).padding(.bottom, 8)
-                                .accessibilityAddTraits(.isHeader)
-                        }
-                        NavigationLink {
-                            ReaderView(manga: manga, initialChapter: chapter)
-                        } label: {
-                            if index == 0 {
-                                AhogeContinueReadingCard(
-                                    manga: manga, chapter: chapter, progress: nil,
-                                    hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
-                                    allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false
-                                )
-                            } else {
-                                historyRow(entry: entry, manga: manga, chapter: chapter)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                model.removeHistoryEntry(entry.id)
-                            } label: {
-                                Label("Remove from History", systemImage: "trash")
-                            }
-                        }
-
-                        if index < entries.count - 1 {
-                            Divider().padding(.leading, 84)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: 760)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, AhogeLayout.pagePadding)
-            .padding(.bottom, 28)
-        }
-        .searchable(text: $searchText, prompt: "Search history")
-        .navigationTitle("History")
-        .toolbar {
-            if !entries.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            showClearConfirmation = true
-                        } label: {
-                            Label("Clear History", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .accessibilityLabel("History actions")
-                }
-            }
-        }
-        .confirmationDialog("Clear reading history?", isPresented: $showClearConfirmation) {
-            Button("Clear History", role: .destructive) { model.clearHistory() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the history list. It does not remove manga from your library or delete downloads.")
-        }
+    @State private var search = ""
+    @State private var clear = false
+    @State private var titleToRemove: Manga?
+    @State private var categoryManga: Manga?
+    private var entries: [HistoryEntry] {
+        model.state.history.sorted { $0.timestamp > $1.timestamp }.filter { entry in search.isEmpty || model.allMangaByID()[entry.mangaID]?.title.localizedCaseInsensitiveContains(search) == true }
     }
-
-    private func historyRow(entry: HistoryEntry, manga: Manga, chapter: Chapter) -> some View {
-        HStack(spacing: 14) {
-            MangaCoverView(
-                manga: manga,
-                hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers,
-                allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false,
-                cornerRadius: AhogeLayout.coverRadius
-            )
-            .frame(width: 56, height: 80)
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(manga.title)
-                    .font(.subheadline.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(chapter.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private var days: [Date] { Array(Set(entries.map { Calendar.current.startOfDay(for: $0.timestamp) })).sorted(by: >) }
+    var body: some View {
+        List {
+            if entries.isEmpty { ContentUnavailableView("No matching history", systemImage: "clock", description: Text("Read chapters to build your history, or change your search.")) }
+            ForEach(days, id: \.self) { day in
+                Section(day.formatted(date: .complete, time: .omitted)) {
+                    ForEach(entries.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: day) }) { entry in
+                        if let manga = model.allMangaByID()[entry.mangaID] {
+                            HStack(spacing: 12) {
+                                NavigationLink { MangaDetailView(manga: manga) } label: {
+                                    MangaCoverView(manga: manga, hideSensitiveCover: model.state.securityPreferences.hideSensitiveCovers, allowsAdultContent: model.source(for: manga.sourceID)?.allowsAdultContent ?? false).frame(width: 40, height: 56).accessibilityHidden(true)
+                                }.buttonStyle(.plain)
+                                NavigationLink {
+                                    if let chapter = model.chapter(for: entry.chapterID, in: manga), model.canReadChapter(chapter, manga: manga) { ReaderView(manga: manga, initialChapter: chapter) }
+                                    else { MangaDetailView(manga: manga) }
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(manga.title).font(.subheadline.weight(.medium))
+                                        Text(model.chapter(for: entry.chapterID, in: manga)?.title ?? "Chapter unavailable · Open title for recovery").font(.caption).foregroundStyle(.secondary)
+                                        Text(entry.timestamp.formatted(date: .omitted, time: .shortened)).font(.caption2).foregroundStyle(.secondary)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }.contextMenu {
+                                Button(model.isInLibrary(manga) ? "Remove from Library" : "Add to Library") { model.toggleLibrary(manga) }.disabled(model.state.securityPreferences.lockLibraryEdits)
+                                if model.isInLibrary(manga) { Button("Categories") { categoryManga = manga }.disabled(model.state.securityPreferences.lockLibraryEdits) }
+                                if let source = model.migrationSource(for: manga) { NavigationLink("Migrate") { MigrationConfirmationView(source: source, target: manga) } }
+                                Button("Remove this entry", role: .destructive) { model.removeHistoryEntry(entry.id) }
+                                Button("Remove all history for title", role: .destructive) { titleToRemove = manga }
+                            }
+                        } else {
+                            VStack(alignment: .leading) { Text("Title unavailable"); Text("Restore source metadata or a backup to recover this history entry.").font(.caption).foregroundStyle(.secondary) }.swipeActions { Button("Remove", role: .destructive) { model.removeHistoryEntry(entry.id) } }
+                        }
+                    }
+                }
             }
-            Spacer()
-            Image(systemName: "play.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-        }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Resume this chapter")
+        }.listStyle(.plain).navigationTitle("History").searchable(text: $search, prompt: "Search history")
+        .sheet(item: $categoryManga) { CollectionCategoryPicker(mangaIDs: [$0.id]) }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Clear", systemImage: "trash") { clear = true }.disabled(model.state.history.isEmpty) } }
+        .confirmationDialog("Clear \(model.state.history.count) history entries?", isPresented: $clear) { Button("Clear history", role: .destructive) { model.clearHistory() } } message: { Text("Library titles, resume progress and downloads are retained.") }
+        .confirmationDialog("Remove history for \(titleToRemove?.title ?? "title")?", isPresented: Binding(get: { titleToRemove != nil }, set: { if !$0 { titleToRemove = nil } })) { Button("Remove title history", role: .destructive) { if let title = titleToRemove { model.removeHistory(for: title.id) }; titleToRemove = nil } }
     }
 }

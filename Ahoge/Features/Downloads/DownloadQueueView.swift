@@ -5,6 +5,7 @@ import SwiftUI
 
 struct DownloadQueueView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var deleting: DownloadJob?
     var showsNavigationTitle: Bool = true
 
     var body: some View {
@@ -32,6 +33,16 @@ struct DownloadQueueView: View {
                 .padding(.horizontal, AhogeLayout.pagePadding)
                 .padding(.vertical, 12)
             }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(model.state.downloadQueuePaused ? "Resume queue" : "Pause queue") {
+                    if model.state.downloadQueuePaused { model.resumeDownloadQueue() } else { model.pauseDownloadQueue() }
+                }.disabled(model.downloadJobs.isEmpty)
+            }
+        }
+        .confirmationDialog("Delete this downloaded chapter?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { if let job = deleting { model.removeDownloaded(manga: job.manga, chapter: job.chapter) }; deleting = nil }
         }
         .modifier(OptionalNavigationTitleModifier(enabled: showsNavigationTitle, title: "Download Queue"))
     }
@@ -92,6 +103,12 @@ struct DownloadQueueView: View {
         VStack(alignment: .leading, spacing: 8) {
             switch job.state {
             case .queued, .downloading, .paused:
+                if job.state == .paused { Button("Resume") { model.resumeDownload(jobID: job.id) } }
+                else { Button("Pause") { model.pauseDownload(jobID: job.id) } }
+                if job.state != .downloading {
+                    Button("Move earlier") { model.movePendingDownload(jobID: job.id, earlier: true) }
+                    Button("Move later") { model.movePendingDownload(jobID: job.id, earlier: false) }
+                }
                 Button(role: .destructive) {
                     model.cancelDownload(jobID: job.id)
                 } label: {
@@ -104,13 +121,13 @@ struct DownloadQueueView: View {
                     Label("Retry", systemImage: "arrow.clockwise")
                 }
                 Button(role: .destructive) {
-                    model.cancelDownload(jobID: job.id)
+                    model.removeDownloadJob(job.id)
                 } label: {
-                    Label("Cancel", systemImage: "xmark.circle")
+                    Label("Remove from queue", systemImage: "trash")
                 }
             case .complete:
                 Button(role: .destructive) {
-                    model.removeDownloaded(manga: job.manga, chapter: job.chapter)
+                    deleting = job
                 } label: {
                     Label("Remove", systemImage: "trash")
                 }

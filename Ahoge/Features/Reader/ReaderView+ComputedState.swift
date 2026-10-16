@@ -50,28 +50,39 @@ extension ReaderView {
         readerRenderData.renderItems
     }
 
-    private var pagerRenderItems: [ReaderRenderItem] {
-        readerRenderData.renderItems
+    private var pagerRenderItems: [ReaderDisplayGroup] {
+        committedSnapshot?.displayGroups ?? []
     }
 
     var pagerItems: [ReaderPagerItem] {
-        var items: [ReaderPagerItem] = []
-        if isRTLPager {
-            items.append(.nextChapter)
-            items.append(contentsOf: pagerRenderItems.map(ReaderPagerItem.render))
-            items.append(.previousChapter)
-        } else {
-            items.append(.previousChapter)
-            items.append(contentsOf: pagerRenderItems.map(ReaderPagerItem.render))
-            items.append(.nextChapter)
-        }
-        return items
+        ReaderPagerItem.build(groups: pagerRenderItems, rtl: isRTLPager)
     }
 
     var currentPagerInteractionState: ReaderInteractionState {
         guard pagerItems.indices.contains(pagerDisplayIndex) else { return .default }
         guard case .render(let item) = pagerItems[pagerDisplayIndex] else { return .default }
-        return surfaceInteractionStates[item.id] ?? .default
+        return item.members.compactMap { surfaceInteractionStates[$0.id] }
+            .first(where: { $0.consumesTapNavigation }) ?? .default
+    }
+
+    var visibleDisplayGroup: ReaderDisplayGroup? {
+        guard pagerItems.indices.contains(pagerDisplayIndex),
+              case .render(let group) = pagerItems[pagerDisplayIndex] else { return nil }
+        return group
+    }
+
+    var visibleSurfaceIDs: Set<String> {
+        ReaderSurfaceVisibility.visibleMembers(mode: activeReaderMode,
+            pagedMembers: Set(visibleDisplayGroup?.members.map(\.id) ?? []),
+            continuousMembers: Set(verticalRenderItems.map(\.id)), frames: continuousFrames,
+            viewportSize: continuousViewportSize)
+    }
+
+    var surfaceInteractionOwned: Bool { surfaceOwnership.isOwned }
+
+    var publicationGate: ReaderPublicationGate {
+        ReaderPublicationGate(surfaceOwned: surfaceInteractionOwned, pagerIdle: readerInteractionPhase == .idle,
+            hasTransition: transitionState != nil, chapterTransitioning: isChapterTransitioning)
     }
 
     var currentPagerTransitionDirection: ReaderTransitionDirection? {
@@ -91,7 +102,7 @@ extension ReaderView {
         switch activeReaderMode {
         case .pagerDefault, .pagerRTL:
             return true
-        case .pagerLTR, .vertical, .webtoon:
+        case .pagerLTR, .vertical, .webtoon, .verticalPaged:
             return false
         }
     }

@@ -52,7 +52,7 @@ extension AppModel {
     // MARK: - DownloadRepository
 
     func jobs() -> [DownloadJob] {
-        downloadJobs.sorted { $0.queuedAt < $1.queuedAt }
+        downloadJobs
     }
 
     // MARK: - BackupRepository

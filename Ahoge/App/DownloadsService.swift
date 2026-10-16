@@ -11,6 +11,7 @@ import Foundation
 protocol DownloadsServicing {
     func downloadAndStorePages(
         pages: [ReaderPage],
+        wifiOnly: Bool,
         chapterBaseDirectory: URL,
         chapterComponent: String,
         progress: @escaping @Sendable (Double) async -> Void
@@ -20,6 +21,7 @@ protocol DownloadsServicing {
 final class DefaultDownloadsService: DownloadsServicing {
     func downloadAndStorePages(
         pages: [ReaderPage],
+        wifiOnly: Bool,
         chapterBaseDirectory: URL,
         chapterComponent: String,
         progress: @escaping @Sendable (Double) async -> Void
@@ -31,6 +33,13 @@ final class DefaultDownloadsService: DownloadsServicing {
         try? FileManager.default.removeItem(at: partial)
         try FileManager.default.createDirectory(at: partial, withIntermediateDirectories: true, attributes: nil)
 
+        var didCommit = false
+        defer { if !didCommit { try? FileManager.default.removeItem(at: partial) } }
+        let configuration = URLSessionConfiguration.default
+        configuration.allowsCellularAccess = !wifiOnly
+        configuration.allowsExpensiveNetworkAccess = !wifiOnly
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
         let imagePages = pages.filter { $0.assetKind == .image }
         let total = max(imagePages.count, 1)
         var completedCount = 0
@@ -51,7 +60,7 @@ final class DefaultDownloadsService: DownloadsServicing {
 
             var request = URLRequest(url: url)
             request.timeoutInterval = 20
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
                 throw URLError(.badServerResponse)
             }
@@ -77,8 +86,10 @@ final class DefaultDownloadsService: DownloadsServicing {
             await progress(min(max(value, 0), 1))
         }
 
+        try Task.checkCancellation()
         try? FileManager.default.removeItem(at: committed)
         try FileManager.default.moveItem(at: partial, to: committed)
+        didCommit = true
 
         return updated.map { page in
             guard let assetPath = page.assetPath else { return page }

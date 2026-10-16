@@ -17,76 +17,70 @@ extension ReaderView {
         let resolvedMode = mode ?? model.state.readerPreferences.mode
         let resolvedPages = pages ?? liveResolvedPages
         let resolvedImageSizes = imageSizes ?? pageImageSizes
-        return ReaderContentSnapshot(
-            chapterID: currentChapter.id,
-            mode: resolvedMode,
-            pages: resolvedPages,
-            imageSizes: resolvedImageSizes,
-            renderData: ReaderRenderData.build(
+        let data = ReaderRenderData.build(
                 pages: resolvedPages,
                 mode: resolvedMode,
                 spreadBehavior: model.state.readerPreferences.spreadBehavior,
                 imageSizes: resolvedImageSizes,
-                pagerViewportSize: pagerViewportSizeForRendering
+                pagerViewportSize: nil,
+                invertSplitOrder: model.state.readerPreferences.parity.invertSplitOrder,
+                rotateWidePages: model.state.readerPreferences.parity.rotateWidePages,
+                rotateClockwise: model.state.readerPreferences.parity.rotateClockwise
             )
+        return ReaderContentSnapshot(
+            chapterID: currentChapter.id, mode: resolvedMode, pages: resolvedPages,
+            imageSizes: resolvedImageSizes, renderData: data,
+            displayGroups: ReaderDisplayGroup.build(data: data, mode: resolvedMode, sizes: resolvedImageSizes,
+                policy: parity.dualPageDisplay, firstPageAlone: parity.firstPageAlone, viewport: pagerViewportSizeForRendering)
         )
     }
 
     func refreshCommittedSnapshot(preferredPageIndex: Int?, animatedSync: Bool) {
-        let snapshot = buildReaderSnapshot()
-        if shouldDeferSnapshot(snapshot) {
-            deferredSnapshot = snapshot
-            deferredSnapshotPreferredPageIndex = preferredPageIndex
-            return
-        }
-        commitSnapshot(snapshot, preferredPageIndex: preferredPageIndex, animatedSync: animatedSync)
+        requestSnapshot(buildReaderSnapshot(), preferredPageIndex: preferredPageIndex, animatedSync: animatedSync)
     }
 
-    func commitSnapshot(_ snapshot: ReaderContentSnapshot, preferredPageIndex: Int?, animatedSync: Bool) {
-        let previousSnapshot = committedSnapshot
-        let previousPageCount = previousSnapshot?.renderData.logicalPages.count ?? 0
-        let anchor = previousSnapshot?.renderData.anchor(
-            for: min(max(pageIndex, 0), max(previousPageCount - 1, 0))
-        )
-        committedSnapshot = snapshot
-        deferredSnapshot = nil
-        deferredSnapshotPreferredPageIndex = nil
-
-        let resolvedIndex: Int
-        if let preferredPageIndex {
-            if preferredPageIndex == Self.chapterEndPageTarget {
-                resolvedIndex = max(snapshot.renderData.logicalPages.count - 1, 0)
-            } else {
-                resolvedIndex = min(max(preferredPageIndex, 0), max(snapshot.renderData.logicalPages.count - 1, 0))
-            }
-        } else if let anchor, let mappedIndex = snapshot.renderData.index(for: anchor) {
-            resolvedIndex = mappedIndex
-        } else {
-            resolvedIndex = min(max(pageIndex, 0), max(snapshot.renderData.logicalPages.count - 1, 0))
+    func requestSnapshot(_ snapshot: ReaderContentSnapshot, preferredPageIndex: Int?, animatedSync: Bool) {
+        guard snapshot.chapterID == currentChapter.id else { return }
+        let explicitAnchor = preferredPageIndex.flatMap { index in
+            snapshot.renderData.anchor(for: min(max(index, 0), max(snapshot.renderData.logicalPages.count - 1, 0)))
         }
+        pendingPublication.request(snapshot, chapter: snapshot.chapterID, anchor: explicitAnchor,
+            chapterEnd: preferredPageIndex == Self.chapterEndPageTarget)
+        publishPendingSnapshot(animatedSync: animatedSync)
+    }
 
+    func commitSnapshot(_ snapshot: ReaderContentSnapshot, preferredAnchor: ReaderLogicalAnchor?, chapterEnd: Bool, animatedSync: Bool) {
+        let previousIndex = pageIndex
+        let anchor = preferredAnchor ?? committedSnapshot?.renderData.anchor(for: pageIndex)
+        if committedSnapshot?.mode != snapshot.mode {
+            // Mode changes replace the host graph only after publication is idle.
+            // An old graph's terminal/register callback must not affect the new one.
+            interactionEpoch = UUID()
+            continuousFrames = [:]
+            surfaceOwnership = .init()
+            surfaceInteractionStates = [:]
+        }
+        committedSnapshot = snapshot
+        let resolvedIndex: Int
+        if chapterEnd { resolvedIndex = max(snapshot.renderData.logicalPages.count - 1, 0) }
+        else if let anchor, let mappedIndex = snapshot.renderData.index(for: anchor) { resolvedIndex = mappedIndex }
+        else { resolvedIndex = min(max(pageIndex, 0), max(snapshot.renderData.logicalPages.count - 1, 0)) }
         pageIndex = resolvedIndex
         syncPagerDisplayIndex(animated: animatedSync)
+        reconcileSurfaceInteractions()
+        // An index change is persisted by the single pageIndex observer.
+        if previousIndex == resolvedIndex, canPersistPageProgress, pageLoadState == .loaded { persistProgress() }
     }
 
-    func flushDeferredSnapshotIfPossible() {
-        guard readerInteractionPhase == .idle, !isChapterTransitioning, let deferredSnapshot else { return }
-        commitSnapshot(
-            deferredSnapshot,
-            preferredPageIndex: deferredSnapshotPreferredPageIndex,
-            animatedSync: false
-        )
+    func publishPendingSnapshot(animatedSync: Bool) {
+        guard let (snapshot, anchor, chapterEnd) = pendingPublication.take(chapter: currentChapter.id, gate: publicationGate) else { return }
+        commitSnapshot(snapshot, preferredAnchor: anchor, chapterEnd: chapterEnd, animatedSync: animatedSync)
         prefetchAroundCurrentPage()
     }
 
-    func shouldDeferSnapshot(_ snapshot: ReaderContentSnapshot) -> Bool {
-        guard let committedSnapshot else { return false }
-        guard committedSnapshot.chapterID == snapshot.chapterID else { return false }
-        return readerInteractionPhase != .idle || transitionState != nil || isChapterTransitioning
-    }
+    func flushDeferredSnapshotIfPossible() { publishPendingSnapshot(animatedSync: false) }
 
     var pagerViewportSizeForRendering: CGSize? {
-        guard exactPagerWidth > 0, exactPagerHeight > 0 else { return nil }
-        return CGSize(width: exactPagerWidth, height: exactPagerHeight)
+        pagerViewport.measuredSize
     }
 }

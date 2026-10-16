@@ -4,8 +4,8 @@
 import SwiftUI
 
 enum AhogeLayout {
-    static let pagePadding: CGFloat = 20
-    static let sectionSpacing: CGFloat = 28
+    static let pagePadding: CGFloat = 16
+    static let sectionSpacing: CGFloat = 16
     static let contentSpacing: CGFloat = 12
     static let cardRadius: CGFloat = 12
     static let coverRadius: CGFloat = 8
@@ -332,5 +332,43 @@ struct AhogeActionRow: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Tri-state filters retain excluded as well as included matches.
+enum CollectionFilter: Int, CaseIterable, Identifiable {
+    case any, include, exclude
+    var id: Int { rawValue }
+    var title: String { ["Any", "Include", "Exclude"][rawValue] }
+    func matches(_ value: Bool) -> Bool { self == .any || (self == .include ? value : !value) }
+}
+struct CollectionFilterPicker: View {
+    let title: String
+    @Binding var value: CollectionFilter
+    var body: some View {
+        Picker(title, selection: $value) { ForEach(CollectionFilter.allCases) { Text($0.title).tag($0) } }
+    }
+}
+struct CollectionCategoryPicker: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let mangaIDs: [String]
+    @State private var selected = Set<String>()
+    var body: some View {
+        NavigationStack {
+            List {
+                Section { Text("Assign categories to \(mangaIDs.count) title(s). With no selection, titles become Uncategorized.").font(.footnote).foregroundStyle(.secondary) }
+                ForEach(model.categories) { category in
+                    Button { if !selected.insert(category.id).inserted { selected.remove(category.id) } } label: {
+                        HStack { Text(category.name); Spacer(); if selected.contains(category.id) { Image(systemName: "checkmark") } }
+                    }
+                }
+            }.navigationTitle("Categories").toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Apply") { model.assignCategories(Array(selected), mangaIDs: mangaIDs); dismiss() }.disabled(model.state.securityPreferences.lockLibraryEdits) }
+            }.onAppear {
+                if mangaIDs.count == 1, let entry = model.state.library.first(where: { $0.mangaID == mangaIDs[0] }) { selected = Set(entry.categoryIDs) }
+            }
+        }
     }
 }

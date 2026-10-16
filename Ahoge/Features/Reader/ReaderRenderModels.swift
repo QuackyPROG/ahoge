@@ -6,7 +6,10 @@
 //  Ahoge
 //
 
+import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct ReaderContentSnapshot {
     let chapterID: String
@@ -14,6 +17,58 @@ struct ReaderContentSnapshot {
     let pages: [ReaderPage]
     let imageSizes: [String: CGSize]
     let renderData: ReaderRenderData
+    var displayGroups: [ReaderDisplayGroup] = []
+}
+
+// Display-only grouping: member logical indices and source anchors never change.
+extension ReaderDualPageDisplay {
+    func enabled(mode: ReaderMode, viewport: CGSize?) -> Bool {
+        guard mode == .pagerDefault || mode == .pagerLTR || mode == .pagerRTL else { return false }
+        switch self {
+        case .never: return false
+        case .always: return true
+        case .wide:
+            guard let viewport, viewport.width > 0, viewport.height > 0 else { return false }
+            return viewport.width > viewport.height
+        }
+    }
+}
+struct ReaderDisplayGroup: Identifiable {
+    let members: [ReaderRenderItem] // chapter reading order
+    var id: String { members.map(\.id).joined(separator: "|pair|") }
+    var first: ReaderRenderItem { members[0] }
+    func contains(_ logicalIndex: Int) -> Bool { members.contains { $0.logicalPageIndex == logicalIndex } }
+    func physicalMembers(rtl: Bool) -> [ReaderRenderItem] { rtl ? Array(members.reversed()) : members }
+    var sourceRange: ClosedRange<Int> { first.sourcePageIndex...members.last!.sourcePageIndex }
+    func reachesEnd(sourceCount: Int) -> Bool { sourceCount > 0 && sourceRange.upperBound == sourceCount - 1 }
+
+    static func build(data: ReaderRenderData, mode: ReaderMode, sizes: [String: CGSize],
+                      policy: ReaderDualPageDisplay, firstPageAlone: Bool, viewport: CGSize?) -> [ReaderDisplayGroup] {
+        // Preserve pre-existing single-page physical order, including split fragments.
+        guard policy.enabled(mode: mode, viewport: viewport) else {
+            return data.renderItems.map { ReaderDisplayGroup(members: [$0]) }
+        }
+        let ordered = data.renderItems.sorted { $0.logicalPageIndex < $1.logicalPageIndex }
+        func eligible(_ item: ReaderRenderItem) -> Bool {
+            guard case .full = item.fragment, let size = sizes[item.page.id],
+                  size.width > 0, size.height > size.width else { return false }
+            return !(firstPageAlone && item.sourcePageIndex == 0)
+        }
+        var result: [ReaderDisplayGroup] = []
+        var index = 0
+        while index < ordered.count {
+            let first = ordered[index]
+            if index + 1 < ordered.count, eligible(first), eligible(ordered[index + 1]),
+               ordered[index + 1].sourcePageIndex == first.sourcePageIndex + 1 {
+                result.append(ReaderDisplayGroup(members: [first, ordered[index + 1]]))
+                index += 2
+            } else {
+                result.append(ReaderDisplayGroup(members: [first]))
+                index += 1
+            }
+        }
+        return mode == .pagerDefault || mode == .pagerRTL ? Array(result.reversed()) : result
+    }
 }
 
 enum ReaderInteractionPhase {
@@ -43,40 +98,26 @@ struct ReaderRenderData {
         mode: ReaderMode,
         spreadBehavior: ReaderSpreadBehavior,
         imageSizes: [String: CGSize],
-        pagerViewportSize: CGSize? = nil
+        pagerViewportSize: CGSize? = nil,
+        invertSplitOrder: Bool = false,
+        rotateWidePages: Bool = false,
+        rotateClockwise: Bool = true
     ) -> ReaderRenderData {
         switch mode {
-        case .pagerDefault, .pagerLTR, .pagerRTL:
+        case .pagerDefault, .pagerLTR, .pagerRTL, .verticalPaged:
             return buildPagedData(
                 pages: pages,
                 mode: mode,
                 spreadBehavior: spreadBehavior,
                 imageSizes: imageSizes,
-                pagerViewportSize: pagerViewportSize
+                pagerViewportSize: pagerViewportSize,
+                invertSplitOrder: invertSplitOrder
             )
-        case .vertical:
-            let logicalPages = pages.enumerated().map { index, page in
-                ReaderLogicalPage(
-                    id: "\(page.id)|full",
-                    sourcePage: page,
-                    sourcePageIndex: index,
-                    anchorKey: "full",
-                    renderFragment: .full
-                )
-            }
-            let renderItems = logicalPages.enumerated().map { index, logicalPage in
-                ReaderRenderItem(
-                    id: logicalPage.id,
-                    logicalPageID: logicalPage.id,
-                    logicalPageIndex: index,
-                    sourcePageIndex: logicalPage.sourcePageIndex,
-                    page: logicalPage.sourcePage,
-                    fragment: .full
-                )
-            }
-            return ReaderRenderData(logicalPages: logicalPages, renderItems: renderItems)
-        case .webtoon:
-            return buildWebtoonData(pages: pages, imageSizes: imageSizes)
+        case .vertical, .webtoon:
+            return buildContinuousData(pages: pages, mode: mode, spreadBehavior: spreadBehavior,
+                                       imageSizes: imageSizes, invertSplitOrder: invertSplitOrder,
+                                       rotateWidePages: rotateWidePages, rotateClockwise: rotateClockwise)
+
         }
     }
 
@@ -85,7 +126,8 @@ struct ReaderRenderData {
         mode: ReaderMode,
         spreadBehavior: ReaderSpreadBehavior,
         imageSizes: [String: CGSize],
-        pagerViewportSize: CGSize?
+        pagerViewportSize: CGSize?,
+        invertSplitOrder: Bool
     ) -> ReaderRenderData {
         let pageGroups = pages.enumerated().flatMap { index, page -> [[ReaderLogicalPage]] in
             let shouldSplit = spreadBehavior == .autoSplit
@@ -117,7 +159,8 @@ struct ReaderRenderData {
                 ]
             }
 
-            return baseFragments.map { descriptor in
+            let orderedFragments = invertSplitOrder ? Array(baseFragments.reversed()) : baseFragments
+            return orderedFragments.map { descriptor in
                 buildPagedLogicalPageGroup(
                     page: page,
                     sourcePageIndex: index,
@@ -145,6 +188,40 @@ struct ReaderRenderData {
             }
         }
         return ReaderRenderData(logicalPages: logicalPages, renderItems: renderItems)
+    }
+
+    private static func buildContinuousData(pages: [ReaderPage], mode: ReaderMode,
+        spreadBehavior: ReaderSpreadBehavior, imageSizes: [String: CGSize], invertSplitOrder: Bool,
+        rotateWidePages: Bool, rotateClockwise: Bool) -> ReaderRenderData {
+        let base = buildPagedData(pages: pages, mode: .pagerLTR, spreadBehavior: spreadBehavior,
+                                  imageSizes: imageSizes, pagerViewportSize: nil, invertSplitOrder: invertSplitOrder)
+        let items = base.logicalPages.enumerated().flatMap { index, logical -> [ReaderRenderItem] in
+            let crop: CGRect
+            switch logical.renderFragment {
+            case .full: crop = CGRect(x: 0, y: 0, width: 1, height: 1)
+            case .spreadHalf(let half): crop = half.unitRect
+            case .slice(_, _, let rect): crop = rect
+            }
+            let size = imageSizes[logical.sourcePage.id]?.applyingCrop(crop)
+            let rotated = rotateWidePages && logical.anchorKey == "full" && (size.map { $0.width > $0.height } ?? false)
+            let displaySize = rotated ? size.map { CGSize(width: $0.height, height: $0.width) } : size
+            let sliceRects = displaySize?.webtoonSliceUnitRects ?? [CGRect(x: 0, y: 0, width: 1, height: 1)]
+            return sliceRects.enumerated().map { sliceIndex, slice in
+                let sourceRect: CGRect
+                if rotated {
+                    let x = rotateClockwise ? slice.minY : 1 - slice.maxY
+                    sourceRect = CGRect(x: crop.minX + x * crop.width, y: crop.minY,
+                                        width: slice.height * crop.width, height: crop.height)
+                } else {
+                    sourceRect = CGRect(x: crop.minX + slice.minX * crop.width, y: crop.minY + slice.minY * crop.height,
+                                        width: slice.width * crop.width, height: slice.height * crop.height)
+                }
+                return ReaderRenderItem(id: "\(logical.id)|slice-\(sliceIndex)", logicalPageID: logical.id,
+                    logicalPageIndex: index, sourcePageIndex: logical.sourcePageIndex, page: logical.sourcePage,
+                    fragment: sliceRects.count == 1 ? logical.renderFragment : .slice(index: sliceIndex, total: sliceRects.count, unitRect: sourceRect))
+            }
+        }
+        return ReaderRenderData(logicalPages: base.logicalPages, renderItems: items)
     }
 
     private static func buildWebtoonData(
@@ -342,6 +419,7 @@ private extension ReaderRenderData {
     }
 }
 
+#if canImport(UIKit)
 extension UIImage {
     func cropped(unitRect: CGRect) -> UIImage? {
         guard let cgImage else { return nil }
@@ -357,3 +435,5 @@ extension UIImage {
         return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
     }
 }
+
+#endif

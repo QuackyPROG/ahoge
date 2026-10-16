@@ -34,11 +34,11 @@ extension AppModel {
     }
 
     func allMangaByID() -> [String: Manga] {
-        Dictionary(uniqueKeysWithValues: allManga.map { ($0.id, $0) })
+        allManga.reduce(into: [String: Manga]()) { $0[$1.id] = $1 }
     }
 
     func progressByMangaID() -> [String: ReadingProgress] {
-        Dictionary(uniqueKeysWithValues: state.progress.map { ($0.mangaID, $0) })
+        state.progress.reduce(into: [String: ReadingProgress]()) { if ($0[$1.mangaID]?.updatedAt ?? .distantPast) <= $1.updatedAt { $0[$1.mangaID] = $1 } }
     }
 
     func mangas(for source: Source) -> [Manga] {
@@ -93,7 +93,11 @@ extension AppModel {
     }
 
     func normalizedChapters(_ chapters: [Chapter]) -> [Chapter] {
-        chapters.sorted(by: isChapterNewer(_:than:))
+        let unique = chapters.reduce(into: [String: Chapter]()) { result, chapter in
+            if let existing = result[chapter.id], existing.isDownloaded && !chapter.isDownloaded { return }
+            result[chapter.id] = chapter
+        }
+        return unique.values.sorted(by: isChapterNewer(_:than:))
     }
 
     func detectChapterOrderAnomaly(in chapters: [Chapter]) -> ChapterOrderAnomaly? {

@@ -3,64 +3,81 @@
 
 import SwiftUI
 
-private enum AppTab: Hashable {
-    case library
-    case explore
-    case activity
-    case more
+extension Notification.Name {
+    static let ahogeLibraryReselected = Notification.Name("ahoge.library.reselected")
+    static let ahogeBrowseReselected = Notification.Name("ahoge.browse.reselected")
 }
-
+private enum AppTab: Int, CaseIterable, Identifiable {
+    case library, updates, history, browse, more
+    var id: Int { rawValue }
+    var title: String { ["Library", "Updates", "History", "Browse", "More"][rawValue] }
+    var symbol: String { ["books.vertical", "arrow.triangle.2.circlepath", "clock", "safari", "ellipsis"][rawValue] }
+}
 struct RootTabView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedTab: AppTab = .library
-    @State private var previousTab: AppTab = .library
-    @State private var libraryPath = NavigationPath()
-    @State private var explorePath = NavigationPath()
-    @State private var activityPath = NavigationPath()
-    @State private var morePath = NavigationPath()
-
+    @State private var paths = Array(repeating: NavigationPath(), count: 5)
+    @State private var presentation: AppTab?
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack(path: $libraryPath) {
-                LibraryView()
+            Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
+                stack(.library)
             }
-            .tabItem { Label("Library", systemImage: "books.vertical") }
-            .tag(AppTab.library)
-
-            NavigationStack(path: $explorePath) {
-                BrowseView()
+            Tab("Updates", systemImage: "arrow.triangle.2.circlepath", value: AppTab.updates) {
+                stack(.updates)
+            }.badge(model.unreadUpdatesCount)
+            Tab("History", systemImage: "clock", value: AppTab.history) {
+                stack(.history)
             }
-            .tabItem { Label("Explore", systemImage: "safari") }
-            .tag(AppTab.explore)
-
-            NavigationStack(path: $activityPath) {
-                ActivityView()
+            Tab("Browse", systemImage: "safari", value: AppTab.browse) {
+                stack(.browse)
+            }.badge(model.sourcePackageUpdateCount)
+            Tab("More", systemImage: "ellipsis", value: AppTab.more) {
+                stack(.more)
             }
-            .tabItem { Label("Activity", systemImage: "clock.badge") }
-            .badge(model.unreadUpdatesCount > 0 ? model.unreadUpdatesCount : 0)
-            .tag(AppTab.activity)
-
-            NavigationStack(path: $morePath) {
-                MoreView()
-            }
-            .tabItem { Label("More", systemImage: "ellipsis.circle") }
-            .tag(AppTab.more)
         }
+        .tabViewStyle(.sidebarAdaptable)
         .tint(model.chromeTint)
         .toolbarBackground(AhogePalette.canvas, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
-        .onChange(of: selectedTab) { old, new in
-            if new == old { popToRoot(for: new) }
-            previousTab = new
+        .sheet(item: $presentation) { tab in
+            NavigationStack {
+                Group {
+                    if tab == .updates { DownloadQueueView() }
+                    else if tab == .more { SettingsHomeView() }
+                    else if tab == .history, let item = model.historyEntries(searchText: "").first(where: { model.canReadChapter($0.2, manga: $0.1) }) {
+                        ReaderView(manga: item.1, initialChapter: item.2)
+                    }
+                }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { presentation = nil } } }
+            }
         }
     }
-
-    private func popToRoot(for tab: AppTab) {
+    private func stack(_ tab: AppTab) -> some View {
+        NavigationStack(path: $paths[tab.rawValue]) {
+            Group {
+                switch tab {
+                case .library: LibraryView()
+                case .updates: UpdatesView()
+                case .history: HistoryView()
+                case .browse: BrowseView()
+                case .more: MoreView()
+                }
+            }.background {
+                // Install for both the compact tab bar and the native iPad sidebar.
+                TabBarControllerAccessor { index in
+                    if let tab = AppTab(rawValue: index) { reselect(tab) }
+                }.frame(width: 0, height: 0)
+            }
+        }
+    }
+    private func reselect(_ tab: AppTab) {
+        guard presentation == nil else { return }
+        paths[tab.rawValue] = NavigationPath()
         switch tab {
-        case .library: libraryPath = NavigationPath()
-        case .explore: explorePath = NavigationPath()
-        case .activity: activityPath = NavigationPath()
-        case .more: morePath = NavigationPath()
+        case .library: NotificationCenter.default.post(name: .ahogeLibraryReselected, object: nil)
+        case .browse: NotificationCenter.default.post(name: .ahogeBrowseReselected, object: nil)
+        case .updates, .more: presentation = tab
+        case .history: if let item = model.historyEntries(searchText: "").first(where: { model.canReadChapter($0.2, manga: $0.1) }), model.canReadChapter(item.2, manga: item.1) { presentation = tab }
         }
     }
 }

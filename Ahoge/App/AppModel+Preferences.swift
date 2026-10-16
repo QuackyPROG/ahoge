@@ -23,6 +23,11 @@ extension AppModel {
         persist()
     }
 
+    func setReaderParityPreferences(_ preferences: ReaderParityPreferences) {
+        state.readerPreferences.parity = preferences
+        persist()
+    }
+
     func setReaderMode(_ mode: ReaderMode) {
         state.readerPreferences.mode = mode
         persist()
@@ -77,6 +82,10 @@ extension AppModel {
         state.libraryPreferences.showUnreadBadge = enabled
         persist()
     }
+
+    func setLibraryDisplayList(_ enabled: Bool) { state.libraryPreferences.displayList = enabled; persist() }
+    func setLibrarySortDescending(_ enabled: Bool) { state.libraryPreferences.sortDescending = enabled; persist() }
+    func setLibraryFilter(_ key: String, value: String) { state.libraryPreferences.filters[key] = value; persist() }
 
     func setLibrarySortMode(_ mode: LibrarySortMode) {
         state.libraryPreferences.sortMode = mode
