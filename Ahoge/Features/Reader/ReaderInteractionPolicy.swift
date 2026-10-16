@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 // Identity travels with the originating host callback, including terminal callbacks.
 struct ReaderSurfaceIdentity: Hashable {
