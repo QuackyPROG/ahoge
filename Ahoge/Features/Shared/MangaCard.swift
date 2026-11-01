@@ -25,7 +25,7 @@ struct MangaCard: View {
                 }
             Text(title)
                 .font(.caption)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
         }
     }

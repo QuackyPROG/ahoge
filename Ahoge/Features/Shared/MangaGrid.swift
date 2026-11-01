@@ -7,7 +7,7 @@ struct MangaGrid: View {
     @EnvironmentObject private var sources: SourceManager
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 10)], spacing: 14) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 10, alignment: .top)], spacing: 14) {
             ForEach(items, id: \.self) { ref in
                 NavigationLink(value: Route.manga(ref)) {
                     MangaCard(title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref))

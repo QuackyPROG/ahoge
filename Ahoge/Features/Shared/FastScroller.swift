@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// Tracks which rows of a long list are on screen, so a fast scroller knows where the list is.
+/// Owners hold it in `@State`, not `@StateObject`: only the scroller observes it, so scrolling
+/// redraws the thumb instead of the whole list.
 @MainActor
 final class VisibleRows: ObservableObject {
     @Published private(set) var top = 0
@@ -22,11 +24,12 @@ final class VisibleRows: ObservableObject {
 }
 
 /// Mihon-style fast scroller: a thumb on the right edge that can be dragged through a long list,
-/// with a bubble naming the row it will land on.
+/// with a bubble naming the row it will land on. Lists using it hide the system scroll indicator,
+/// which looks the same but only drags after a long press.
 struct FastScroller: View {
     let count: Int
-    /// The row at the top of the screen, for placing the thumb while not dragging.
-    let topIndex: Int
+    /// The rows on screen, for placing the thumb while not dragging.
+    @ObservedObject var rows: VisibleRows
     let label: (Int) -> String
     let scrollTo: (Int) -> Void
 
@@ -36,7 +39,7 @@ struct FastScroller: View {
     var body: some View {
         GeometryReader { geometry in
             let track = max(geometry.size.height - thumbHeight, 1)
-            let index = dragIndex ?? topIndex
+            let index = dragIndex ?? rows.top
             let fraction = count > 1 ? CGFloat(index) / CGFloat(count - 1) : 0
             let y = min(max(fraction, 0), 1) * track
             ZStack(alignment: .topTrailing) {
@@ -56,11 +59,11 @@ struct FastScroller: View {
                 }
                 Capsule()
                     .fill(dragIndex == nil ? Color.secondary.opacity(0.55) : Color.accentColor)
-                    .frame(width: dragIndex == nil ? 5 : 8, height: thumbHeight)
+                    .frame(width: dragIndex == nil ? 6 : 8, height: thumbHeight)
                     .frame(width: 28, height: thumbHeight)
                     .contentShape(Rectangle())
                     .offset(y: y)
-                    .gesture(
+                    .highPriorityGesture(
                         DragGesture(minimumDistance: 0, coordinateSpace: .named("track"))
                             .onChanged { value in
                                 let position = min(max((value.location.y - thumbHeight / 2) / track, 0), 1)

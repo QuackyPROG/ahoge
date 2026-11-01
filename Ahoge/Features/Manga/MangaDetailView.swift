@@ -15,7 +15,7 @@ struct MangaDetailView: View {
     @State private var display: ChapterDisplay
     @State private var selecting = false
     @State private var selection = Set<String>()
-    @StateObject private var visible = VisibleRows()
+    @State private var visible = VisibleRows()
 
     init(ref: MangaRef) {
         self.ref = ref
@@ -60,12 +60,13 @@ struct MangaDetailView: View {
                 }
             }
             .listStyle(.plain)
+            .scrollIndicators(chapters.count > 40 ? .hidden : .automatic)
             .environment(\.editMode, .constant(selecting ? .active : .inactive))
             .overlay(alignment: .trailing) {
                 if chapters.count > 40 {
                     FastScroller(
                         count: chapters.count,
-                        topIndex: visible.top,
+                        rows: visible,
                         label: { chapters[$0].number >= 0 ? "Ch. \(chapters[$0].number.formatted())" : chapters[$0].name },
                         scrollTo: { proxy.scrollTo(chapters[$0].key, anchor: .top) }
                     )

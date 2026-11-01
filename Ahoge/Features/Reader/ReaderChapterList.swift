@@ -6,7 +6,7 @@ struct ReaderChapterList: View {
     let current: ChapterRecord
     let select: (ChapterRecord) -> Void
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var visible = VisibleRows()
+    @State private var visible = VisibleRows()
 
     var body: some View {
         let chapters = ChapterDisplay.load(for: manga.key).apply(to: manga.chapters)
@@ -28,11 +28,12 @@ struct ReaderChapterList: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollIndicators(chapters.count > 40 ? .hidden : .automatic)
                 .overlay(alignment: .trailing) {
                     if chapters.count > 40 {
                         FastScroller(
                             count: chapters.count,
-                            topIndex: visible.top,
+                            rows: visible,
                             label: { chapters[$0].number >= 0 ? "Ch. \(chapters[$0].number.formatted())" : chapters[$0].name },
                             scrollTo: { proxy.scrollTo(chapters[$0].key, anchor: .top) }
                         )
