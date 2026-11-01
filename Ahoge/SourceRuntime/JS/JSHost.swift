@@ -1,24 +1,50 @@
 import Foundation
 import JavaScriptCore
 
-/// Resumes a continuation at most once (the result, an error or the timeout, whichever comes first).
+/// Settles a call at most once (the result, an error, the timeout or cancellation, whichever comes
+/// first). The outcome may arrive before the continuation is attached; it is then delivered on attach.
 private final class Once<T> {
     private var continuation: CheckedContinuation<T, Error>?
+    private var early: Result<T, Error>?
+    private var settled = false
     private let lock = NSLock()
+    /// Runs exactly once, when the call first settles (timeout cleanup, garbage collection).
+    var onSettle: (() -> Void)?
 
-    init(_ continuation: CheckedContinuation<T, Error>) {
-        self.continuation = continuation
-    }
-
-    func resume(returning value: T) { take()?.resume(returning: value) }
-    func resume(throwing error: Error) { take()?.resume(throwing: error) }
-
-    private func take() -> CheckedContinuation<T, Error>? {
+    var isSettled: Bool {
         lock.lock()
         defer { lock.unlock() }
-        let c = continuation
+        return settled
+    }
+
+    func attach(_ continuation: CheckedContinuation<T, Error>) {
+        lock.lock()
+        if let early {
+            lock.unlock()
+            continuation.resume(with: early)
+        } else {
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    func resume(returning value: T) { settle(.success(value)) }
+    func resume(throwing error: Error) { settle(.failure(error)) }
+
+    private func settle(_ result: Result<T, Error>) {
+        lock.lock()
+        guard !settled else {
+            lock.unlock()
+            return
+        }
+        settled = true
+        let waiting = continuation
         continuation = nil
-        return c
+        if waiting == nil { early = result }
+        lock.unlock()
+        waiting?.resume(with: result)
+        onSettle?()
+        onSettle = nil
     }
 }
 
@@ -65,40 +91,63 @@ final class JSHost {
     }
 
     /// Calls `source[method](...arguments)`, awaits its promise, and returns the JSON-serialized result.
+    /// The timeout runs on a global queue so it fires even while JavaScript is busy, and cancelling the
+    /// calling task ends the call with `CancellationError`.
     func call(_ method: String, _ arguments: [Any], timeout: TimeInterval = 30) async throws -> Data {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-            let once = Once(continuation)
-            queue.async {
-                guard let source = self.source,
-                      let function = source.objectForKeyedSubscript(method),
-                      function.isInstance(of: self.context.objectForKeyedSubscript("Function")) else {
-                    once.resume(throwing: SourceError.missingMethod(method))
-                    return
-                }
-                self.context.exception = nil
-                let result = source.invokeMethod(method, withArguments: arguments)
-                if let exception = self.context.exception {
+        let once = Once<Data>()
+        let timeoutItem = DispatchWorkItem {
+            once.resume(throwing: SourceError.timeout("Source call \(method) timed out after \(Int(timeout * 1000)) ms"))
+        }
+        once.onSettle = { [weak self] in
+            timeoutItem.cancel()
+            // Free the documents this call parsed.
+            self?.queue.async { [weak self] in
+                guard let self else { return }
+                JSGarbageCollect(self.context.jsGlobalContextRef)
+            }
+        }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                once.attach(continuation)
+                DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
+                queue.async {
+                    if once.isSettled { return }
+                    guard let source = self.source,
+                          let function = source.objectForKeyedSubscript(method),
+                          function.isInstance(of: self.context.objectForKeyedSubscript("Function")) else {
+                        once.resume(throwing: SourceError.missingMethod(method))
+                        return
+                    }
                     self.context.exception = nil
-                    once.resume(throwing: self.error(from: exception))
-                    return
+                    let result = source.invokeMethod(method, withArguments: arguments)
+                    if let exception = self.context.exception {
+                        self.context.exception = nil
+                        once.resume(throwing: self.error(from: exception))
+                        return
+                    }
+                    let onFulfilled: @convention(block) (JSValue) -> Void = { value in
+                        self.context.exception = nil
+                        let json = self.context.objectForKeyedSubscript("JSON").invokeMethod("stringify", withArguments: [value as Any])
+                        if let exception = self.context.exception {
+                            self.context.exception = nil
+                            once.resume(throwing: SourceError.script(Self.message(of: exception)))
+                            return
+                        }
+                        let text = (json == nil || json!.isUndefined) ? "null" : json!.toString()!
+                        once.resume(returning: Data(text.utf8))
+                    }
+                    let onRejected: @convention(block) (JSValue) -> Void = { reason in
+                        once.resume(throwing: self.error(from: reason))
+                    }
+                    let promise = self.context.objectForKeyedSubscript("Promise").invokeMethod("resolve", withArguments: [result as Any])
+                    promise?.invokeMethod("then", withArguments: [
+                        JSValue(object: onFulfilled, in: self.context) as Any,
+                        JSValue(object: onRejected, in: self.context) as Any,
+                    ])
                 }
-                let onFulfilled: @convention(block) (JSValue) -> Void = { value in
-                    let json = self.context.objectForKeyedSubscript("JSON").invokeMethod("stringify", withArguments: [value as Any])
-                    let text = (json == nil || json!.isUndefined) ? "null" : json!.toString()!
-                    once.resume(returning: Data(text.utf8))
-                }
-                let onRejected: @convention(block) (JSValue) -> Void = { reason in
-                    once.resume(throwing: self.error(from: reason))
-                }
-                let promise = self.context.objectForKeyedSubscript("Promise").invokeMethod("resolve", withArguments: [result as Any])
-                promise?.invokeMethod("then", withArguments: [
-                    JSValue(object: onFulfilled, in: self.context) as Any,
-                    JSValue(object: onRejected, in: self.context) as Any,
-                ])
             }
-            queue.asyncAfter(deadline: .now() + timeout) {
-                once.resume(throwing: SourceError.timeout("Source call \(method) timed out after \(Int(timeout * 1000)) ms"))
-            }
+        } onCancel: {
+            once.resume(throwing: CancellationError())
         }
     }
 

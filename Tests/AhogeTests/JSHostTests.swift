@@ -92,6 +92,31 @@ final class JSHostTests: XCTestCase {
         }
     }
 
+    func testCancellingTheTaskEndsTheCallBeforeTheTimeout() async throws {
+        let h = try host("var source = { pages: function () { return new Promise(function () {}); } };")
+        let start = Date()
+        let task = Task { try await h.call("pages", ["/c"], timeout: 30) }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("expected cancellation")
+        } catch is CancellationError {
+            // expected
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+    }
+
+    func testUnserializableResultIsAScriptError() async throws {
+        let h = try host("var source = { details: async function () { var o = {}; o.self = o; return o; } };")
+        do {
+            _ = try await h.call("details", ["/x"])
+            XCTFail("expected a script error")
+        } catch SourceError.script {
+            // expected: JSON.stringify threw on the circular result
+        }
+    }
+
     func testGlobalsMatchJavaScriptCoreContract() throws {
         let h = try host("var source = {};")
         XCTAssertEqual(h.evaluate("typeof URL + ',' + typeof fetch + ',' + typeof setTimeout"), "undefined,undefined,undefined")
