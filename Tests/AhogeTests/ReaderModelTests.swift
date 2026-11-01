@@ -19,3 +19,20 @@ final class ReaderModelTests: XCTestCase {
         XCTAssertNil(model.chapter(after: try XCTUnwrap(manga.chapters.first { $0.url == "/c/3" })))
     }
 }
+
+final class ReadingModeTests: XCTestCase {
+    func testPerMangaModeFallsBackToTheDefault() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.string(forKey: "reader.mode.default")
+        defer { defaults.set(saved, forKey: "reader.mode.default") }
+        let key = "test\n" + UUID().uuidString
+        defer { defaults.removeObject(forKey: "reader.mode\n" + key) }
+
+        ReadingMode.preferred = .rightToLeft
+        XCTAssertEqual(ReadingMode.load(for: key), .rightToLeft)
+        ReadingMode.webtoon.save(for: key)
+        XCTAssertEqual(ReadingMode.load(for: key), .webtoon)
+        ReadingMode.preferred = .vertical
+        XCTAssertEqual(ReadingMode.load(for: key), .webtoon)
+    }
+}

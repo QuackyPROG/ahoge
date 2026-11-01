@@ -35,6 +35,7 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        NSPhotoLibraryAddUsageDescription: Save manga pages you share from the reader to your photos.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:
