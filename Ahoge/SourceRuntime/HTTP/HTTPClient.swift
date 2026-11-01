@@ -56,7 +56,9 @@ final class HTTPClient {
         let rawHeaders = response.allHeaderFields.reduce(into: [String: String]()) { result, pair in
             if let name = pair.key as? String, let value = pair.value as? String { result[name] = value }
         }
-        let cookies = HTTPCookie.cookies(withResponseHeaderFields: rawHeaders, for: finalURL)
+        // Look the header up case-insensitively, then hand Foundation the exact key it expects.
+        let setCookieFields = response.value(forHTTPHeaderField: "Set-Cookie").map { ["Set-Cookie": $0] } ?? [:]
+        let cookies = HTTPCookie.cookies(withResponseHeaderFields: setCookieFields, for: finalURL)
         if let host = finalURL.host { jar.store(cookies, responseHost: host) }
 
         var headers = [String: String]()

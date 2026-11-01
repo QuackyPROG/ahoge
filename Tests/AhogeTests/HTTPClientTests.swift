@@ -26,6 +26,26 @@ final class HTTPClientTests: XCTestCase {
         XCTAssertNil(response.headers["set-cookie"])
     }
 
+    func testSetCookieHeaderNameCaseDoesNotMatter() async throws {
+        let stub = StubTransport { request in
+            request.url?.path == "/login" ? (200, ["set-cookie": "sid=7"], Data(), nil) : (200, [:], Data(), nil)
+        }
+        let client = HTTPClient(transport: stub)
+        _ = try await client.send(spec("https://s.test/login"))
+        _ = try await client.send(spec("https://s.test/page"))
+        XCTAssertEqual(stub.requests[1].value(forHTTPHeaderField: "Cookie"), "sid=7")
+    }
+
+    func testBracketedQueryStaysUsable() async throws {
+        let stub = StubTransport.text("ok")
+        let client = HTTPClient(transport: stub)
+        _ = try await client.send(spec("https://api.test/manga?includes[]=cover_art&order[followedCount]=desc"))
+        let url = try XCTUnwrap(stub.requests[0].url)
+        let query = try XCTUnwrap(url.query)
+        XCTAssertTrue(query.contains("includes"))
+        XCTAssertTrue(query.contains("cover_art"))
+    }
+
     func testResponseNormalization() async throws {
         var body = Data([0xEF, 0xBB, 0xBF])
         body.append(Data("héllo".utf8))
