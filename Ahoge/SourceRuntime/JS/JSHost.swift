@@ -48,6 +48,11 @@ private final class Once<T> {
     }
 }
 
+/// A call argument passed to JavaScript as the value of this JSON text (nested objects, booleans).
+struct JSONArgument {
+    let json: String
+}
+
 /// One JavaScriptCore context running one source bundle, confined to a serial queue.
 final class JSHost {
     static let runtimeVersion = 1
@@ -90,6 +95,14 @@ final class JSHost {
         }
     }
 
+    /// Whether the script's source object defines `method` as a function.
+    func hasMethod(_ method: String) -> Bool {
+        queue.sync {
+            guard let function = source?.objectForKeyedSubscript(method) else { return false }
+            return function.isInstance(of: context.objectForKeyedSubscript("Function"))
+        }
+    }
+
     /// Calls `source[method](...arguments)`, awaits its promise, and returns the JSON-serialized result.
     /// The timeout runs on a global queue so it fires even while JavaScript is busy, and cancelling the
     /// calling task ends the call with `CancellationError`.
@@ -119,7 +132,12 @@ final class JSHost {
                         return
                     }
                     self.context.exception = nil
-                    let result = source.invokeMethod(method, withArguments: arguments)
+                    let jsonParse = self.context.objectForKeyedSubscript("JSON")
+                    let values: [Any] = arguments.map { argument in
+                        guard let json = (argument as? JSONArgument)?.json else { return argument }
+                        return jsonParse?.invokeMethod("parse", withArguments: [json]) as Any
+                    }
+                    let result = source.invokeMethod(method, withArguments: values)
                     if let exception = self.context.exception {
                         self.context.exception = nil
                         once.resume(throwing: self.error(from: exception))

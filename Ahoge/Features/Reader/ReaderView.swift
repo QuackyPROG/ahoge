@@ -8,6 +8,7 @@ struct ReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showOverlay = false
     @State private var sliderPage = 0.0
+    @State private var showChapters = false
     private let start: ChapterRecord
 
     init(sourceId: String, manga: LibraryManga, chapter: ChapterRecord) {
@@ -54,6 +55,11 @@ struct ReaderView: View {
         }
         .ignoresSafeArea()
         .statusBarHidden(!showOverlay)
+        .sheet(isPresented: $showChapters) {
+            ReaderChapterList(manga: model.manga, current: model.currentChapter) { chapter in
+                Task { await model.open(chapter, manager: sources) }
+            }
+        }
     }
 
     private func pageID(_ chapterURL: String, _ index: Int) -> String { "\(chapterURL)#\(index)" }
@@ -68,6 +74,8 @@ struct ReaderView: View {
                     Text(model.currentChapter.name).font(.subheadline.bold()).lineLimit(1)
                 }
                 Spacer()
+                Button { showChapters = true } label: { Image(systemName: "list.bullet").font(.headline).padding(10) }
+                    .accessibilityLabel("Chapters")
             }
             .padding(.horizontal)
             .padding(.top, 50)
