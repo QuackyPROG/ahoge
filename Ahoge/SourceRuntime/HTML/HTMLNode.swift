@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSoup
 
 /// An element (or the document root) with HOST_API.md semantics.
@@ -22,13 +23,31 @@ final class HTMLNode {
         return HTMLNode(element: document, base: base)
     }
 
-    func select(_ css: String) throws -> [HTMLNode] {
+    /// Selectors that already passed SelectorGuard, so repeated selects skip the four regex scans.
+    private static var checkedSelectors = Set<String>()
+    private static let checkedLock = NSLock()
+
+    private static func assertSupported(_ css: String) throws {
+        checkedLock.lock()
+        let known = checkedSelectors.contains(css)
+        checkedLock.unlock()
+        if known { return }
         try SelectorGuard.assertSupported(css)
+        checkedLock.lock()
+        if checkedSelectors.count >= 4096 { checkedSelectors.removeAll() }
+        checkedSelectors.insert(css)
+        checkedLock.unlock()
+    }
+
+    func select(_ css: String) throws -> [HTMLNode] {
+        try Self.assertSupported(css)
         return try element.select(css).array().map { HTMLNode(element: $0, base: base) }
     }
 
+    /// Stops at the first match (document order, the element itself included, as `select` does).
     func selectFirst(_ css: String) throws -> HTMLNode? {
-        try select(css).first
+        try Self.assertSupported(css)
+        return try element.selectFirst(css).map { HTMLNode(element: $0, base: base) }
     }
 
     func text() -> String { TextExtraction.text(element) }
