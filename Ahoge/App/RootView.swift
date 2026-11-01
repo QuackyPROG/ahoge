@@ -3,11 +3,11 @@ import SwiftUI
 struct RootView: View {
     var body: some View {
         TabView {
-            Text("Library")
+            LibraryView()
                 .tabItem { Label("Library", systemImage: "books.vertical") }
-            Text("Browse")
+            BrowseView()
                 .tabItem { Label("Browse", systemImage: "safari") }
-            Text("More")
+            MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
         }
     }
