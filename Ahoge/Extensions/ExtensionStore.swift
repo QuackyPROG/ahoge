@@ -40,10 +40,18 @@ final class ExtensionStore: ObservableObject {
         save()
     }
 
-    func removeRepo(_ url: String) {
+    /// Installed sources keep working after their repository is removed, unless asked to go too.
+    func removeRepo(_ url: String, uninstallingSources: Bool = false) {
+        if uninstallingSources {
+            for item in installed where item.repoURL == url { uninstall(item.id) }
+        }
         repos.removeAll { $0.url == url }
         indexes[url] = nil
         save()
+    }
+
+    func installedCount(fromRepo url: String) -> Int {
+        installed.filter { $0.repoURL == url }.count
     }
 
     /// Re-fetches every repository index; a failing repository keeps its last good index.

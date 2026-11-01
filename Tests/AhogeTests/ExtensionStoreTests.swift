@@ -89,4 +89,37 @@ final class ExtensionStoreTests: XCTestCase {
         } catch {}
         XCTAssertEqual(store.repos.count, 1)
     }
+
+    func testRemoveRepoKeepsInstalledSources() async throws {
+        let store = ExtensionStore(directory: directory, client: RepoClient(transport: stub(index: { self.index() }, script: { self.script })))
+        try await store.addRepo(indexURL)
+        try await store.install(try XCTUnwrap(store.rows().first?.source), from: indexURL)
+        XCTAssertEqual(store.installedCount(fromRepo: indexURL), 1)
+
+        store.removeRepo(indexURL)
+        XCTAssertTrue(store.repos.isEmpty)
+        XCTAssertEqual(store.installed.map(\.id), ["en.demo"])
+        XCTAssertEqual(store.rows().map(\.state), [.installed])
+        XCTAssertEqual(try store.scriptText(for: "en.demo"), script)
+
+        let reloaded = ExtensionStore(directory: directory, client: RepoClient(transport: StubTransport.text("", status: 500)))
+        XCTAssertTrue(reloaded.repos.isEmpty)
+        XCTAssertEqual(reloaded.installed.map(\.id), ["en.demo"])
+    }
+
+    func testRemoveRepoUninstallingSources() async throws {
+        let store = ExtensionStore(directory: directory, client: RepoClient(transport: stub(index: { self.index() }, script: { self.script })))
+        try await store.addRepo(indexURL)
+        try await store.install(try XCTUnwrap(store.rows().first?.source), from: indexURL)
+
+        store.removeRepo(indexURL, uninstallingSources: true)
+        XCTAssertTrue(store.repos.isEmpty)
+        XCTAssertTrue(store.installed.isEmpty)
+        XCTAssertTrue(store.rows().isEmpty)
+        XCTAssertThrowsError(try store.scriptText(for: "en.demo"))
+
+        let reloaded = ExtensionStore(directory: directory, client: RepoClient(transport: StubTransport.text("", status: 500)))
+        XCTAssertTrue(reloaded.repos.isEmpty)
+        XCTAssertTrue(reloaded.installed.isEmpty)
+    }
 }
