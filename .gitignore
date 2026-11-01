@@ -1,36 +1,10 @@
-# Modified for Ahoge from an Apache-2.0-licensed prior configuration.
-# See THIRD_PARTY_NOTICES.md for attribution and license information.
-
-# macOS
-.DS_Store
-
-# Xcode
+*.xcodeproj/
+Ahoge/Info.plist
+.dd/
+.dd-device/
 DerivedData/
-build/
-.derivedData/
-*.xcuserstate
-*.xcscmblueprint
-*.xccheckout
-*.moved-aside
-*.xcworkspace/xcuserdata/
-*.xcodeproj/xcuserdata/
-
-# SwiftPM
-.build/
-
-# Signing, provisioning, credentials, and device-local data
-*.mobileprovision
-*.provisionprofile
-*.p12
-*.p8
-*.cer
-*.key
-*.pem
-*.pairing
-*pairing*.plist
-.env
-.env.*
-
-# Tooling
-.idea/
-.vscode/
+xcuserdata/
+.DS_Store
+sideload-staging/
+sideload-artifacts/
+*.xcresult

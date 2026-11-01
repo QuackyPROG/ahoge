@@ -1,0 +1,76 @@
+name: iOS
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Warn if the conformance file is out of date
+        run: |
+          if [ -f Tests/AhogeTests/Resources/host-api-conformance.json ]; then
+            curl -fsSL https://raw.githubusercontent.com/QuackyPROG/ahoge-extension/main/runtime/host-api-conformance.json -o /tmp/conformance.json
+            cmp -s /tmp/conformance.json Tests/AhogeTests/Resources/host-api-conformance.json || echo "::warning::host-api-conformance.json differs from ahoge-extension main; run Scripts/sync-conformance.sh"
+          fi
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          runtimes = sorted((r for r in devices if "iOS" in r), reverse=True)
+          print(next(d["udid"] for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")))
+          ')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+      - name: Test
+        run: |
+          set +e
+          xcodebuild test -project Ahoge.xcodeproj -scheme Ahoge -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath .dd CODE_SIGNING_ALLOWED=NO > xcodebuild-test.log 2>&1
+          status=$?
+          grep -E "error:|Test Case .* failed|XCTAssert|Executed|\*\* TEST" xcodebuild-test.log | tail -200
+          exit $status
+      - name: Upload test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-test-log
+          path: xcodebuild-test.log
+      - name: Build unsigned device app
+        if: github.event_name != 'pull_request'
+        run: |
+          set -o pipefail
+          xcodebuild build -project Ahoge.xcodeproj -scheme Ahoge -configuration Release -sdk iphoneos \
+            -destination generic/platform=iOS -derivedDataPath .dd-device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -20
+      - name: Package IPA
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          APP=$(find .dd-device/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP"
+          mkdir -p sideload-staging/Payload sideload-artifacts
+          cp -R "$APP" sideload-staging/Payload/
+          (cd sideload-staging && zip -qry ../sideload-artifacts/Ahoge.ipa Payload)
+          unzip -tq sideload-artifacts/Ahoge.ipa
+          (cd sideload-artifacts && shasum -a 256 Ahoge.ipa > Ahoge.ipa.sha256)
+      - name: Upload IPA
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ahoge-ipa-${{ github.run_number }}
+          path: sideload-artifacts/
+          retention-days: 14

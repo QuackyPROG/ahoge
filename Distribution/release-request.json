@@ -1,5 +1,0 @@
-{
-  "version": "0.1.2",
-  "build": "3",
-  "releaseNotes": "Ahoge 0.1.2 — Reconstructed reading experience\n\n• Artwork-led Library with reading continuity and an adaptive collection.\n• Discovery-first Explore, source browsing, and global search.\n• Rebuilt manga details with a primary Read/Resume action and dense chapter browsing.\n• Reading timelines for Updates and History, plus an offline shelf and clearer download controls.\n• Reconstructed reader controls, onboarding, More, settings, and management surfaces.\n• Dynamic Type layouts, named accessibility controls, and motion/contrast-aware presentation.\n• Includes the native MangaDex and WeebCentral source runtimes added since 0.1.1.\n• Existing reader-engine, persistence, download, and security behavior is preserved by the presentation reconstruction."
-}
