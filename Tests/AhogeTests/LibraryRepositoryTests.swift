@@ -4,8 +4,11 @@ import XCTest
 
 @MainActor
 final class LibraryRepositoryTests: XCTestCase {
+    /// The container must outlive the repository; a released container crashes its context.
+    private var container: ModelContainer!
+
     private func repository() throws -> LibraryRepository {
-        let container = try ModelContainer(for: LibraryManga.self, ChapterRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        container = try ModelContainer(for: LibraryManga.self, ChapterRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         return LibraryRepository(context: container.mainContext)
     }
 
