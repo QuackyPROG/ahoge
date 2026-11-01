@@ -2,6 +2,7 @@
 Ahoge/Info.plist
 .dd/
 .dd-device/
+.spm/
 DerivedData/
 xcuserdata/
 .DS_Store
