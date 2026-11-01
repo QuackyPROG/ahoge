@@ -10,6 +10,9 @@ concurrency:
 env:
   # CI never uses Xcode's index; building it costs compile time.
   XCODE_FLAGS: COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO
+  # brew otherwise updates itself first, which sometimes takes minutes.
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALL_CLEANUP: 1
 jobs:
   # Tests, then the simulator app zipped from the same build (Debug, no second compile).
   test:
