@@ -117,6 +117,12 @@ final class JSHostTests: XCTestCase {
         }
     }
 
+    func testSelectFirstReturnsNullWhenNothingMatches() throws {
+        let h = try host("var source = {};")
+        XCTAssertEqual(h.evaluate("html.parse('<p>x</p>','https://e.com/').selectFirst('span') === null"), "true")
+        XCTAssertEqual(h.evaluate("html.parse('<p>x</p>','https://e.com/').selectFirst('p').text()"), "x")
+    }
+
     func testGlobalsMatchJavaScriptCoreContract() throws {
         let h = try host("var source = {};")
         XCTAssertEqual(h.evaluate("typeof URL + ',' + typeof fetch + ',' + typeof setTimeout"), "undefined,undefined,undefined")

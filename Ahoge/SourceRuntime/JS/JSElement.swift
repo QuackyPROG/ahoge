@@ -1,8 +1,9 @@
 import JavaScriptCore
+import SwiftSoup
 
 @objc protocol JSElementExports: JSExport {
     func select(_ css: String) -> [JSElement]
-    func selectFirst(_ css: String) -> JSElement?
+    func selectFirst(_ css: String) -> JSValue
     func text() -> String
     func ownText() -> String
     func data() -> String
@@ -29,13 +30,17 @@ final class JSElement: NSObject, JSElementExports {
         }
     }
 
-    func selectFirst(_ css: String) -> JSElement? {
+    /// Returns the element, or JavaScript `null` (an Objective-C nil would arrive as `undefined`).
+    func selectFirst(_ css: String) -> JSValue {
+        let context = JSContext.current()!
         do {
-            return try node.selectFirst(css).map(JSElement.init)
+            if let found = try node.selectFirst(css) {
+                return JSValue(object: JSElement(found), in: context)
+            }
         } catch {
             JSElement.raise(error)
-            return nil
         }
+        return JSValue(nullIn: context)
     }
 
     func text() -> String { node.text() }
@@ -46,8 +51,16 @@ final class JSElement: NSObject, JSElementExports {
     func absUrl(_ name: String) -> String { node.absUrl(name) }
     func tagName() -> String { node.tagName() }
 
+    /// SwiftSoup's own errors carry their text in an enum payload, not in `localizedDescription`.
+    private static func message(of error: Error) -> String {
+        if let soup = error as? SwiftSoup.Exception, case .Error(_, let message) = soup {
+            return message
+        }
+        return error.localizedDescription
+    }
+
     static func raise(_ error: Error) {
         guard let context = JSContext.current() else { return }
-        context.exception = JSValue(newErrorFromMessage: error.localizedDescription, in: context)
+        context.exception = JSValue(newErrorFromMessage: message(of: error), in: context)
     }
 }
