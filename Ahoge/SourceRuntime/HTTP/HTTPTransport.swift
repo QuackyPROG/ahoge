@@ -14,6 +14,9 @@ struct URLSessionTransport: HTTPTransport {
         config.httpCookieAcceptPolicy = .never
         config.httpCookieStorage = nil
         config.timeoutIntervalForRequest = 30
+        // Sources must always see live responses.
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
 
