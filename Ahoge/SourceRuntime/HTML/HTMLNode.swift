@@ -47,7 +47,17 @@ final class HTMLNode {
     /// Stops at the first match (document order, the element itself included, as `select` does).
     func selectFirst(_ css: String) throws -> HTMLNode? {
         try Self.assertSupported(css)
-        return try element.selectFirst(css).map { HTMLNode(element: $0, base: base) }
+        // SwiftSoup has no first-match API; walk the tree like Collector does (document order,
+        // root included) and stop at the first element the evaluator accepts.
+        let evaluator = try QueryParser.parse(css)
+        var stack: [Element] = [element]
+        while let current = stack.popLast() {
+            if try evaluator.matches(element, current) {
+                return HTMLNode(element: current, base: base)
+            }
+            for child in current.children().array().reversed() { stack.append(child) }
+        }
+        return nil
     }
 
     func text() -> String { TextExtraction.text(element) }
