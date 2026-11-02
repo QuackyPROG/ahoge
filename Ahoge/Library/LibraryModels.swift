@@ -69,11 +69,12 @@ final class ChapterRecord: ObservableObject, Identifiable, Codable, FetchableRec
     var read: Bool
     var lastPageRead: Int
     var sourceOrder: Int
+    var dateFetch: Date?
     /// Set by `LibraryRepository`; not a column.
     weak var manga: LibraryManga?
 
     enum CodingKeys: String, CodingKey {
-        case key, mangaKey, url, name, number, dateUpload, scanlator, read, lastPageRead, sourceOrder
+        case key, mangaKey, url, name, number, dateUpload, scanlator, read, lastPageRead, sourceOrder, dateFetch
     }
 
     init(manga: LibraryManga, state: ChapterState) {
@@ -87,13 +88,14 @@ final class ChapterRecord: ObservableObject, Identifiable, Codable, FetchableRec
         read = state.read
         lastPageRead = state.lastPageRead
         sourceOrder = state.sourceOrder
+        dateFetch = state.dateFetch
         self.manga = manga
     }
 
     var id: String { key }
 
     var state: ChapterState {
-        ChapterState(url: url, name: name, number: number, date: dateUpload, scanlator: scanlator, read: read, lastPageRead: lastPageRead, sourceOrder: sourceOrder)
+        ChapterState(url: url, name: name, number: number, date: dateUpload, scanlator: scanlator, read: read, lastPageRead: lastPageRead, sourceOrder: sourceOrder, dateFetch: dateFetch)
     }
 
     func apply(_ state: ChapterState) {
@@ -104,6 +106,7 @@ final class ChapterRecord: ObservableObject, Identifiable, Codable, FetchableRec
         read = state.read
         lastPageRead = state.lastPageRead
         sourceOrder = state.sourceOrder
+        dateFetch = state.dateFetch
     }
 }
 

@@ -6,7 +6,7 @@ import GRDB
 /// the same objects; changes go through here, which saves them and tells observing views.
 @MainActor
 final class LibraryRepository: ObservableObject {
-    private let db: any DatabaseWriter
+    let db: any DatabaseWriter
     private var loaded: [String: LibraryManga] = [:]
     /// Keys looked up and not in the database, so a view asking every redraw costs no query.
     private var absent: Set<String> = []
@@ -68,6 +68,26 @@ final class LibraryRepository: ObservableObject {
                 t.column("sourceOrder", .integer).notNull()
             }
         }
+        migrator.registerMigration("v2") { db in
+            try db.alter(table: ChapterRecord.databaseTableName) { t in
+                t.add(column: "dateFetch", .datetime)
+            }
+            try db.create(table: "category") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("name", .text).notNull()
+                t.column("sort", .integer).notNull()
+            }
+            try db.create(table: "mangaCategory") { t in
+                t.column("mangaKey", .text).notNull().references(LibraryManga.databaseTableName, onDelete: .cascade)
+                t.column("categoryId", .integer).notNull().indexed().references("category", onDelete: .cascade)
+                t.primaryKey(["mangaKey", "categoryId"])
+            }
+            try db.create(table: "history") { t in
+                t.primaryKey("chapterKey", .text).references(ChapterRecord.databaseTableName, onDelete: .cascade)
+                t.column("mangaKey", .text).notNull().indexed().references(LibraryManga.databaseTableName, onDelete: .cascade)
+                t.column("lastRead", .datetime).notNull().indexed()
+            }
+        }
         return migrator
     }
 
@@ -87,7 +107,10 @@ final class LibraryRepository: ObservableObject {
     var library: [LibraryManga] { loaded.values.filter(\.inLibrary) }
 
     func manga(sourceId: String, url: String) -> LibraryManga? {
-        let key = LibraryManga.makeKey(sourceId: sourceId, url: url)
+        manga(key: LibraryManga.makeKey(sourceId: sourceId, url: url))
+    }
+
+    func manga(key: String) -> LibraryManga? {
         if let manga = loaded[key] { return manga }
         guard !absent.contains(key) else { return nil }
         let found = try? db.read { db in
@@ -195,7 +218,7 @@ final class LibraryRepository: ObservableObject {
         }
     }
 
-    private func write(_ updates: (Database) throws -> Void) {
+    func write(_ updates: (Database) throws -> Void) {
         _ = try? db.write(updates)
     }
 }

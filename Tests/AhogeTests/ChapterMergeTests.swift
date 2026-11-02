@@ -26,4 +26,25 @@ final class ChapterMergeTests: XCTestCase {
         XCTAssertEqual(merged.map(\.url), ["/a", "/b"])
         XCTAssertNil(merged[1].date)
     }
+
+    func testDateFetchMarksOnlyNewChapters() {
+        let then = Date(timeIntervalSince1970: 1_000)
+        let now = Date(timeIntervalSince1970: 2_000)
+        let existing = [
+            ChapterState(url: "/c1", name: "1", number: 1, date: nil, scanlator: nil, read: false, lastPageRead: 0, sourceOrder: 0, dateFetch: then),
+            ChapterState(url: "/c0", name: "0", number: 0, date: nil, scanlator: nil, read: false, lastPageRead: 0, sourceOrder: 1, dateFetch: nil),
+        ]
+        let fetched = [
+            SourceChapter(url: "/c2", name: "2", number: 2, date: nil, scanlator: nil),
+            SourceChapter(url: "/c1", name: "1", number: 1, date: nil, scanlator: nil),
+            SourceChapter(url: "/c0", name: "0", number: 0, date: nil, scanlator: nil),
+        ]
+        let merged = ChapterMerge.merge(existing: existing, fetched: fetched, now: now)
+        XCTAssertEqual(merged.map(\.dateFetch), [now, then, nil])
+    }
+
+    func testFirstChapterListIsNotAnUpdate() {
+        let merged = ChapterMerge.merge(existing: [], fetched: [SourceChapter(url: "/c1", name: "1", number: 1, date: nil, scanlator: nil)], now: Date())
+        XCTAssertEqual(merged.map(\.dateFetch), [nil])
+    }
 }

@@ -82,4 +82,18 @@ final class LibraryRepositoryTests: XCTestCase {
         repo.saveProgress(try XCTUnwrap(manga.chapters.first { !$0.read }), page: 9, pageCount: 10)
         XCTAssertEqual(manga.unreadCount, 0)
     }
+
+    func testDateFetchSurvivesReopen() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("library-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let repo = try LibraryRepository.open(at: file)
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        repo.applyChapters([chapter("/c/1", 1)], to: manga)
+        repo.applyChapters([chapter("/c/2", 2), chapter("/c/1", 1)], to: manga)
+
+        let reopened = try LibraryRepository.open(at: file)
+        let loaded = try XCTUnwrap(reopened.manga(key: manga.key))
+        XCTAssertNotNil(loaded.chapters.first { $0.url == "/c/2" }?.dateFetch)
+        XCTAssertNil(loaded.chapters.first { $0.url == "/c/1" }?.dateFetch)
+    }
 }
