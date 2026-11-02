@@ -4,6 +4,8 @@ import WebKit
 struct MoreView: View {
     @EnvironmentObject private var sources: SourceManager
     @Environment(\.palette) private var palette
+    @EnvironmentObject private var repo: LibraryRepository
+    @AppStorage(LibraryPrefs.defaultCategory) private var defaultCategory = LibraryPrefs.alwaysAsk
     @State private var showRepos = false
     @State private var message: String?
 
@@ -31,6 +33,20 @@ struct MoreView: View {
                     }
                     Button { showRepos = true } label: {
                         Label { Text("Extension repositories").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "shippingbox.fill", color: .orange) }
+                    }
+                }
+                .themedRows()
+
+                Section("Library") {
+                    NavigationLink { CategoriesView() } label: {
+                        Label { Text("Categories") } icon: { SettingsIcon(systemName: "folder.fill", color: .blue) }
+                    }
+                    Picker(selection: $defaultCategory) {
+                        Text("Always ask").tag(LibraryPrefs.alwaysAsk)
+                        Text("Default").tag(LibraryPrefs.uncategorized)
+                        ForEach(repo.categories) { Text($0.name).tag(Int($0.id)) }
+                    } label: {
+                        Label { Text("Default category") } icon: { SettingsIcon(systemName: "tray.and.arrow.down.fill", color: .teal) }
                     }
                 }
                 .themedRows()
