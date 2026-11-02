@@ -9,7 +9,6 @@ struct MangaGrid: View {
     /// In the Library: starts selection from a long-press, and offers "Edit categories".
     var librarySelect: ((MangaRef) -> Void)? = nil
     @EnvironmentObject private var sources: SourceManager
-    @EnvironmentObject private var repo: LibraryRepository
     @Environment(\.palette) private var palette
     @State private var choosingCategories: LibraryManga?
 
@@ -56,19 +55,32 @@ struct MangaGrid: View {
                 .buttonStyle(PressableCardStyle())
                 .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .contextMenu {
-                    if let librarySelect {
-                        Button("Select", systemImage: "checkmark.circle") { librarySelect(ref) }
-                        Button("Edit categories", systemImage: "folder") {
-                            let target = repo.manga(sourceId: ref.sourceId, url: ref.url)
-                            Task { @MainActor in choosingCategories = target }
-                        }
+                    LibraryCardMenu(ref: ref, librarySelect: librarySelect) { target in
+                        Task { @MainActor in choosingCategories = target }
                     }
-                    LibraryToggleButton(ref: ref) { added in Task { @MainActor in choosingCategories = added } }
                 }
         }
     }
 
     private func referer(_ ref: MangaRef) -> [String: String] {
         sources.installed(ref.sourceId).map { ["Referer": $0.baseUrl + "/"] } ?? [:]
+    }
+}
+
+/// Context-menu contents; holds the repo so the grid itself does not re-render on every repo change.
+private struct LibraryCardMenu: View {
+    let ref: MangaRef
+    let librarySelect: ((MangaRef) -> Void)?
+    let choose: (LibraryManga?) -> Void
+    @EnvironmentObject private var repo: LibraryRepository
+
+    var body: some View {
+        if let librarySelect {
+            Button("Select", systemImage: "checkmark.circle") { librarySelect(ref) }
+            Button("Edit categories", systemImage: "folder") {
+                choose(repo.manga(sourceId: ref.sourceId, url: ref.url))
+            }
+        }
+        LibraryToggleButton(ref: ref) { added in choose(added) }
     }
 }

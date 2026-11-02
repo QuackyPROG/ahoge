@@ -217,10 +217,12 @@ final class LibraryRepository: ObservableObject {
 
     func saveProgress(_ chapter: ChapterRecord, page: Int, pageCount: Int) {
         guard chapter.lastPageRead != page || (page >= pageCount - 1 && !chapter.read) else { return }
-        objectWillChange.send()
         chapter.objectWillChange.send()
+        let wasRead = chapter.read
         chapter.lastPageRead = page
         if page >= pageCount - 1 { chapter.read = true }
+        // Only a read flip changes unread counts and badges elsewhere; plain page turns stay local to the row.
+        if chapter.read && !wasRead { objectWillChange.send() }
         chapter.manga?.refreshUnreadCount()
         let manga = chapter.manga
         let now = Date()

@@ -80,7 +80,10 @@ struct ReaderView: View {
             Task { await model.reposition() }
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenOn }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            NotificationCenter.default.post(name: .readerDidClose, object: nil)
+        }
         .onChange(of: keepScreenOn) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .sheet(isPresented: $showChapters) {
             ReaderChapterList(manga: model.manga, current: model.currentChapter) { chapter in
@@ -316,4 +319,9 @@ struct ReaderView: View {
     private func toolButton(_ name: String, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { toolLabel(name, title: title) }
     }
+}
+
+extension Notification.Name {
+    /// Posted when the reader goes away, so the root view can reassert the window style.
+    static let readerDidClose = Notification.Name("ahoge.readerDidClose")
 }

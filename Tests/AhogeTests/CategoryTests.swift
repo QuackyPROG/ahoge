@@ -29,6 +29,9 @@ final class CategoryTests: XCTestCase {
     }
 
     func testRenameReorderDelete() throws {
+        let key = LibraryPrefs.defaultCategory
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
         let (repo, a, _) = try libraryWithTwo()
         let one = try XCTUnwrap(repo.createCategory(named: "One"))
         let two = try XCTUnwrap(repo.createCategory(named: "Two"))

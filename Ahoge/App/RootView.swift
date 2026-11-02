@@ -31,6 +31,9 @@ struct RootView: View {
         .onChange(of: mode, initial: true) { applyWindowStyle() }
         .onChange(of: theme) { applyWindowStyle() }
         .onChange(of: pureBlack) { applyWindowStyle() }
+        .onReceive(NotificationCenter.default.publisher(for: .readerDidClose)) { _ in
+            DispatchQueue.main.async { applyWindowStyle() }
+        }
         .alert("Some titles could not be updated", isPresented: Binding(get: { !updater.failures.isEmpty }, set: { if !$0 { updater.failures = [] } })) {
             Button("OK", role: .cancel) {}
         } message: {
