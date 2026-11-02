@@ -22,7 +22,9 @@ struct SourcesView: View {
                         }
                     }
                 }
+                .themedRows()
             }
         }
+        .themedScreen()
     }
 }

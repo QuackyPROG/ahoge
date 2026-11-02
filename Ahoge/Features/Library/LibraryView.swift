@@ -42,6 +42,7 @@ struct LibraryView: View {
                 })
             }
             .navigationTitle("Library")
+            .themedScreen()
             .searchable(text: $search)
             .refreshable { await updateAll() }
             .toolbar {

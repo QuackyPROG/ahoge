@@ -33,6 +33,7 @@ struct FastScroller: View {
     let label: (Int) -> String
     let scrollTo: (Int) -> Void
 
+    @Environment(\.palette) private var palette
     @State private var dragIndex: Int?
     private let thumbHeight: CGFloat = 44
 
@@ -58,7 +59,7 @@ struct FastScroller: View {
                         .transition(.opacity)
                 }
                 Capsule()
-                    .fill(dragIndex == nil ? Color.secondary.opacity(0.55) : Color.accentColor)
+                    .fill(dragIndex == nil ? Color.secondary.opacity(0.55) : palette.primary.color)
                     .frame(width: dragIndex == nil ? 6 : 8, height: thumbHeight)
                     .frame(width: 28, height: thumbHeight)
                     .contentShape(Rectangle())

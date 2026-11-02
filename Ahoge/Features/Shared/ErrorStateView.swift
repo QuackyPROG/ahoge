@@ -4,6 +4,7 @@ struct ErrorStateView: View {
     let error: Error
     let retry: () -> Void
     var openWeb: ((String) -> Void)?
+    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(spacing: 12) {
@@ -12,7 +13,7 @@ struct ErrorStateView: View {
             HStack {
                 Button("Retry", action: retry).buttonStyle(.bordered)
                 if case .cloudflare(let url)? = error as? SourceError, let openWeb {
-                    Button("Open web view") { openWeb(url) }.buttonStyle(.borderedProminent)
+                    Button("Open web view") { openWeb(url) }.buttonStyle(.borderedProminent).foregroundStyle(palette.onPrimary.color)
                 }
             }
         }

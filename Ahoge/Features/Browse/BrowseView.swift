@@ -17,6 +17,7 @@ struct BrowseView: View {
                 }
             }
             .navigationTitle("Browse")
+            .themedScreen()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

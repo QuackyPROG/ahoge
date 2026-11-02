@@ -4,6 +4,7 @@ struct MangaDetailView: View {
     let ref: MangaRef
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
+    @Environment(\.palette) private var palette
     @State private var isLoading = false
     @State private var error: Error?
     @State private var expanded = false
@@ -40,6 +41,7 @@ struct MangaDetailView: View {
                         ErrorStateView(error: error, retry: { Task { await refresh() } }, openWeb: { webTarget = WebTarget(url: $0) })
                     }
                     .listRowSeparator(.hidden)
+                    .themedRows(plain: true)
                 }
                 if let manga {
                     Section {
@@ -53,9 +55,11 @@ struct MangaDetailView: View {
                     } header: {
                         chapterHeader(manga, shown: chapters.count)
                     }
+                    .themedRows(plain: true)
                 }
             }
             .listStyle(.plain)
+            .themedScreen()
             .scrollIndicators(chapters.count > 40 ? .hidden : .automatic)
             .environment(\.editMode, .constant(selecting ? .active : .inactive))
             .overlay(alignment: .trailing) {
@@ -101,7 +105,7 @@ struct MangaDetailView: View {
                 .clipped()
                 .mask(LinearGradient(colors: [.black, .black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(palette.background.color)
     }
 
     @ViewBuilder
@@ -229,7 +233,7 @@ struct MangaDetailView: View {
                 .buttonStyle(.plain)
                 .swipeActions(edge: .leading) {
                     Button(chapter.read ? "Unread" : "Read", systemImage: chapter.read ? "eye.slash" : "eye") { repo.setRead([chapter], !chapter.read) }
-                        .tint(.blue)
+                        .tint(palette.primary.color)
                 }
                 .contextMenu {
                     Button("Select", systemImage: "checkmark.circle") { startSelecting(chapter) }
@@ -287,8 +291,8 @@ struct MangaDetailView: View {
                     .font(.headline)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
-                    .foregroundStyle(.white)
-                    .background(Color.accentColor, in: Capsule())
+                    .foregroundStyle(palette.onPrimary.color)
+                    .background(palette.primary.color, in: Capsule())
                     .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
             }
             .buttonStyle(.plain)
@@ -360,13 +364,14 @@ private struct ActionLabel: View {
     let title: String
     let icon: String
     var active = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(spacing: 4) {
             Image(systemName: icon).font(.title3)
             Text(title).font(.caption)
         }
-        .foregroundStyle(active ? Color.accentColor : Color.secondary)
+        .foregroundStyle(active ? palette.primary.color : Color.secondary)
         .frame(maxWidth: .infinity, minHeight: 48)
         .contentShape(Rectangle())
     }

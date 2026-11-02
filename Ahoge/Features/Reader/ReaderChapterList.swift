@@ -6,6 +6,7 @@ struct ReaderChapterList: View {
     let current: ChapterRecord
     let select: (ChapterRecord) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
     @State private var visible = VisibleRows()
 
     var body: some View {
@@ -22,7 +23,7 @@ struct ReaderChapterList: View {
                         }
                         .buttonStyle(.plain)
                         .id(chapter.key)
-                        .listRowBackground(chapter.key == current.key ? Color.accentColor.opacity(0.12) : nil)
+                        .listRowBackground(chapter.key == current.key ? palette.primary.color.opacity(0.12) : nil)
                         .onAppear { visible.appeared(index) }
                         .onDisappear { visible.disappeared(index) }
                     }

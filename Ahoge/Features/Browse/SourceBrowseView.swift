@@ -108,6 +108,7 @@ struct SourceBrowseView: View {
     @StateObject private var model: SourceBrowseModel
     @State private var webTarget: WebTarget?
     @State private var editing: FilterState?
+    @Environment(\.palette) private var palette
     private let genre: String?
 
     init(sourceId: String, genre: String? = nil) {
@@ -137,6 +138,7 @@ struct SourceBrowseView: View {
             if model.isLoading { ProgressView().padding() }
         }
         .navigationTitle(genre ?? info?.name ?? "Source")
+        .themedScreen()
         .searchable(text: $model.query, placement: .navigationBarDrawer(displayMode: .always))
         .onSubmit(of: .search) { Task { await model.reload(fetch) } }
         .onChange(of: model.query) { old, query in
@@ -206,8 +208,8 @@ struct SourceBrowseView: View {
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .foregroundStyle(selected ? Color.white : Color.primary)
-            .background(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary), in: Capsule())
+            .foregroundStyle(selected ? palette.onPrimary.color : Color.primary)
+            .background(selected ? AnyShapeStyle(palette.primary.color) : AnyShapeStyle(.quaternary), in: Capsule())
             .contentShape(Capsule())
     }
 }

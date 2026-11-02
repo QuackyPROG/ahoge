@@ -9,9 +9,11 @@ struct FilterSheet: View {
         NavigationStack {
             List {
                 FilterRows(filters: state.filters, values: $state.values)
+                    .themedRows()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Filters")
+            .themedScreen()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -99,6 +101,7 @@ private struct FilterRows: View {
 private struct TriStateRow: View {
     let name: String
     @Binding var state: TriState
+    @Environment(\.palette) private var palette
 
     var body: some View {
         Button { state = state.next } label: {
@@ -128,7 +131,7 @@ private struct TriStateRow: View {
     private var color: Color {
         switch state {
         case .ignore: .secondary
-        case .include: .accentColor
+        case .include: palette.primary.color
         case .exclude: .red
         }
     }
@@ -140,6 +143,7 @@ private struct SortRows: View {
     let options: [FilterOption]
     @Binding var value: SortValue
     @State private var expanded = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
@@ -149,7 +153,7 @@ private struct SortRows: View {
                 } label: {
                     HStack {
                         Image(systemName: value.ascending ? "arrow.up" : "arrow.down")
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(palette.primary.color)
                             .opacity(value.value == option.value ? 1 : 0)
                             .frame(width: 24)
                         Text(option.label)
@@ -175,6 +179,7 @@ private struct GroupRows: View {
     let children: [SourceFilter]
     @Binding var values: [String: FilterValue]
     @State private var expanded = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let count = FilterState(filters: children, values: values).activeCount
@@ -189,8 +194,8 @@ private struct GroupRows: View {
                         .font(.caption.bold())
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .foregroundStyle(.white)
-                        .background(Color.accentColor, in: Capsule())
+                        .foregroundStyle(palette.onPrimary.color)
+                        .background(palette.primary.color, in: Capsule())
                 }
             }
         }

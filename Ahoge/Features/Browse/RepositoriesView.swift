@@ -26,8 +26,10 @@ struct RepositoriesView: View {
             } footer: {
                 if let error { Text(error).foregroundStyle(.red) }
             }
+            .themedRows()
         }
         .navigationTitle("Repositories")
+        .themedScreen()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         .alert("Add repository", isPresented: $showAdd) {

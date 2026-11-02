@@ -6,6 +6,7 @@ struct ExtensionsView: View {
     @State private var showRepos = false
     @State private var busy: Set<String> = []
     @State private var actionError: String?
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let rows = store.rows()
@@ -19,18 +20,22 @@ struct ExtensionsView: View {
                             .foregroundStyle(.secondary)
                         Button("Add Ahoge Extensions") { Task { await addDefault() } }
                             .buttonStyle(.borderedProminent)
+                            .foregroundStyle(palette.onPrimary.color)
                     }
                     .padding(.vertical, 4)
                 }
+                .themedRows()
             }
             if let error = store.lastError {
                 Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                    .themedRows()
             }
             section("Updates", rows.filter { $0.state == .updateAvailable })
             section("Installed", rows.filter { $0.state == .installed })
             section("Available", rows.filter { $0.state == .available })
             section("Requires app update", rows.filter { $0.state == .requiresAppUpdate })
         }
+        .themedScreen()
         .overlay { if store.isRefreshing && rows.isEmpty { ProgressView() } }
         .refreshable { await store.refresh() }
         .task { if store.indexes.isEmpty && !store.repos.isEmpty { await store.refresh() } }
@@ -56,6 +61,7 @@ struct ExtensionsView: View {
                     ExtensionRowView(row: row, busy: busy.contains(row.id)) { await perform(row) }
                 }
             }
+            .themedRows()
         }
     }
 
@@ -90,6 +96,7 @@ private struct ExtensionRowView: View {
     let row: ExtensionRow
     let busy: Bool
     let action: () async -> Void
+    @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 12) {
@@ -118,7 +125,7 @@ private struct ExtensionRowView: View {
                 case .available:
                     Button("Install") { Task { await action() } }.buttonStyle(.bordered)
                 case .updateAvailable:
-                    Button("Update") { Task { await action() } }.buttonStyle(.borderedProminent)
+                    Button("Update") { Task { await action() } }.buttonStyle(.borderedProminent).foregroundStyle(palette.onPrimary.color)
                 case .installed:
                     Button("Uninstall", role: .destructive) { Task { await action() } }.buttonStyle(.bordered)
                 case .requiresAppUpdate:

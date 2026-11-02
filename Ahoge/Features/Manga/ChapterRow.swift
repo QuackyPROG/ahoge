@@ -4,13 +4,14 @@ struct ChapterRow: View {
     @ObservedObject var chapter: ChapterRecord
     /// The chapter open in the reader, highlighted in the reader's chapter list.
     var isCurrent = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(chapter.name)
                     .font(.subheadline.weight(isCurrent ? .semibold : .regular))
-                    .foregroundStyle(isCurrent ? Color.accentColor : chapter.read ? Color.secondary : Color.primary)
+                    .foregroundStyle(isCurrent ? palette.primary.color : chapter.read ? Color.secondary : Color.primary)
                     .lineLimit(2)
                 HStack(spacing: 4) {
                     if let date = chapter.dateUpload { Text(date, format: .dateTime.year().month(.abbreviated).day()) }
@@ -20,7 +21,7 @@ struct ChapterRow: View {
                     }
                     if !chapter.read && chapter.lastPageRead > 0 {
                         Text("•")
-                        Text("Page \(chapter.lastPageRead + 1)").foregroundStyle(Color.accentColor)
+                        Text("Page \(chapter.lastPageRead + 1)").foregroundStyle(palette.primary.color)
                     }
                 }
                 .font(.caption)
@@ -29,7 +30,7 @@ struct ChapterRow: View {
             }
             Spacer(minLength: 0)
             if !chapter.read {
-                Circle().fill(Color.accentColor).frame(width: 7, height: 7)
+                Circle().fill(palette.primary.color).frame(width: 7, height: 7)
                     .accessibilityLabel("Unread")
             }
         }
