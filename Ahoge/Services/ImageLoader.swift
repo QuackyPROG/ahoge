@@ -1,4 +1,5 @@
 import UIKit
+import ImageIO
 
 /// Decoded images by URL. Thread-safe, so views can read a hit synchronously while laying out
 /// and show a cached page on their first frame instead of a placeholder.
@@ -38,11 +39,19 @@ actor ImageLoader {
         session = URLSession(configuration: config)
     }
 
-    func image(_ url: String, headers: [String: String] = [:]) async throws -> UIImage {
-        if let hit = ImageMemoryCache.shared[url] { return hit }
-        if let running = inFlight[url] { return try await running.value }
+    /// The memory-cache key: the URL for full-size pages (so the reader can read hits by URL),
+    /// the URL plus the width for smaller decodes such as covers.
+    nonisolated static func cacheKey(_ url: String, maxPixelWidth: CGFloat) -> String {
+        maxPixelWidth >= Self.maxPixelWidth ? url : "\(url)#w\(Int(maxPixelWidth))"
+    }
+
+    func image(_ url: String, headers: [String: String] = [:], maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth, priority: TaskPriority = .userInitiated) async throws -> UIImage {
+        let key = Self.cacheKey(url, maxPixelWidth: maxPixelWidth)
+        if let hit = ImageMemoryCache.shared[key] { return hit }
+        // Awaiting a running low-priority prefetch raises its priority to ours.
+        if let running = inFlight[key] { return try await running.value }
         let session = session
-        let task = Task.detached(priority: .userInitiated) { () throws -> UIImage in
+        let task = Task.detached(priority: priority) { () throws -> UIImage in
             guard let target = URL(string: url) else { throw URLError(.badURL) }
             var request = URLRequest(url: target)
             request.setValue(HTTPClient.defaultUserAgent, forHTTPHeaderField: "User-Agent")
@@ -51,18 +60,19 @@ actor ImageLoader {
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw URLError(.badServerResponse)
             }
-            guard let image = UIImage(data: data) else { throw URLError(.cannotDecodeContentData) }
-            return Self.decoded(image)
+            guard let image = Self.decode(data, maxPixelWidth: maxPixelWidth) else { throw URLError(.cannotDecodeContentData) }
+            return image
         }
-        inFlight[url] = task
-        defer { inFlight[url] = nil }
+        inFlight[key] = task
+        defer { inFlight[key] = nil }
         let image = try await task.value
-        ImageMemoryCache.shared.insert(image, for: url)
+        ImageMemoryCache.shared.insert(image, for: key)
         return image
     }
 
+    /// Reader prefetches run below the page on screen, so they never slow it down.
     func prefetch(_ url: String, headers: [String: String]) {
-        Task { _ = try? await image(url, headers: headers) }
+        Task(priority: .utility) { _ = try? await image(url, headers: headers, priority: .utility) }
     }
 
     func clear() {
@@ -70,13 +80,27 @@ actor ImageLoader {
         session.configuration.urlCache?.removeAllCachedResponses()
     }
 
-    /// Decodes off the main thread so the first draw does not stall scrolling.
-    private nonisolated static func decoded(_ image: UIImage) -> UIImage {
-        let width = image.size.width * image.scale
-        if width > maxPixelWidth {
-            let height = image.size.height * image.scale * maxPixelWidth / width
-            if let small = image.preparingThumbnail(of: CGSize(width: maxPixelWidth, height: height.rounded())) { return small }
+    /// Decodes off the main thread, straight to at most `maxPixelWidth` across: ImageIO never
+    /// holds the full-size bitmap, so a 4000 px cover costs what a 360 px one does.
+    nonisolated static func decode(_ data: Data, maxPixelWidth: CGFloat) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) > 0 else { return nil }
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let width = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
+        let height = (properties?[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue ?? 0
+        guard width > maxPixelWidth, height > 0 else {
+            guard let image = UIImage(data: data) else { return nil }
+            return image.preparingForDisplay() ?? image
         }
-        return image.preparingForDisplay() ?? image
+        // The thumbnail limit applies to the longer side.
+        let longest = max(maxPixelWidth, (height * maxPixelWidth / width).rounded())
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: longest,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
     }
 }
