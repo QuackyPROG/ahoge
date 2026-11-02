@@ -10,6 +10,10 @@ final class LibraryRepository: ObservableObject {
     private var loaded: [String: LibraryManga] = [:]
     /// Keys looked up and not in the database, so a view asking every redraw costs no query.
     private var absent: Set<String> = []
+    /// Categories in display order. Change them only through the category methods.
+    var categories: [MangaCategory] = []
+    /// Category ids by manga key; a library title missing here is in Default.
+    var categoryLinks: [String: Set<Int64>] = [:]
 
     /// Library titles and their chapters are loaded up front; other manga on first lookup.
     init(db: any DatabaseWriter) throws {
@@ -19,6 +23,10 @@ final class LibraryRepository: ObservableObject {
             try Self.withChapters(LibraryManga.filter(Column(LibraryManga.CodingKeys.inLibrary) == true).fetchAll(db), db)
         }
         for manga in library { loaded[manga.key] = manga }
+        categories = try db.read { try MangaCategory.order(Column("sort")).fetchAll($0) }
+        for row in try db.read({ try Row.fetchAll($0, sql: "SELECT mangaKey, categoryId FROM mangaCategory") }) {
+            categoryLinks[row["mangaKey"], default: []].insert(row["categoryId"])
+        }
     }
 
     /// The on-device library (Application Support/library.sqlite).
@@ -175,7 +183,11 @@ final class LibraryRepository: ObservableObject {
         objectWillChange.send()
         manga.inLibrary = value
         manga.dateAdded = value ? (manga.dateAdded ?? Date()) : nil
-        write { try manga.update($0) }
+        if !value { categoryLinks[manga.key] = nil }
+        write { db in
+            try manga.update(db)
+            if !value { try db.execute(sql: "DELETE FROM mangaCategory WHERE mangaKey = ?", arguments: [manga.key]) }
+        }
     }
 
     func setRead(_ chapters: [ChapterRecord], _ read: Bool) {
