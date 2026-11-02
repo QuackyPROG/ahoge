@@ -11,3 +11,4 @@ sideload-artifacts/
 *.xcresult
 xtool/
 .build/
+.bsp/

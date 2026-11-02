@@ -24,13 +24,19 @@ CI (`.github/workflows/ios.yml`) generates the project, runs the tests on a simu
 
 One-time setup, following [xtool's Linux guide](https://github.com/xtool-org/xtool/blob/main/Documentation/xtool.docc/Installation-Linux.md):
 
-1. On Windows: `wsl --install Ubuntu`, then [usbipd-win](https://learn.microsoft.com/en-us/windows/wsl/connect-usb) to attach the iPhone to WSL (`usbipd bind` / `usbipd attach --wsl`).
-2. In Linux: install the Swift toolchain xtool's guide names, and `sudo apt-get install usbmuxd libimobiledevice-utils`. Check the phone shows up with `ideviceinfo`.
+1. On Windows: `wsl --install Ubuntu-24.04`, and the Apple Devices app (or iTunes) so Windows sees the iPhone. Keep the phone plugged into Windows: usbipd passthrough hangs installs ([xtool#19](https://github.com/xtool-org/xtool/issues/19)).
+2. In Linux: install the Swift toolchain xtool's guide names (via swiftly), and `sudo apt-get install libimobiledevice-utils ideviceinstaller socat zip`.
 3. Download the Xcode `.xip` the guide names from developer.apple.com in your browser.
 4. Install the `xtool` AppImage from its latest release, then run `xtool setup`: log in (password mode for a free Apple ID) and give it the path to the `.xip`.
 
-Then, from the repo root:
+Then, in WSL, start the relay that hands Windows' Apple service to WSL, and leave it running:
+
+    bash Scripts/wsl-usbmux.sh
+
+In a second WSL shell, from the repo root (`ideviceinfo` checks the phone is reachable):
 
     xtool dev
+
+A free Apple ID allows three sideloaded apps per device; remove one if the install fails at `[Verifying]`.
 
 The version and Info.plist keys live in both `project.yml` and `Info-xtool.plist`; keep them in sync.
