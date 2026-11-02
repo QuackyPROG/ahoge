@@ -113,6 +113,7 @@ private struct HistoryRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Resume reading")
             Button(action: remove) {
                 Image(systemName: "trash")
                     .foregroundStyle(.secondary)
@@ -128,7 +129,8 @@ private struct HistoryRow: View {
                     .background(palette.primary.color, in: Circle())
             }
             .buttonStyle(PressableCardStyle())
-            .accessibilityLabel("Resume")
+            // The row's text button already resumes; one VoiceOver stop is enough.
+            .accessibilityHidden(true)
         }
         .padding(.vertical, 2)
     }
