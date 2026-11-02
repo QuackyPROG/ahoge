@@ -9,3 +9,5 @@ xcuserdata/
 sideload-staging/
 sideload-artifacts/
 *.xcresult
+xtool/
+.build/

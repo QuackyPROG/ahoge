@@ -1,10 +1,13 @@
+import Combine
 import Foundation
-import SwiftData
+import GRDB
 
 /// A manga the app has seen. `inLibrary` marks the ones saved to the Library (Mihon "favorite").
-@Model
-final class LibraryManga {
-    @Attribute(.unique) var key: String
+/// Change it only through `LibraryRepository`, which saves it and tells views.
+final class LibraryManga: Identifiable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "manga"
+
+    var key: String
     var sourceId: String
     var url: String
     var title: String
@@ -18,7 +21,12 @@ final class LibraryManga {
     var dateAdded: Date?
     var lastReadAt: Date?
     var lastChapterFetch: Date?
-    @Relationship(deleteRule: .cascade, inverse: \ChapterRecord.manga) var chapters: [ChapterRecord] = []
+    /// Loaded by `LibraryRepository` with the manga; not a column.
+    var chapters: [ChapterRecord] = []
+
+    enum CodingKeys: String, CodingKey {
+        case key, sourceId, url, title, coverUrl, author, artist, summary, genres, status, inLibrary, dateAdded, lastReadAt, lastChapterFetch
+    }
 
     init(sourceId: String, url: String, title: String, coverUrl: String) {
         key = Self.makeKey(sourceId: sourceId, url: url)
@@ -36,15 +44,20 @@ final class LibraryManga {
 
     static func makeKey(sourceId: String, url: String) -> String { sourceId + "\n" + url }
 
+    var id: String { key }
+
     /// Newest first, the order the source returned.
     var sortedChapters: [ChapterRecord] { chapters.sorted { $0.sourceOrder < $1.sourceOrder } }
     var unreadCount: Int { chapters.filter { !$0.read }.count }
     var ref: MangaRef { MangaRef(sourceId: sourceId, url: url, title: title, cover: coverUrl) }
 }
 
-@Model
-final class ChapterRecord {
-    @Attribute(.unique) var key: String
+/// Observable so a row redraws when its read state changes; `LibraryRepository` sends the change.
+final class ChapterRecord: ObservableObject, Identifiable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "chapter"
+
+    var key: String
+    var mangaKey: String
     var url: String
     var name: String
     var number: Double
@@ -53,10 +66,16 @@ final class ChapterRecord {
     var read: Bool
     var lastPageRead: Int
     var sourceOrder: Int
-    var manga: LibraryManga?
+    /// Set by `LibraryRepository`; not a column.
+    weak var manga: LibraryManga?
 
-    init(sourceId: String, state: ChapterState) {
-        key = LibraryManga.makeKey(sourceId: sourceId, url: state.url)
+    enum CodingKeys: String, CodingKey {
+        case key, mangaKey, url, name, number, dateUpload, scanlator, read, lastPageRead, sourceOrder
+    }
+
+    init(manga: LibraryManga, state: ChapterState) {
+        key = LibraryManga.makeKey(sourceId: manga.sourceId, url: state.url)
+        mangaKey = manga.key
         url = state.url
         name = state.name
         number = state.number
@@ -65,7 +84,10 @@ final class ChapterRecord {
         read = state.read
         lastPageRead = state.lastPageRead
         sourceOrder = state.sourceOrder
+        self.manga = manga
     }
+
+    var id: String { key }
 
     var state: ChapterState {
         ChapterState(url: url, name: name, number: number, date: dateUpload, scanlator: scanlator, read: read, lastPageRead: lastPageRead, sourceOrder: sourceOrder)

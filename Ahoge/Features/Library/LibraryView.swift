@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 struct LibraryView: View {
@@ -10,13 +9,14 @@ struct LibraryView: View {
         var id: String { rawValue }
     }
 
-    @Query(filter: #Predicate<LibraryManga> { $0.inLibrary == true }) private var library: [LibraryManga]
     @EnvironmentObject private var sources: SourceManager
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var repo: LibraryRepository
     @AppStorage("library.sort") private var sort: Sort = .title
     @State private var search = ""
     @State private var updating = false
     @State private var failures: [String] = []
+
+    private var library: [LibraryManga] { repo.library }
 
     private var visible: [LibraryManga] {
         let filtered = search.isEmpty ? library : library.filter { $0.title.localizedCaseInsensitiveContains(search) }
@@ -76,7 +76,6 @@ struct LibraryView: View {
     private func updateAll() async {
         updating = true
         defer { updating = false }
-        let repo = LibraryRepository(context: context)
         var errors: [String] = []
         for manga in library {
             do {

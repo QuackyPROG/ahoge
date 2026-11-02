@@ -1,0 +1,4 @@
+version: 1
+bundleID: com.quackyprog.ahoge
+infoPath: Info-xtool.plist
+iconPath: Ahoge/Assets.xcassets/AppIcon.appiconset/AhogeIcon.png

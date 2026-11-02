@@ -1,10 +1,9 @@
-import SwiftData
 import SwiftUI
 
 struct ReaderView: View {
     @StateObject private var model: ReaderModel
     @EnvironmentObject private var sources: SourceManager
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var repo: LibraryRepository
     @Environment(\.dismiss) private var dismiss
     @State private var showOverlay = false
     @State private var sliderPage = 0.0
@@ -64,7 +63,7 @@ struct ReaderView: View {
             guard model.sections.isEmpty else { return }
             await model.open(start, manager: sources)
         }
-        .onChange(of: model.position) { model.positionChanged(repo: LibraryRepository(context: context), manager: sources) }
+        .onChange(of: model.position) { model.positionChanged(repo: repo, manager: sources) }
         .onChange(of: model.currentPage) { _, page in if !scrubbing { sliderPage = Double(page) } }
         .onChange(of: sliderPage) { _, page in
             // Paged modes follow the slider live; a webtoon jumps when it is let go.

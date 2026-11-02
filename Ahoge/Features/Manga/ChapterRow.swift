@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChapterRow: View {
-    let chapter: ChapterRecord
+    @ObservedObject var chapter: ChapterRecord
     /// The chapter open in the reader, highlighted in the reader's chapter list.
     var isCurrent = false
 

@@ -1,11 +1,9 @@
-import SwiftData
 import SwiftUI
 
 struct MangaDetailView: View {
     let ref: MangaRef
     @EnvironmentObject private var sources: SourceManager
-    @Environment(\.modelContext) private var context
-    @Query private var matches: [LibraryManga]
+    @EnvironmentObject private var repo: LibraryRepository
     @State private var isLoading = false
     @State private var error: Error?
     @State private var expanded = false
@@ -20,12 +18,10 @@ struct MangaDetailView: View {
     init(ref: MangaRef) {
         self.ref = ref
         let key = LibraryManga.makeKey(sourceId: ref.sourceId, url: ref.url)
-        _matches = Query(filter: #Predicate<LibraryManga> { $0.key == key })
         _display = State(initialValue: ChapterDisplay.load(for: key))
     }
 
-    private var manga: LibraryManga? { matches.first }
-    private var repo: LibraryRepository { LibraryRepository(context: context) }
+    private var manga: LibraryManga? { repo.manga(sourceId: ref.sourceId, url: ref.url) }
     private var info: InstalledSource? { sources.installed(ref.sourceId) }
     private var headers: [String: String] { info.map { ["Referer": $0.baseUrl + "/"] } ?? [:] }
     private var cover: String { manga?.coverUrl.nonEmpty ?? ref.cover }

@@ -1,21 +1,22 @@
-import SwiftData
 import SwiftUI
 
 @main
 struct AhogeApp: App {
     @StateObject private var extensions: ExtensionStore
     @StateObject private var sources: SourceManager
-    private let container: ModelContainer
+    @StateObject private var library: LibraryRepository
 
     init() {
         let store = ExtensionStore()
         _extensions = StateObject(wrappedValue: store)
         _sources = StateObject(wrappedValue: SourceManager(extensions: store))
+        let library: LibraryRepository
         do {
-            container = try ModelContainer(for: LibraryManga.self, ChapterRecord.self)
+            library = try LibraryRepository.open()
         } catch {
             fatalError("Could not open the library database: \(error)")
         }
+        _library = StateObject(wrappedValue: library)
     }
 
     var body: some Scene {
@@ -23,7 +24,7 @@ struct AhogeApp: App {
             RootView()
                 .environmentObject(extensions)
                 .environmentObject(sources)
+                .environmentObject(library)
         }
-        .modelContainer(container)
     }
 }

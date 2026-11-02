@@ -1,15 +1,10 @@
-import SwiftData
 import XCTest
 @testable import Ahoge
 
 @MainActor
 final class LibraryRepositoryTests: XCTestCase {
-    /// The container must outlive the repository; a released container crashes its context.
-    private var container: ModelContainer!
-
     private func repository() throws -> LibraryRepository {
-        container = try ModelContainer(for: LibraryManga.self, ChapterRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        return LibraryRepository(context: container.mainContext)
+        try LibraryRepository.inMemory()
     }
 
     private func chapter(_ url: String, _ number: Double) -> SourceChapter {
@@ -50,5 +45,30 @@ final class LibraryRepositoryTests: XCTestCase {
         XCTAssertTrue(updated.inLibrary)
         XCTAssertEqual(updated.title, "One Full")
         XCTAssertEqual(updated.genres, ["Action"])
+    }
+
+    func testReopenLoadsSavedState() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("library-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let repo = try LibraryRepository.open(at: file)
+        let saved = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        let details = try JSONDecoder().decode(MangaDetails.self, from: Data(#"{"title":"One","cover":"","author":"A","artist":"B","description":"D","genres":["Action","Drama"],"status":"ongoing"}"#.utf8))
+        repo.upsert(sourceId: "en.demo", url: "/m/1", details: details)
+        repo.setInLibrary(saved, true)
+        repo.applyChapters([chapter("/c/2", 2), chapter("/c/1", 1)], to: saved)
+        repo.saveProgress(try XCTUnwrap(saved.sortedChapters.last), page: 2, pageCount: 10)
+        repo.upsert(sourceId: "en.demo", url: "/m/2", title: "Two", cover: "")
+
+        let reopened = try LibraryRepository.open(at: file)
+        XCTAssertEqual(reopened.library.map(\.url), ["/m/1"])
+        let manga = try XCTUnwrap(reopened.library.first)
+        XCTAssertEqual(manga.genres, ["Action", "Drama"])
+        XCTAssertNotNil(manga.dateAdded)
+        XCTAssertNotNil(manga.lastReadAt)
+        XCTAssertEqual(manga.sortedChapters.map(\.url), ["/c/2", "/c/1"])
+        XCTAssertEqual(manga.sortedChapters.map(\.lastPageRead), [0, 2])
+        XCTAssertTrue(manga.sortedChapters.allSatisfy { $0.manga === manga })
+        XCTAssertEqual(reopened.manga(sourceId: "en.demo", url: "/m/2")?.title, "Two")
+        XCTAssertNil(reopened.manga(sourceId: "en.demo", url: "/m/3"))
     }
 }

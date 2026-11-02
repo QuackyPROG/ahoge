@@ -1,15 +1,10 @@
-import SwiftData
 import XCTest
 @testable import Ahoge
 
 @MainActor
 final class ReaderModelTests: XCTestCase {
-    /// The container must outlive the repository; a released container crashes its context.
-    private var container: ModelContainer!
-
     func testNextAndPreviousChapterFollowSourceOrder() throws {
-        container = try ModelContainer(for: LibraryManga.self, ChapterRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let repo = LibraryRepository(context: container.mainContext)
+        let repo = try LibraryRepository.inMemory()
         let manga = repo.upsert(sourceId: "s", url: "/m", title: "M", cover: "")
         repo.applyChapters((1...3).reversed().map { SourceChapter(url: "/c/\($0)", name: "Ch \($0)", number: Double($0), date: nil, scanlator: nil) }, to: manga)
         let middle = try XCTUnwrap(manga.chapters.first { $0.url == "/c/2" })

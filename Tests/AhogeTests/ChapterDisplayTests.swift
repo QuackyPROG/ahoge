@@ -1,15 +1,10 @@
-import SwiftData
 import XCTest
 @testable import Ahoge
 
 @MainActor
 final class ChapterDisplayTests: XCTestCase {
-    /// The container must outlive the repository; a released container crashes its context.
-    private var container: ModelContainer!
-
     private func chapters() throws -> [ChapterRecord] {
-        container = try ModelContainer(for: LibraryManga.self, ChapterRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let repo = LibraryRepository(context: container.mainContext)
+        let repo = try LibraryRepository.inMemory()
         let manga = repo.upsert(sourceId: "s", url: "/m", title: "M", cover: "")
         // Source order (newest first): 3, 1.5 (no date), 2, 1 — the source lists an extra out of order.
         let day = 86_400_000.0
