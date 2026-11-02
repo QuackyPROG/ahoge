@@ -20,26 +20,33 @@ struct LibraryView: View {
     @State private var settingCategories = false
     @State private var confirmRemove = false
 
-    /// Default (titles in no category) when it has any or there are no categories, then each category.
-    private var shelves: [LibraryShelf] {
-        let named = repo.categories.map { LibraryShelf(id: Int($0.id), name: $0.name) }
-        if named.isEmpty || !repo.library(in: nil).isEmpty {
-            return [LibraryShelf(id: 0, name: "Default")] + named
+    /// One pass over the library: titles per shelf (0 = in no category), the shelf list and the current shelf.
+    private struct Snapshot {
+        let buckets: [Int: [LibraryManga]]
+        let shelves: [LibraryShelf]
+        let currentId: Int
+    }
+
+    private func snapshot() -> Snapshot {
+        var buckets: [Int: [LibraryManga]] = [:]
+        for title in repo.library {
+            let ids = repo.categoryIds(of: title)
+            if ids.isEmpty {
+                buckets[0, default: []].append(title)
+            } else {
+                for id in ids { buckets[Int(id), default: []].append(title) }
+            }
         }
-        return named
+        // Default (titles in no category) when it has any or there are no categories, then each category.
+        var shelves = repo.categories.map { LibraryShelf(id: Int($0.id), name: $0.name) }
+        if shelves.isEmpty || !(buckets[0] ?? []).isEmpty {
+            shelves.insert(LibraryShelf(id: 0, name: "Default"), at: 0)
+        }
+        let currentId = shelves.contains { $0.id == shelf } ? shelf : shelves.first?.id ?? 0
+        return Snapshot(buckets: buckets, shelves: shelves, currentId: currentId)
     }
 
-    private var currentShelf: Int {
-        let shelves = shelves
-        return shelves.contains { $0.id == shelf } ? shelf : shelves.first?.id ?? 0
-    }
-
-    private func titles(on shelf: Int) -> [LibraryManga] {
-        repo.library(in: shelf == 0 ? nil : Int64(shelf))
-    }
-
-    private func visible(on shelf: Int) -> [LibraryManga] {
-        let all = titles(on: shelf)
+    private func visible(_ all: [LibraryManga]) -> [LibraryManga] {
         let filtered = search.isEmpty ? all : all.filter { $0.title.localizedCaseInsensitiveContains(search) }
         switch sort {
         case .title: return filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
@@ -52,28 +59,31 @@ struct LibraryView: View {
     private var selectedManga: [LibraryManga] { repo.library.filter { selection.contains($0.key) } }
 
     var body: some View {
-        let shelves = shelves
-        let current = Binding(get: { currentShelf }, set: { shelf = $0 })
+        let snap = snapshot()
+        let shelves = snap.shelves
+        let currentId = snap.currentId
+        let current = Binding(get: { currentId }, set: { shelf = $0 })
         NavigationStack {
             VStack(spacing: 0) {
                 if shelves.count > 1 {
                     CategoryTabBar(
                         shelves: shelves,
-                        counts: Dictionary(uniqueKeysWithValues: shelves.map { ($0.id, titles(on: $0.id).count) }),
+                        counts: Dictionary(uniqueKeysWithValues: shelves.map { ($0.id, (snap.buckets[$0.id] ?? []).count) }),
                         selection: current
                     )
                 }
                 TabView(selection: current) {
                     ForEach(shelves) { item in
-                        page(item).tag(item.id)
+                        page(item, titles: snap.buckets[item.id] ?? []).tag(item.id)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                .id(shelves.map { $0.id })
             }
             .navigationTitle(selecting ? "\(selection.count) selected" : "Library")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $search)
-            .toolbar { toolbar }
+            .toolbar { toolbar(snap) }
             .safeAreaInset(edge: .bottom) { if selecting { selectionBar } }
             .overlay(alignment: .bottom) {
                 if updater.isRunning, !selecting {
@@ -87,8 +97,8 @@ struct LibraryView: View {
                 }
             }
             .animation(.spring(duration: 0.3), value: updater.isRunning)
-            .sheet(isPresented: $settingCategories, onDismiss: endSelection) { SetCategoriesSheet(manga: selectedManga) }
-            .confirmationDialog("Remove \(selection.count) from your library?", isPresented: $confirmRemove, titleVisibility: .visible) {
+            .sheet(isPresented: $settingCategories) { SetCategoriesSheet(manga: selectedManga, onSave: endSelection) }
+            .confirmationDialog(selection.count == 1 ? "Remove 1 title from your library?" : "Remove \(selection.count) titles from your library?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) {
                     for manga in selectedManga { repo.setInLibrary(manga, false) }
                     endSelection()
@@ -99,8 +109,8 @@ struct LibraryView: View {
         }
     }
 
-    private func page(_ shelf: LibraryShelf) -> some View {
-        let items = visible(on: shelf.id)
+    private func page(_ shelf: LibraryShelf, titles: [LibraryManga]) -> some View {
+        let items = visible(titles)
         let unread = Dictionary(items.map { ($0.key, $0.unreadCount) }, uniquingKeysWith: { first, _ in first })
         return ScrollView {
             if items.isEmpty { emptyState(shelf).padding(.top, 80) }
@@ -116,7 +126,7 @@ struct LibraryView: View {
             .padding(.vertical, 8)
         }
         // Mihon refreshes the category on screen.
-        .refreshable { await updater.update(titles(on: shelf.id), repo: repo, sources: sources) }
+        .refreshable { await updater.update(titles, repo: repo, sources: sources) }
     }
 
     @ViewBuilder
@@ -131,13 +141,15 @@ struct LibraryView: View {
     }
 
     @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
+    private func toolbar(_ snap: Snapshot) -> some ToolbarContent {
         if selecting {
             ToolbarItem(placement: .topBarLeading) { Button("Done") { endSelection() } }
             ToolbarItem(placement: .topBarTrailing) {
-                let all = Set(visible(on: currentShelf).map(\.key))
+                let all = Set(visible(snap.buckets[snap.currentId] ?? []).map(\.key))
                 let everything = !all.isEmpty && selection.isSuperset(of: all)
-                Button(everything ? "Deselect all" : "Select all") { selection = everything ? [] : all }
+                Button(everything ? "Deselect all" : "Select all") {
+                    if everything { selection.subtract(all) } else { selection.formUnion(all) }
+                }
             }
         } else {
             ToolbarItem(placement: .topBarTrailing) {

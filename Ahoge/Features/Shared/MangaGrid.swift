@@ -45,6 +45,7 @@ struct MangaGrid: View {
                             .symbolRenderingMode(.palette)
                             .foregroundStyle(selected ? palette.onPrimary.color : Color.white, selected ? palette.primary.color : Color.black.opacity(0.35))
                             .padding(6)
+                            .accessibilityHidden(true)
                     }
             }
             .buttonStyle(PressableCardStyle())
@@ -58,10 +59,11 @@ struct MangaGrid: View {
                     if let librarySelect {
                         Button("Select", systemImage: "checkmark.circle") { librarySelect(ref) }
                         Button("Edit categories", systemImage: "folder") {
-                            choosingCategories = repo.manga(sourceId: ref.sourceId, url: ref.url)
+                            let target = repo.manga(sourceId: ref.sourceId, url: ref.url)
+                            Task { @MainActor in choosingCategories = target }
                         }
                     }
-                    LibraryToggleButton(ref: ref) { choosingCategories = $0 }
+                    LibraryToggleButton(ref: ref) { added in Task { @MainActor in choosingCategories = added } }
                 }
         }
     }

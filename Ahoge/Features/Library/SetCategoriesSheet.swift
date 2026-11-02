@@ -4,6 +4,7 @@ import SwiftUI
 /// only some have starts as a dash and is left alone unless tapped.
 struct SetCategoriesSheet: View {
     let manga: [LibraryManga]
+    var onSave: () -> Void = {}
     @EnvironmentObject private var repo: LibraryRepository
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
@@ -22,19 +23,21 @@ struct SetCategoriesSheet: View {
                                 Image(systemName: Self.symbol(check))
                                     .font(.title3)
                                     .foregroundStyle(check == .off ? Color.secondary : palette.primary.color)
+                                    .accessibilityHidden(true)
                                 Text(category.name).foregroundStyle(.primary)
                                 Spacer()
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .sensoryFeedback(.selection, trigger: check)
+                        .accessibilityValue(check == .on ? "Checked" : check == .mixed ? "Mixed" : "Not checked")
                     }
                 } footer: {
                     Text("Titles in no category show under Default.")
                 }
                 .themedRows()
             }
+            .sensoryFeedback(.selection, trigger: checks) { old, _ in !old.isEmpty }
             .overlay {
                 if repo.categories.isEmpty {
                     ContentUnavailableView("No categories", systemImage: "folder", description: Text("Tap Edit categories to make one."))
@@ -64,6 +67,7 @@ struct SetCategoriesSheet: View {
         for title in manga {
             repo.setCategories(CategoryAssignment.apply(live, to: repo.categoryIds(of: title)), for: title)
         }
+        onSave()
         dismiss()
     }
 

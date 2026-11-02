@@ -24,7 +24,7 @@ struct CategoriesView: View {
                             Text("\(repo.library(in: category.id).count)").monospacedDigit().foregroundStyle(.secondary)
                         }
                     }
-                    .swipeActions {
+                    .swipeActions(allowsFullSwipe: false) {
                         Button("Delete", systemImage: "trash", role: .destructive) {
                             target = category
                             deleting = true

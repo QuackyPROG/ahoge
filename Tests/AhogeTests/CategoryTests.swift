@@ -83,6 +83,17 @@ final class CategoryTests: XCTestCase {
         XCTAssertEqual(repo.categoryIds(of: manga), [favorite.id])
     }
 
+    func testDeletingTheDefaultCategoryResetsThePreference() throws {
+        let key = LibraryPrefs.defaultCategory
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
+        let repo = try LibraryRepository.inMemory()
+        let favorite = try XCTUnwrap(repo.createCategory(named: "Favorite"))
+        UserDefaults.standard.set(Int(favorite.id), forKey: key)
+        repo.deleteCategory(favorite.id)
+        XCTAssertEqual(UserDefaults.standard.integer(forKey: key), LibraryPrefs.alwaysAsk)
+    }
+
     func testTriStateAssignment() {
         let checks = CategoryAssignment.initial(categoryIds: [1, 2, 3], selections: [[1, 2], [1]])
         XCTAssertEqual(checks, [1: .on, 2: .mixed, 3: .off])

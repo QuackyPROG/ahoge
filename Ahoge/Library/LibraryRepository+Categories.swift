@@ -45,6 +45,9 @@ extension LibraryRepository {
 
     /// Its titles stay in the library; those left in no category show under Default.
     func deleteCategory(_ id: Int64) {
+        if UserDefaults.standard.object(forKey: LibraryPrefs.defaultCategory) as? Int == Int(id) {
+            UserDefaults.standard.set(LibraryPrefs.alwaysAsk, forKey: LibraryPrefs.defaultCategory)
+        }
         objectWillChange.send()
         categories.removeAll { $0.id == id }
         for key in Array(categoryLinks.keys) {
@@ -90,7 +93,8 @@ extension LibraryRepository {
     @discardableResult
     func addToLibrary(_ manga: LibraryManga, defaultCategory: Int) -> Bool {
         setInLibrary(manga, true)
-        if defaultCategory > 0, categories.contains(where: { $0.id == Int64(defaultCategory) }) {
+        if defaultCategory > 0 {
+            guard categories.contains(where: { $0.id == Int64(defaultCategory) }) else { return !categories.isEmpty }
             setCategories([Int64(defaultCategory)], for: manga)
             return false
         }
