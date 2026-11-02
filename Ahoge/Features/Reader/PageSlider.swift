@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// Where pages sit on the scrubber track. Pure, so it is unit tested.
 enum PageSliderMath {
@@ -47,8 +46,9 @@ struct PageSlider: View {
     var reversed = false
     var onEditingChanged: (Bool) -> Void = { _ in }
 
-    @State private var dragging = false
-    @State private var feedback = UISelectionFeedbackGenerator()
+    /// Reset by SwiftUI when the gesture ends or is cancelled, so it can never stick.
+    @GestureState private var dragging = false
+    @State private var reportedEditing = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -91,37 +91,42 @@ struct PageSlider: View {
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($dragging) { _, state, _ in state = true }
                     .onChanged { value in
-                        if !dragging {
-                            dragging = true
-                            feedback.prepare()
-                            onEditingChanged(true)
-                        }
                         let target = PageSliderMath.page(at: value.location.x, count: count, width: width, reversed: reversed)
-                        if target != page {
-                            page = target
-                            feedback.selectionChanged()
-                        }
-                    }
-                    .onEnded { _ in
-                        dragging = false
-                        onEditingChanged(false)
+                        if target != page { page = target }
                     }
             )
             .animation(.spring(duration: 0.2), value: dragging)
         }
+        .onChange(of: dragging) { _, isDragging in
+            reportedEditing = isDragging
+            onEditingChanged(isDragging)
+        }
+        .onDisappear {
+            if reportedEditing {
+                reportedEditing = false
+                onEditingChanged(false)
+            }
+        }
+        .sensoryFeedback(.selection, trigger: page) { _, _ in dragging }
         .frame(height: 32)
         // Drawn by offsets; mirroring is done by `reversed`, never by the layout direction.
         .environment(\.layoutDirection, .leftToRight)
         .accessibilityElement()
         .accessibilityLabel("Page")
-        .accessibilityValue("\(page + 1) of \(count)")
+        .accessibilityValue("\(min(page, count - 1) + 1) of \(count)")
         .accessibilityAdjustableAction { direction in
+            let target: Int
             switch direction {
-            case .increment: if page < count - 1 { page += 1 }
-            case .decrement: if page > 0 { page -= 1 }
-            @unknown default: break
+            case .increment: target = min(page + 1, count - 1)
+            case .decrement: target = max(page - 1, 0)
+            @unknown default: return
             }
+            guard target != page else { return }
+            onEditingChanged(true)
+            page = target
+            onEditingChanged(false)
         }
     }
 }
