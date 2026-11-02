@@ -11,6 +11,8 @@ struct MangaDetailView: View {
     @State private var reading: ChapterRecord?
     @State private var webTarget: WebTarget?
     @State private var showCover = false
+    @AppStorage(LibraryPrefs.defaultCategory) private var defaultCategory = LibraryPrefs.alwaysAsk
+    @State private var choosingCategories = false
     @State private var display: ChapterDisplay
     @State private var selecting = false
     @State private var selection = Set<String>()
@@ -89,6 +91,9 @@ struct MangaDetailView: View {
         .toolbar { toolbarItems(chapters) }
         .sheet(item: $webTarget) { WebViewSheet(target: $0) }
         .sheet(isPresented: $showCover) { CoverSheet(url: cover, headers: headers) }
+        .sheet(isPresented: $choosingCategories) {
+            if let manga { SetCategoriesSheet(manga: [manga]) }
+        }
         .fullScreenCover(item: $reading) { chapter in
             if let manga { ReaderView(sourceId: ref.sourceId, manga: manga, chapter: chapter) }
         }
@@ -276,10 +281,18 @@ struct MangaDetailView: View {
                 let all = Set(chapters.map(\.key))
                 Button(selection == all ? "Deselect all" : "Select all") { selection = selection == all ? [] : all }
             }
-        } else if let webURL {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { webTarget = WebTarget(url: webURL) } label: { Image(systemName: "globe") }
-                    .accessibilityLabel("Open in web view")
+        } else {
+            if manga?.inLibrary == true {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { choosingCategories = true } label: { Image(systemName: "folder") }
+                        .accessibilityLabel("Edit categories")
+                }
+            }
+            if let webURL {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { webTarget = WebTarget(url: webURL) } label: { Image(systemName: "globe") }
+                        .accessibilityLabel("Open in web view")
+                }
             }
         }
     }
@@ -323,7 +336,11 @@ struct MangaDetailView: View {
 
     private func toggleLibrary() {
         let target = manga ?? repo.upsert(sourceId: ref.sourceId, url: ref.url, title: ref.title, cover: ref.cover)
-        repo.setInLibrary(target, !target.inLibrary)
+        if target.inLibrary {
+            repo.setInLibrary(target, false)
+        } else if repo.addToLibrary(target, defaultCategory: defaultCategory) {
+            choosingCategories = true
+        }
     }
 
     private func refresh() async {
