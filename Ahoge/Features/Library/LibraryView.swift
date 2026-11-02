@@ -11,10 +11,9 @@ struct LibraryView: View {
 
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
+    @EnvironmentObject private var updater: LibraryUpdater
     @AppStorage("library.sort") private var sort: Sort = .title
     @State private var search = ""
-    @State private var updating = false
-    @State private var failures: [String] = []
 
     private var library: [LibraryManga] { repo.library }
 
@@ -44,7 +43,7 @@ struct LibraryView: View {
             .navigationTitle("Library")
             .themedScreen()
             .searchable(text: $search)
-            .refreshable { await updateAll() }
+            .refreshable { await updater.update(library, repo: repo, sources: sources) }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -57,35 +56,16 @@ struct LibraryView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if updating {
-                    Label("Updating library…", systemImage: "arrow.clockwise")
-                        .padding(10)
-                        .background(.thinMaterial, in: Capsule())
+                if updater.isRunning {
+                    Label("Updating library… \(updater.done)/\(updater.total)", systemImage: "arrow.clockwise")
+                        .font(.footnote.weight(.semibold).monospacedDigit())
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial, in: Capsule())
                         .padding()
                 }
             }
-            .alert("Some titles could not be updated", isPresented: Binding(get: { !failures.isEmpty }, set: { if !$0 { failures = [] } })) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(failures.joined(separator: "\n"))
-            }
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
-    }
-
-    /// Re-fetches chapter lists for every library title, one after another.
-    private func updateAll() async {
-        updating = true
-        defer { updating = false }
-        var errors: [String] = []
-        for manga in library {
-            do {
-                let source = try sources.source(manga.sourceId)
-                repo.applyChapters(try await source.chapters(url: manga.url), to: manga)
-            } catch {
-                errors.append("\(manga.title): \(error.localizedDescription)")
-            }
-        }
-        failures = errors
     }
 }

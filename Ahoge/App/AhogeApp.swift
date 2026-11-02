@@ -5,6 +5,7 @@ struct AhogeApp: App {
     @StateObject private var extensions: ExtensionStore
     @StateObject private var sources: SourceManager
     @StateObject private var library: LibraryRepository
+    @StateObject private var updater = LibraryUpdater()
 
     init() {
         let store = ExtensionStore()
@@ -25,6 +26,7 @@ struct AhogeApp: App {
                 .environmentObject(extensions)
                 .environmentObject(sources)
                 .environmentObject(library)
+                .environmentObject(updater)
         }
     }
 }

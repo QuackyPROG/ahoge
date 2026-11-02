@@ -4,6 +4,7 @@ struct RootView: View {
     @AppStorage(ThemePrefs.theme) private var theme = AppTheme.standard
     @AppStorage(ThemePrefs.mode) private var mode = ThemeMode.system
     @AppStorage(ThemePrefs.pureBlack) private var pureBlack = false
+    @EnvironmentObject private var updater: LibraryUpdater
 
     var body: some View {
         let palette = theme.palette(pureBlack: pureBlack)
@@ -18,5 +19,10 @@ struct RootView: View {
         .tint(palette.primary.color)
         .environment(\.palette, palette)
         .preferredColorScheme(mode.colorScheme)
+        .alert("Some titles could not be updated", isPresented: Binding(get: { !updater.failures.isEmpty }, set: { if !$0 { updater.failures = [] } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(updater.failures.joined(separator: "\n"))
+        }
     }
 }
