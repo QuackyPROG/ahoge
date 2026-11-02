@@ -96,4 +96,15 @@ final class LibraryRepositoryTests: XCTestCase {
         XCTAssertNotNil(loaded.chapters.first { $0.url == "/c/2" }?.dateFetch)
         XCTAssertNil(loaded.chapters.first { $0.url == "/c/1" }?.dateFetch)
     }
+
+    func testEmptyFetchKeepsChapters() throws {
+        let repo = try repository()
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        repo.applyChapters([chapter("/c/2", 2), chapter("/c/1", 1)], to: manga)
+        repo.setRead([try XCTUnwrap(manga.chapters.first { $0.url == "/c/1" })], true)
+        repo.applyChapters([], to: manga)
+        XCTAssertEqual(manga.sortedChapters.map(\.url), ["/c/2", "/c/1"])
+        XCTAssertEqual(manga.sortedChapters.map(\.read), [false, true])
+        XCTAssertEqual(manga.unreadCount, 1)
+    }
 }

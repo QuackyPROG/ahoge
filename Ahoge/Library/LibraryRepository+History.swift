@@ -29,7 +29,7 @@ extension LibraryRepository {
 
     nonisolated static func upsertHistory(_ chapter: ChapterRecord, at date: Date, _ db: Database) throws {
         try db.execute(
-            sql: "INSERT INTO history (chapterKey, mangaKey, lastRead) VALUES (?, ?, ?) ON CONFLICT(chapterKey) DO UPDATE SET lastRead = excluded.lastRead",
+            sql: "INSERT INTO history (chapterKey, mangaKey, lastRead) VALUES (?, ?, ?) ON CONFLICT(chapterKey) DO UPDATE SET lastRead = excluded.lastRead, mangaKey = excluded.mangaKey",
             arguments: [chapter.key, chapter.mangaKey, date]
         )
     }

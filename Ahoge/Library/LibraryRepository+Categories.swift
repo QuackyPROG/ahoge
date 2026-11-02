@@ -67,6 +67,8 @@ extension LibraryRepository {
     func categoryIds(of manga: LibraryManga) -> Set<Int64> { categoryLinks[manga.key] ?? [] }
 
     func setCategories(_ ids: Set<Int64>, for manga: LibraryManga) {
+        // A deleted category's id would fail the foreign key and roll back the whole write.
+        let ids = ids.filter { id in categories.contains { $0.id == id } }
         objectWillChange.send()
         categoryLinks[manga.key] = ids.isEmpty ? nil : ids
         write { db in

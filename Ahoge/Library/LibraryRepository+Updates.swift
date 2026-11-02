@@ -18,7 +18,7 @@ extension LibraryRepository {
                 return UpdateEntry(manga: manga, chapter: chapter, date: fetched)
             }
         }
-        // Newest refresh first; within one refresh, the source's order (newest chapter first).
-        .sorted { ($0.date, $1.chapter.sourceOrder) > ($1.date, $0.chapter.sourceOrder) }
+        // Newest refresh first; within one refresh, by manga, then the source's order (newest chapter first).
+        .sorted { ($0.date, $1.manga.key, $1.chapter.sourceOrder) > ($1.date, $0.manga.key, $0.chapter.sourceOrder) }
     }
 }

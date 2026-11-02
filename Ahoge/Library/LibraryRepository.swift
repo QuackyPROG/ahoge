@@ -155,6 +155,9 @@ final class LibraryRepository: ObservableObject {
     }
 
     func applyChapters(_ fetched: [SourceChapter], to manga: LibraryManga) {
+        // An empty list from a manga that had chapters is a source failure (Mihon treats it as an
+        // error); applying it would delete every chapter, its read state and its history.
+        if fetched.isEmpty && !manga.chapters.isEmpty { return }
         objectWillChange.send()
         let existing = manga.chapters
         let merged = ChapterMerge.merge(existing: existing.map(\.state), fetched: fetched)
