@@ -6,11 +6,14 @@ struct MangaCard: View {
     var headers: [String: String] = [:]
     var badge: String?
 
+    /// About three pixels per point of the widest grid card.
+    static let coverPixelWidth: CGFloat = 360
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Color.clear
                 .aspectRatio(2 / 3, contentMode: .fit)
-                .overlay { RemoteImage(url: cover, headers: headers) }
+                .overlay { RemoteImage(url: cover, headers: headers, maxPixelWidth: Self.coverPixelWidth) }
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(alignment: .topLeading) {
                     if let badge {
