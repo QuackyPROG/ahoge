@@ -14,6 +14,8 @@ final class LibraryRepository: ObservableObject {
     var categories: [MangaCategory] = []
     /// Category ids by manga key; a library title missing here is in Default.
     var categoryLinks: [String: Set<Int64>] = [:]
+    /// Every Updates entry, newest first; cleared whenever chapters are fetched or library membership changes.
+    var updatesCache: [UpdateEntry]?
 
     /// Library titles and their chapters are loaded up front; other manga on first lookup.
     init(db: any DatabaseWriter) throws {
@@ -158,6 +160,7 @@ final class LibraryRepository: ObservableObject {
         // An empty list from a manga that had chapters is a source failure (Mihon treats it as an
         // error); applying it would delete every chapter, its read state and its history.
         if fetched.isEmpty && !manga.chapters.isEmpty { return }
+        updatesCache = nil
         objectWillChange.send()
         let existing = manga.chapters
         let merged = ChapterMerge.merge(existing: existing.map(\.state), fetched: fetched)
@@ -183,6 +186,7 @@ final class LibraryRepository: ObservableObject {
     }
 
     func setInLibrary(_ manga: LibraryManga, _ value: Bool) {
+        updatesCache = nil
         objectWillChange.send()
         manga.inLibrary = value
         manga.dateAdded = value ? (manga.dateAdded ?? Date()) : nil

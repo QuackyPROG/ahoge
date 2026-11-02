@@ -26,7 +26,7 @@ enum DateGrouping {
     static func title(for day: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: day), to: calendar.startOfDay(for: now)).day ?? 0
         switch days {
-        case 0: return "Today"
+        case ..<1: return "Today" // 0, or negative from clock skew
         case 1: return "Yesterday"
         case 2..<7: return "\(days) days ago"
         default: return day.formatted(.dateTime.day().month(.abbreviated).year())

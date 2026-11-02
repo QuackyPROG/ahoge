@@ -14,7 +14,8 @@ struct UpdatesView: View {
     @EnvironmentObject private var updater: LibraryUpdater
     @Environment(\.palette) private var palette
     @AppStorage(UpdatesPrefs.lastSeen) private var lastSeen = 0.0
-    @State private var reading: ChapterRecord?
+    @State private var reading: UpdateEntry?
+    @State private var visible = false
 
     var body: some View {
         let entries = repo.updates(since: UpdatesPrefs.cutoff)
@@ -29,7 +30,7 @@ struct UpdatesView: View {
                 ForEach(DateGrouping.group(entries, by: \.date), id: \.day) { group in
                     Section {
                         ForEach(group.items) { entry in
-                            UpdateRow(manga: entry.manga, chapter: entry.chapter, headers: referer(entry.manga)) { reading = entry.chapter }
+                            UpdateRow(manga: entry.manga, chapter: entry.chapter, headers: referer(entry.manga)) { reading = entry }
                                 .swipeActions(edge: .leading) {
                                     Button(entry.chapter.read ? "Unread" : "Read", systemImage: entry.chapter.read ? "eye.slash" : "eye") {
                                         repo.setRead([entry.chapter], !entry.chapter.read)
@@ -53,6 +54,7 @@ struct UpdatesView: View {
             .overlay {
                 if entries.isEmpty {
                     ContentUnavailableView("No recent updates", systemImage: "bell", description: Text("Pull down to check your library for new chapters."))
+                        .allowsHitTesting(false)
                 }
             }
             .navigationTitle("Updates")
@@ -77,11 +79,12 @@ struct UpdatesView: View {
             }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
-            .fullScreenCover(item: $reading) { chapter in
-                if let manga = chapter.manga { ReaderView(sourceId: manga.sourceId, manga: manga, chapter: chapter) }
+            .fullScreenCover(item: $reading) { entry in
+                ReaderView(sourceId: entry.manga.sourceId, manga: entry.manga, chapter: entry.chapter)
             }
-            .onAppear { lastSeen = Date().timeIntervalSince1970 }
-            .onDisappear { lastSeen = Date().timeIntervalSince1970 }
+            .onAppear { visible = true; lastSeen = Date().timeIntervalSince1970 }
+            .onDisappear { visible = false; lastSeen = Date().timeIntervalSince1970 }
+            .onChange(of: updater.lastUpdated) { if visible { lastSeen = Date().timeIntervalSince1970 } }
         }
     }
 
