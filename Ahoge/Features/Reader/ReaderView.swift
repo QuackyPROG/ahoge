@@ -6,7 +6,7 @@ struct ReaderView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @Environment(\.dismiss) private var dismiss
     @State private var showOverlay = false
-    @State private var sliderPage = 0.0
+    @State private var sliderPage = 0
     @State private var scrubbing = false
     @State private var showChapters = false
     @State private var showSettings = false
@@ -64,10 +64,10 @@ struct ReaderView: View {
             await model.open(start, manager: sources)
         }
         .onChange(of: model.position) { model.positionChanged(repo: repo, manager: sources) }
-        .onChange(of: model.currentPage) { _, page in if !scrubbing { sliderPage = Double(page) } }
+        .onChange(of: model.currentPage) { _, page in if !scrubbing { sliderPage = page } }
         .onChange(of: sliderPage) { _, page in
             // Paged modes follow the slider live; a webtoon jumps when it is let go.
-            if scrubbing, mode.isPaged { model.jump(to: Int(page)) }
+            if scrubbing, mode.isPaged { model.jump(to: page) }
         }
         .onChange(of: mode) { _, mode in
             mode.save(for: model.manga.key)
@@ -232,13 +232,12 @@ struct ReaderView: View {
             HStack(spacing: 10) {
                 roundButton("backward.end.fill", label: "Previous chapter", enabled: previous != nil) { open(previous) }
                 HStack(spacing: 12) {
-                    Text("\(Int(sliderPage) + 1)").frame(minWidth: 22)
+                    Text("\(sliderPage + 1)").frame(minWidth: 22)
                     if pageCount > 1 {
-                        Slider(value: $sliderPage, in: 0...Double(pageCount - 1), step: 1) { editing in
+                        PageSlider(page: $sliderPage, count: pageCount, reversed: mode == .rightToLeft) { editing in
                             scrubbing = editing
-                            if !editing { model.jump(to: Int(sliderPage)) }
+                            if !editing { model.jump(to: sliderPage) }
                         }
-                        .tint(.white)
                     } else {
                         Spacer()
                     }
@@ -271,7 +270,7 @@ struct ReaderView: View {
             .padding(.bottom, 2)
             .background { barBackground.ignoresSafeArea(edges: .bottom) }
         }
-        .onAppear { sliderPage = Double(model.currentPage) }
+        .onAppear { sliderPage = model.currentPage }
     }
 
     private func icon(_ name: String) -> some View {
