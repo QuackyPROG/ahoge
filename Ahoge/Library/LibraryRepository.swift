@@ -216,10 +216,12 @@ final class LibraryRepository: ObservableObject {
         if page >= pageCount - 1 { chapter.read = true }
         chapter.manga?.refreshUnreadCount()
         let manga = chapter.manga
-        manga?.lastReadAt = Date()
+        let now = Date()
+        manga?.lastReadAt = now
         write { db in
             try chapter.update(db)
             try manga?.update(db)
+            try Self.upsertHistory(chapter, at: now, db)
         }
     }
 
