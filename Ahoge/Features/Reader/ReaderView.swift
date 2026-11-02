@@ -64,6 +64,12 @@ struct ReaderView: View {
             await model.open(start, manager: sources)
         }
         .onChange(of: model.position) { model.positionChanged(repo: repo, manager: sources) }
+        .onChange(of: model.ready) { _, ready in
+            if ready, model.error == nil { repo.recordHistory(model.currentChapter) }
+        }
+        .onChange(of: model.currentChapter.key) { _, _ in
+            if model.ready { repo.recordHistory(model.currentChapter) }
+        }
         .onChange(of: model.currentPage) { _, page in if !scrubbing { sliderPage = page } }
         .onChange(of: sliderPage) { _, page in
             // Paged modes follow the slider live; a webtoon jumps when it is let go.
