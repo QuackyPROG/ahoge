@@ -40,8 +40,8 @@ struct MangaCard: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.black).shadow(color: .black.opacity(0.18), radius: 6, y: 3))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.08)))
-            .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
             .accessibilityElement(children: .combine)
     }
 }

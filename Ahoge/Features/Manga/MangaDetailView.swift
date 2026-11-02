@@ -222,6 +222,8 @@ struct MangaDetailView: View {
         }
         .textCase(nil)
         .padding(.vertical, 4)
+        // Bleeds past the header insets so pinned headers show the theme, not a system band.
+        .background { palette.background.color.padding(.horizontal, -40) }
     }
 
     @ViewBuilder
@@ -233,7 +235,7 @@ struct MangaDetailView: View {
                 .buttonStyle(.plain)
                 .swipeActions(edge: .leading) {
                     Button(chapter.read ? "Unread" : "Read", systemImage: chapter.read ? "eye.slash" : "eye") { repo.setRead([chapter], !chapter.read) }
-                        .tint(palette.primary.color)
+                        .tint(Color(uiColor: UIColor(rgb: palette.primary.light))) // UIKit draws swipe labels white
                 }
                 .contextMenu {
                     Button("Select", systemImage: "checkmark.circle") { startSelecting(chapter) }

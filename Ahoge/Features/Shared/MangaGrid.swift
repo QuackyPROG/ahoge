@@ -13,6 +13,7 @@ struct MangaGrid: View {
                     MangaCard(title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref))
                 }
                 .buttonStyle(PressableCardStyle())
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .contextMenu { LibraryToggleButton(ref: ref) }
                 .onAppear { onItemAppear(ref) }
             }

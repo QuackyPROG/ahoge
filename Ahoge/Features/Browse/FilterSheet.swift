@@ -9,7 +9,6 @@ struct FilterSheet: View {
         NavigationStack {
             List {
                 FilterRows(filters: state.filters, values: $state.values)
-                    .themedRows()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Filters")
@@ -34,7 +33,7 @@ private struct FilterRows: View {
 
     var body: some View {
         ForEach(Array(filters.enumerated()), id: \.offset) { _, filter in
-            row(filter)
+            if case .header = filter { row(filter) } else { row(filter).themedRows() }
         }
     }
 
