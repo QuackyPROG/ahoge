@@ -17,6 +17,8 @@ struct RootView: View {
             UpdatesView()
                 .tabItem { Label("Updates", systemImage: "bell") }
                 .badge(unseen)
+            HistoryView()
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
             BrowseView()
                 .tabItem { Label("Browse", systemImage: "safari") }
             MoreView()
