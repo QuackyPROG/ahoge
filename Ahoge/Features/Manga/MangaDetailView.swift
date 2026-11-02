@@ -94,7 +94,7 @@ struct MangaDetailView: View {
 
     private var backdrop: some View {
         GeometryReader { geometry in
-            RemoteImage(url: cover, headers: headers)
+            RemoteImage(url: cover, headers: headers, maxPixelWidth: MangaCard.coverPixelWidth)
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .blur(radius: 18)
                 .opacity(0.45)
@@ -111,7 +111,7 @@ struct MangaDetailView: View {
                 Button { showCover = true } label: {
                     Color.clear
                         .frame(width: 112, height: 168)
-                        .overlay { RemoteImage(url: cover, headers: headers) }
+                        .overlay { RemoteImage(url: cover, headers: headers, maxPixelWidth: MangaCard.coverPixelWidth) }
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
                 }

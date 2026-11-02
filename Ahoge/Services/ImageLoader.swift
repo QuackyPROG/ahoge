@@ -86,14 +86,18 @@ actor ImageLoader {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) > 0 else { return nil }
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
-        let width = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
-        let height = (properties?[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue ?? 0
-        guard width > maxPixelWidth, height > 0 else {
+        var width = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
+        var height = (properties?[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue ?? 0
+        // The pixel size is before rotation, the thumbnail after it: orientations 5-8 turn the image.
+        if let orientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.intValue, orientation >= 5 {
+            swap(&width, &height)
+        }
+        if width > 0, height > 0, width <= maxPixelWidth {
             guard let image = UIImage(data: data) else { return nil }
             return image.preparingForDisplay() ?? image
         }
-        // The thumbnail limit applies to the longer side.
-        let longest = max(maxPixelWidth, (height * maxPixelWidth / width).rounded())
+        // The thumbnail limit applies to the longer side. Unknown dimensions stay capped at the width limit.
+        let longest = width > 0 && height > 0 ? max(maxPixelWidth, (height * maxPixelWidth / width).rounded()) : maxPixelWidth
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
