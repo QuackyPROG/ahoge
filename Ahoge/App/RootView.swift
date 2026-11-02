@@ -5,12 +5,18 @@ struct RootView: View {
     @AppStorage(ThemePrefs.mode) private var mode = ThemeMode.system
     @AppStorage(ThemePrefs.pureBlack) private var pureBlack = false
     @EnvironmentObject private var updater: LibraryUpdater
+    @EnvironmentObject private var repo: LibraryRepository
+    @AppStorage(UpdatesPrefs.lastSeen) private var lastSeen = 0.0
 
     var body: some View {
         let palette = theme.palette(pureBlack: pureBlack)
+        let unseen = repo.updates(since: max(Date(timeIntervalSince1970: lastSeen), UpdatesPrefs.cutoff)).count
         TabView {
             LibraryView()
                 .tabItem { Label("Library", systemImage: "books.vertical") }
+            UpdatesView()
+                .tabItem { Label("Updates", systemImage: "bell") }
+                .badge(unseen)
             BrowseView()
                 .tabItem { Label("Browse", systemImage: "safari") }
             MoreView()
