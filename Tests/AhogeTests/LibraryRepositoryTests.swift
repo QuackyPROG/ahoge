@@ -71,4 +71,15 @@ final class LibraryRepositoryTests: XCTestCase {
         XCTAssertEqual(reopened.manga(sourceId: "en.demo", url: "/m/2")?.title, "Two")
         XCTAssertNil(reopened.manga(sourceId: "en.demo", url: "/m/3"))
     }
+
+    func testUnreadCountFollowsReadChanges() throws {
+        let repo = try repository()
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/9", title: "Nine", cover: "")
+        repo.applyChapters([chapter("/c/2", 2), chapter("/c/1", 1)], to: manga)
+        XCTAssertEqual(manga.unreadCount, 2)
+        repo.setRead([try XCTUnwrap(manga.chapters.first)], true)
+        XCTAssertEqual(manga.unreadCount, 1)
+        repo.saveProgress(try XCTUnwrap(manga.chapters.first { !$0.read }), page: 9, pageCount: 10)
+        XCTAssertEqual(manga.unreadCount, 0)
+    }
 }

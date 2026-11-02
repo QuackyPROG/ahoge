@@ -48,7 +48,10 @@ final class LibraryManga: Identifiable, Codable, FetchableRecord, PersistableRec
 
     /// Newest first, the order the source returned.
     var sortedChapters: [ChapterRecord] { chapters.sorted { $0.sourceOrder < $1.sourceOrder } }
-    var unreadCount: Int { chapters.filter { !$0.read }.count }
+    /// Kept by `LibraryRepository` whenever chapters or read state change; not a column.
+    private(set) var unreadCount = 0
+
+    func refreshUnreadCount() { unreadCount = chapters.reduce(0) { $0 + ($1.read ? 0 : 1) } }
     var ref: MangaRef { MangaRef(sourceId: sourceId, url: url, title: title, cover: coverUrl) }
 }
 

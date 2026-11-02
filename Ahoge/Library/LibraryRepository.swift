@@ -79,6 +79,7 @@ final class LibraryRepository: ObservableObject {
             chapter.manga = owner
             owner.chapters.append(chapter)
         }
+        for owner in manga { owner.refreshUnreadCount() }
         return manga
     }
 
@@ -138,6 +139,7 @@ final class LibraryRepository: ObservableObject {
             return ChapterRecord(manga: manga, state: state)
         }
         manga.lastChapterFetch = Date()
+        manga.refreshUnreadCount()
         write { db in
             for record in removed { try record.delete(db) }
             // upsert: a chapter key already stored under another manga moves here, as SwiftData's unique key did.
@@ -160,6 +162,7 @@ final class LibraryRepository: ObservableObject {
             chapter.read = read
             if !read { chapter.lastPageRead = 0 }
         }
+        refreshCounts(of: chapters)
         write { db in
             for chapter in chapters { try chapter.update(db) }
         }
@@ -176,11 +179,19 @@ final class LibraryRepository: ObservableObject {
         chapter.objectWillChange.send()
         chapter.lastPageRead = page
         if page >= pageCount - 1 { chapter.read = true }
+        chapter.manga?.refreshUnreadCount()
         let manga = chapter.manga
         manga?.lastReadAt = Date()
         write { db in
             try chapter.update(db)
             try manga?.update(db)
+        }
+    }
+
+    private func refreshCounts(of chapters: [ChapterRecord]) {
+        var seen = Set<ObjectIdentifier>()
+        for case let manga? in chapters.map(\.manga) where seen.insert(ObjectIdentifier(manga)).inserted {
+            manga.refreshUnreadCount()
         }
     }
 
