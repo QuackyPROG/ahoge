@@ -103,6 +103,16 @@ final class JSHost {
         }
     }
 
+    /// Sets `source[name]` to the value of this JSON text, so methods read it as `this[name]`.
+    /// Used for the proposed host API v2 `this.prefs`.
+    func setSourceProperty(_ name: String, json: String) {
+        queue.sync {
+            guard let source, let value = context.objectForKeyedSubscript("JSON")?.invokeMethod("parse", withArguments: [json]) else { return }
+            context.exception = nil
+            source.setValue(value, forProperty: name)
+        }
+    }
+
     /// Calls `source[method](...arguments)`, awaits its promise, and returns the JSON-serialized result.
     /// The timeout runs on a global queue so it fires even while JavaScript is busy, and cancelling the
     /// calling task ends the call with `CancellationError`.

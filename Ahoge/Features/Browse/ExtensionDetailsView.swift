@@ -60,6 +60,7 @@ struct ExtensionDetailsView: View {
             .themedRows()
 
             Section {
+                SourcePreferencesLink(sourceId: item.id)
                 Toggle(isOn: Binding(get: { incognito }, set: { setIncognito($0) })) {
                     Label("Incognito for this source", systemImage: "eyeglasses")
                 }

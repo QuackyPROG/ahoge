@@ -20,6 +20,7 @@ final class SourceManager: ObservableObject {
         let jar = CookieJar()
         jar.seed(SharedCookies.cookies(forBaseURL: info.baseUrl))
         let source = try ScriptSource(script: try extensions.scriptText(for: id), http: HTTPClient(jar: jar))
+        source.applyPreferences(json: SourcePreferenceStore.json(for: id))
         cache[id] = (info.sha256, source)
         return source
     }
@@ -28,6 +29,11 @@ final class SourceManager: ObservableObject {
     func importWebCookies(_ cookies: [HTTPCookie]) {
         SharedCookies.store(cookies)
         for entry in cache.values { entry.source.host.http.jar.seed(cookies) }
+    }
+
+    /// Hands a source's changed settings to its running instance; a new instance reads them on creation.
+    func preferencesChanged(_ id: String) {
+        cache[id]?.source.applyPreferences(json: SourcePreferenceStore.json(for: id))
     }
 
     /// Drops one source's running instance, so its next call starts with fresh cookies.

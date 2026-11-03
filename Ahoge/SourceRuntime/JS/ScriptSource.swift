@@ -22,6 +22,20 @@ final class ScriptSource {
         let list: FilterList = try await call("filters", [])
         return list.filters
     }
+    /// The source's settings schema, or none when the script has no `preferences` method
+    /// (proposed host API v2; every current extension has none).
+    func preferences() async throws -> [SourcePreference] {
+        guard host.hasMethod("preferences") else { return [] }
+        return try await call("preferences", [])
+    }
+
+    /// Hands saved settings to the script as `this.prefs`. Does nothing for a script without
+    /// `preferences`, so sources written for host API v1 see no change.
+    func applyPreferences(json: String) {
+        guard host.hasMethod("preferences") else { return }
+        host.setSourceProperty("prefs", json: json)
+    }
+
     func details(url: String) async throws -> MangaDetails { try await call("details", [url]) }
     func chapters(url: String) async throws -> [SourceChapter] { try await call("chapters", [url]) }
     func pages(url: String) async throws -> [SourcePage] { try await call("pages", [url]) }
