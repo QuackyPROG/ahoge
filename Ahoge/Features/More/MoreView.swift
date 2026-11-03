@@ -56,6 +56,9 @@ struct MoreView: View {
                     NavigationLink { CategoriesView() } label: {
                         Label { Text("Categories") } icon: { SettingsIcon(systemName: "folder.fill", color: .blue) }
                     }
+                    NavigationLink { UpdateSettingsView() } label: {
+                        Label { Text("Library updates") } icon: { SettingsIcon(systemName: "arrow.triangle.2.circlepath", color: .orange) }
+                    }
                     NavigationLink { MigrateSourcesView() } label: {
                         Label { Text("Migrate") } icon: { SettingsIcon(systemName: "arrow.left.arrow.right", color: .green) }
                     }

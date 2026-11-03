@@ -32,4 +32,12 @@ extension LibraryRepository {
         }
         return cutoff == .distantPast ? all : all.filter { $0.date > cutoff }
     }
+
+    /// Sets a title's own check interval in days (0 never); nil goes back to the prediction.
+    func setUpdateInterval(_ days: Int?, for manga: LibraryManga) {
+        objectWillChange.send()
+        manga.updateInterval = days
+        manga.nextUpdate = manga.lastChapterFetch.flatMap { ReleasePredictor.nextUpdate(for: manga, lastFetch: $0) }
+        write { try manga.update($0) }
+    }
 }

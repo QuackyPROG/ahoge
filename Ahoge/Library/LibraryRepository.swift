@@ -219,7 +219,9 @@ final class LibraryRepository: ObservableObject {
             if markDuplicates, record.number >= 0, readNumbers.contains(record.number) { record.read = true }
             return record
         }
-        manga.lastChapterFetch = Date()
+        let now = Date()
+        manga.lastChapterFetch = now
+        manga.nextUpdate = ReleasePredictor.nextUpdate(for: manga, lastFetch: now)
         manga.refreshUnreadCount()
         write { db in
             for record in removed { try record.delete(db) }

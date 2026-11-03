@@ -217,6 +217,7 @@ struct MangaDetailView: View {
                 .padding(.top, 4)
             }
             actions
+            if manga?.inLibrary == true, let manga { UpdateIntervalRow(manga: manga) }
             if let summary = manga?.summary.nonEmpty { MangaDescription(summary: summary, expanded: $expanded) }
             if let notes = manga?.notes.nonEmpty { notesBlock(notes) }
             if let genres = manga?.genres, !genres.isEmpty { genreChips(genres) }

@@ -24,7 +24,10 @@ extension Pref {
         removeAfterMarkedRead.name, removeAfterReading.name, removeBookmarkedToo.name, downloadAhead.name,
         downloadNewChapters.name, downloadedOnly.name, clearChapterCacheOnLaunch.name,
         swipeRight.name, swipeLeft.name, hideMissingChapters.name, markDuplicateRead.name, chapterDisplayDefault.name,
-        updatesBookmarked.name,
+        updatesBookmarked.name, updatesDownloaded.name, updatesUnread.name, updatesStarted.name, updatesBadge.name,
+        autoUpdateInterval.name, autoUpdateOnlyCharging.name, updateSkipUnread.name, updateSkipUnstarted.name,
+        updateSkipCompleted.name, updateSmart.name, updateRefreshMetadata.name, updateNotify.name,
+        updateHideNotificationContent.name,
     ]
 }
 

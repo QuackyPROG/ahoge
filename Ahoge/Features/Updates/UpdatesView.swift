@@ -101,6 +101,10 @@ struct UpdatesView: View {
                         .accessibilityLabel("Filter updates")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink { UpcomingView() } label: { Image(systemName: "calendar") }
+                            .accessibilityLabel("Upcoming updates")
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
                         Button("Update library", systemImage: "arrow.clockwise") {
                             Task { await updater.update(repo.library, repo: repo, sources: sources) }
                         }

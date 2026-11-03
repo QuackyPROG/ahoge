@@ -17,26 +17,53 @@ final class LibraryUpdater: ObservableObject {
     /// leaving the screen that started it (and its `.refreshable` task) does not abort it.
     private var running: Task<Void, Never>?
 
+    /// Who asked for the update: the background task, or the user.
+    enum Trigger {
+        case automatic
+        /// A pull-to-refresh or menu item: keeps the skip rules but ignores "not due yet".
+        case manual
+    }
+
+    /// Stops the run in progress after the title being fetched; what was fetched stays saved.
+    func cancel() { running?.cancel() }
+
     /// Runs an update, or waits for the one already running.
-    func update(_ manga: [LibraryManga], repo: LibraryRepository, sources: SourceManager) async {
+    func update(_ manga: [LibraryManga], repo: LibraryRepository, sources: SourceManager, trigger: Trigger = .manual) async {
         if let running {
             await running.value
             return
         }
-        guard !isRunning, !manga.isEmpty else { return }
+        let rules = UpdateRules.current(categories: repo.categories)
+        let started = Date()
+        var queue = manga.filter { title in
+            let reason = UpdatePolicy.decide(title, categories: repo.categoryIds(of: title), rules: rules, now: started)
+            return reason == nil || (trigger == .manual && reason == .notDue)
+        }
+        // Background runs can be cut short, so the titles checked longest ago go first.
+        if trigger == .automatic { queue.sort { ($0.lastChapterFetch ?? .distantPast) < ($1.lastChapterFetch ?? .distantPast) } }
+        guard !isRunning, !queue.isEmpty else { return }
         isRunning = true
         done = 0
-        total = manga.count
+        total = queue.count
+        let refreshMetadata = Pref.updateRefreshMetadata.value()
+        let titles = queue
         let task = Task { @MainActor in
             var errors: [String] = []
-            for title in manga {
+            for title in titles {
+                if Task.isCancelled { break }
                 do {
                     let source = try sources.source(title.sourceId)
+                    // A failing details call must not stop the chapters from updating.
+                    if refreshMetadata, let details = try? await source.details(url: title.url) {
+                        repo.upsert(sourceId: title.sourceId, url: title.url, details: details)
+                    }
                     let before = Set(title.chapters.map(\.key))
                     repo.applyChapters(try await source.chapters(url: title.url), to: title)
                     // A title's first fetch is not "new chapters".
                     let found = before.isEmpty ? [] : title.chapters.filter { !before.contains($0.key) }
-                    if !found.isEmpty { self.downloads?.chaptersFound(found, in: title) }
+                    if !found.isEmpty {
+                        self.downloads?.chaptersFound(found, in: title)
+                    }
                 } catch is CancellationError {
                     // Not the title's fault.
                 } catch let error as URLError where error.code == .cancelled {
