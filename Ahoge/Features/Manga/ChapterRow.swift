@@ -7,6 +7,8 @@ struct ChapterRow: View {
     /// Shown in place of the chapter's own name ("Chapter N" display).
     var title: String?
     @Environment(\.palette) private var palette
+    @AppStorage(Pref.dateFormat.name) private var dateFormat = Pref.dateFormat.defaultValue
+    @AppStorage(Pref.relativeTimestamps.name) private var relativeDates = Pref.relativeTimestamps.defaultValue
 
     var body: some View {
         HStack(spacing: 10) {
@@ -16,7 +18,7 @@ struct ChapterRow: View {
                     .foregroundStyle(isCurrent ? palette.primary.color : chapter.read ? Color.secondary : Color.primary)
                     .lineLimit(2)
                 HStack(spacing: 4) {
-                    if let date = chapter.dateUpload { Text(date, format: .dateTime.year().month(.abbreviated).day()) }
+                    if let date = chapter.dateUpload { Text(DateFormatting.string(for: date, format: dateFormat, relative: relativeDates, now: Date())) }
                     if let scanlator = chapter.scanlator, !scanlator.isEmpty {
                         if chapter.dateUpload != nil { Text("•") }
                         Text(scanlator).lineLimit(1)

@@ -228,3 +228,11 @@ extension Pref {
     /// Sent to sources and image servers instead of the built-in Safari one; empty keeps the built-in.
     static let customUserAgent = Key("advanced.userAgent", "")
 }
+
+extension Pref {
+    // MARK: Dates
+    /// "system", or a `DateFormatter` pattern from `DateFormatting.presets`.
+    static let dateFormat = Key("ui.dateFormat", "system")
+    /// Recent dates read "Today", "Yesterday" or "3 days ago".
+    static let relativeTimestamps = Key("ui.relativeTimestamps", true)
+}
