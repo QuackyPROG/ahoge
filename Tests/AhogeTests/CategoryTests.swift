@@ -29,7 +29,7 @@ final class CategoryTests: XCTestCase {
     }
 
     func testRenameReorderDelete() throws {
-        let key = LibraryPrefs.defaultCategory
+        let key = Pref.libraryDefaultCategory.name
         let saved = UserDefaults.standard.object(forKey: key)
         defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
         let (repo, a, _) = try libraryWithTwo()
@@ -87,7 +87,7 @@ final class CategoryTests: XCTestCase {
     }
 
     func testDeletingTheDefaultCategoryResetsThePreference() throws {
-        let key = LibraryPrefs.defaultCategory
+        let key = Pref.libraryDefaultCategory.name
         let saved = UserDefaults.standard.object(forKey: key)
         defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
         let repo = try LibraryRepository.inMemory()

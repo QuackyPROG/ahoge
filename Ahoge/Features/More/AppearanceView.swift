@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Mihon's Appearance settings: theme mode, app theme with previews, pure black.
 struct AppearanceView: View {
-    @AppStorage(ThemePrefs.theme) private var theme = AppTheme.standard
-    @AppStorage(ThemePrefs.mode) private var mode = ThemeMode.system
-    @AppStorage(ThemePrefs.pureBlack) private var pureBlack = false
+    @AppStorage(Pref.theme.name) private var theme = AppTheme.standard
+    @AppStorage(Pref.themeMode.name) private var mode = ThemeMode.system
+    @AppStorage(Pref.pureBlack.name) private var pureBlack = false
 
     var body: some View {
         List {

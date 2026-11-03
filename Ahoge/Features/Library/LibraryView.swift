@@ -12,8 +12,8 @@ struct LibraryView: View {
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var updater: LibraryUpdater
-    @AppStorage("library.sort") private var sort: Sort = .title
-    @AppStorage(LibraryPrefs.shelf) private var shelf = 0
+    @AppStorage(Pref.librarySort.name) private var sort: Sort = .title
+    @AppStorage(Pref.libraryShelf.name) private var shelf = 0
     @State private var search = ""
     @State private var selecting = false
     @State private var selection = Set<String>()

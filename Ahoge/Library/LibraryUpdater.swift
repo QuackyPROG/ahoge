@@ -4,14 +4,12 @@ import Foundation
 /// Updates so only one runs at a time.
 @MainActor
 final class LibraryUpdater: ObservableObject {
-    private static let lastUpdatedKey = "library.lastUpdated"
-
     @Published private(set) var isRunning = false
     @Published private(set) var done = 0
     @Published private(set) var total = 0
     /// "Title: reason" for each title that failed in the last run; cleared by the alert.
     @Published var failures: [String] = []
-    @Published private(set) var lastUpdated = UserDefaults.standard.object(forKey: LibraryUpdater.lastUpdatedKey) as? Date
+    @Published private(set) var lastUpdated = Pref.libraryLastUpdated.value()
 
     /// The run in progress. Unstructured, so it does not inherit the caller's cancellation:
     /// leaving the screen that started it (and its `.refreshable` task) does not abort it.
@@ -44,7 +42,7 @@ final class LibraryUpdater: ObservableObject {
             }
             let now = Date()
             self.lastUpdated = now
-            UserDefaults.standard.set(now, forKey: Self.lastUpdatedKey)
+            Pref.libraryLastUpdated.set(now)
             self.failures = errors
             self.isRunning = false
             self.running = nil

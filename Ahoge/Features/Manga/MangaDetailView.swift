@@ -11,7 +11,7 @@ struct MangaDetailView: View {
     @State private var reading: ChapterRecord?
     @State private var webTarget: WebTarget?
     @State private var showCover = false
-    @AppStorage(LibraryPrefs.defaultCategory) private var defaultCategory = LibraryPrefs.alwaysAsk
+    @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
     @State private var choosingCategories = false
     @State private var display: ChapterDisplay
     @State private var selecting = false

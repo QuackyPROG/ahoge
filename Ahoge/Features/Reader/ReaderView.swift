@@ -11,14 +11,14 @@ struct ReaderView: View {
     @State private var showChapters = false
     @State private var showSettings = false
     @State private var mode: ReadingMode
-    @AppStorage(ReaderPrefs.background) private var background = ReaderBackground.black
-    @AppStorage(ReaderPrefs.showPageNumber) private var showPageNumber = true
-    @AppStorage(ReaderPrefs.keepScreenOn) private var keepScreenOn = true
-    @AppStorage(ReaderPrefs.dim) private var dim = 0.0
-    @AppStorage(ReaderPrefs.tapZones) private var tapZones = true
-    @AppStorage(ReaderPrefs.invertTaps) private var invertTaps = false
-    @AppStorage(ReaderPrefs.webtoonPadding) private var webtoonPadding = 0.0
-    @AppStorage(ReaderPrefs.webtoonGap) private var webtoonGap = false
+    @AppStorage(Pref.readerBackground.name) private var background = ReaderBackground.black
+    @AppStorage(Pref.readerShowPageNumber.name) private var showPageNumber = true
+    @AppStorage(Pref.readerKeepScreenOn.name) private var keepScreenOn = true
+    @AppStorage(Pref.readerDim.name) private var dim = 0.0
+    @AppStorage(Pref.readerTapZones.name) private var tapZones = true
+    @AppStorage(Pref.readerInvertTaps.name) private var invertTaps = false
+    @AppStorage(Pref.readerWebtoonPadding.name) private var webtoonPadding = 0.0
+    @AppStorage(Pref.readerWebtoonGap.name) private var webtoonGap = false
     private let start: ChapterRecord
 
     init(sourceId: String, manga: LibraryManga, chapter: ChapterRecord) {

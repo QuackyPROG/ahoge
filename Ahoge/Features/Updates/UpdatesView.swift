@@ -1,8 +1,6 @@
 import SwiftUI
 
 enum UpdatesPrefs {
-    /// When the Updates tab was last open (seconds since 1970); newer chapters count in its badge.
-    static let lastSeen = "updates.lastSeen"
     /// Mihon shows three months of updates.
     static var cutoff: Date { Date().addingTimeInterval(-90 * 86_400) }
 }
@@ -13,7 +11,7 @@ struct UpdatesView: View {
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var updater: LibraryUpdater
     @Environment(\.palette) private var palette
-    @AppStorage(UpdatesPrefs.lastSeen) private var lastSeen = 0.0
+    @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
     @State private var reading: UpdateEntry?
     @State private var visible = false
 

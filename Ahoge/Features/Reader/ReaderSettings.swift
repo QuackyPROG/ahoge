@@ -26,7 +26,7 @@ enum ReadingMode: String, CaseIterable, Identifiable {
 
     var isPaged: Bool { self != .webtoon }
 
-    private static let defaultKey = "reader.mode.default"
+    private static let defaultKey = Pref.readerMode.name
     private static func key(_ mangaKey: String) -> String { "reader.mode\n" + mangaKey }
 
     static var preferred: ReadingMode {
@@ -60,28 +60,16 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
     var foreground: Color { self == .white ? .black : .white }
 }
 
-/// Reader preferences shared by every manga, stored in UserDefaults.
-enum ReaderPrefs {
-    static let background = "reader.background"
-    static let showPageNumber = "reader.showPageNumber"
-    static let keepScreenOn = "reader.keepScreenOn"
-    static let dim = "reader.dim"
-    static let tapZones = "reader.tapZones"
-    static let invertTaps = "reader.invertTaps"
-    static let webtoonPadding = "reader.webtoonPadding"
-    static let webtoonGap = "reader.webtoonGap"
-}
-
 struct ReaderSettingsSheet: View {
     @Binding var mode: ReadingMode
-    @AppStorage(ReaderPrefs.background) private var background = ReaderBackground.black
-    @AppStorage(ReaderPrefs.showPageNumber) private var showPageNumber = true
-    @AppStorage(ReaderPrefs.keepScreenOn) private var keepScreenOn = true
-    @AppStorage(ReaderPrefs.dim) private var dim = 0.0
-    @AppStorage(ReaderPrefs.tapZones) private var tapZones = true
-    @AppStorage(ReaderPrefs.invertTaps) private var invertTaps = false
-    @AppStorage(ReaderPrefs.webtoonPadding) private var webtoonPadding = 0.0
-    @AppStorage(ReaderPrefs.webtoonGap) private var webtoonGap = false
+    @AppStorage(Pref.readerBackground.name) private var background = ReaderBackground.black
+    @AppStorage(Pref.readerShowPageNumber.name) private var showPageNumber = true
+    @AppStorage(Pref.readerKeepScreenOn.name) private var keepScreenOn = true
+    @AppStorage(Pref.readerDim.name) private var dim = 0.0
+    @AppStorage(Pref.readerTapZones.name) private var tapZones = true
+    @AppStorage(Pref.readerInvertTaps.name) private var invertTaps = false
+    @AppStorage(Pref.readerWebtoonPadding.name) private var webtoonPadding = 0.0
+    @AppStorage(Pref.readerWebtoonGap.name) private var webtoonGap = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

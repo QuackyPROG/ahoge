@@ -5,7 +5,7 @@ struct MoreView: View {
     @EnvironmentObject private var sources: SourceManager
     @Environment(\.palette) private var palette
     @EnvironmentObject private var repo: LibraryRepository
-    @AppStorage(LibraryPrefs.defaultCategory) private var defaultCategory = LibraryPrefs.alwaysAsk
+    @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
     @State private var showRepos = false
     @State private var message: String?
 

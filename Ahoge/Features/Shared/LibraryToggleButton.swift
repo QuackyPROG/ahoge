@@ -5,7 +5,7 @@ struct LibraryToggleButton: View {
     /// Called after adding when the user should pick categories ("Always ask").
     var chooseCategories: (LibraryManga) -> Void = { _ in }
     @EnvironmentObject private var repo: LibraryRepository
-    @AppStorage(LibraryPrefs.defaultCategory) private var defaultCategory = LibraryPrefs.alwaysAsk
+    @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
 
     var body: some View {
         let inLibrary = repo.manga(sourceId: ref.sourceId, url: ref.url)?.inLibrary ?? false

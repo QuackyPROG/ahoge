@@ -2,14 +2,10 @@ import Foundation
 import GRDB
 import SwiftUI
 
-/// Library preferences, stored in UserDefaults.
+/// Values of `Pref.libraryDefaultCategory` besides a category id.
 enum LibraryPrefs {
-    /// Where new library titles go: a category id, `uncategorized` or `alwaysAsk`.
-    static let defaultCategory = "library.defaultCategory"
     static let alwaysAsk = -1
     static let uncategorized = 0
-    /// The Library tab last shown: a category id, or 0 for Default.
-    static let shelf = "library.shelf"
 }
 
 extension LibraryRepository {
@@ -45,8 +41,8 @@ extension LibraryRepository {
 
     /// Its titles stay in the library; those left in no category show under Default.
     func deleteCategory(_ id: Int64) {
-        if UserDefaults.standard.object(forKey: LibraryPrefs.defaultCategory) as? Int == Int(id) {
-            UserDefaults.standard.set(LibraryPrefs.alwaysAsk, forKey: LibraryPrefs.defaultCategory)
+        if UserDefaults.standard.object(forKey: Pref.libraryDefaultCategory.name) as? Int == Int(id) {
+            UserDefaults.standard.set(LibraryPrefs.alwaysAsk, forKey: Pref.libraryDefaultCategory.name)
         }
         objectWillChange.send()
         categories.removeAll { $0.id == id }

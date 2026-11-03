@@ -1,12 +1,12 @@
 import SwiftUI
 
 struct RootView: View {
-    @AppStorage(ThemePrefs.theme) private var theme = AppTheme.standard
-    @AppStorage(ThemePrefs.mode) private var mode = ThemeMode.system
-    @AppStorage(ThemePrefs.pureBlack) private var pureBlack = false
+    @AppStorage(Pref.theme.name) private var theme = AppTheme.standard
+    @AppStorage(Pref.themeMode.name) private var mode = ThemeMode.system
+    @AppStorage(Pref.pureBlack.name) private var pureBlack = false
     @EnvironmentObject private var updater: LibraryUpdater
     @EnvironmentObject private var repo: LibraryRepository
-    @AppStorage(UpdatesPrefs.lastSeen) private var lastSeen = 0.0
+    @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
 
     var body: some View {
         let palette = theme.palette(pureBlack: pureBlack)
