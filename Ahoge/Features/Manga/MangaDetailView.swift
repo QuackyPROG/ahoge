@@ -4,6 +4,7 @@ struct MangaDetailView: View {
     let ref: MangaRef
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
+    @EnvironmentObject private var downloads: DownloadManager
     @Environment(\.palette) private var palette
     @State private var isLoading = false
     @State private var error: Error?
@@ -17,6 +18,7 @@ struct MangaDetailView: View {
     @State private var selecting = false
     @State private var selection = Set<String>()
     @State private var visible = VisibleRows()
+    @State private var removedWithDownloads: LibraryManga?
 
     init(ref: MangaRef) {
         self.ref = ref
@@ -97,6 +99,14 @@ struct MangaDetailView: View {
         .sheet(isPresented: $showCover) { CoverSheet(url: cover, headers: headers) }
         .sheet(isPresented: $choosingCategories) {
             if let manga { SetCategoriesSheet(manga: [manga]) }
+        }
+        .alert("Delete downloaded chapters?", isPresented: Binding(get: { removedWithDownloads != nil }, set: { if !$0 { removedWithDownloads = nil } })) {
+            Button("Delete", role: .destructive) {
+                if let manga = removedWithDownloads { downloads.delete(manga.chapters) }
+            }
+            Button("Keep", role: .cancel) {}
+        } message: {
+            Text("The title is no longer in your library.")
         }
         .fullScreenCover(item: $reading) { chapter in
             if let manga { ReaderView(sourceId: ref.sourceId, manga: manga, chapter: chapter) }
@@ -235,19 +245,27 @@ struct MangaDetailView: View {
         if selecting {
             ChapterRow(chapter: chapter)
         } else {
-            Button { reading = chapter } label: { ChapterRow(chapter: chapter) }
-                .buttonStyle(.plain)
-                .swipeActions(edge: .leading) {
-                    Button(chapter.read ? "Unread" : "Read", systemImage: chapter.read ? "eye.slash" : "eye") { repo.setRead([chapter], !chapter.read) }
-                        .tint(Color(uiColor: UIColor(rgb: palette.primary.light))) // UIKit draws swipe labels white
+            HStack(spacing: 4) {
+                Button { reading = chapter } label: { ChapterRow(chapter: chapter) }
+                    .buttonStyle(.plain)
+                ChapterDownloadButton(chapter: chapter)
+            }
+            .swipeActions(edge: .leading) {
+                Button(chapter.read ? "Unread" : "Read", systemImage: chapter.read ? "eye.slash" : "eye") { repo.setRead([chapter], !chapter.read) }
+                    .tint(Color(uiColor: UIColor(rgb: palette.primary.light))) // UIKit draws swipe labels white
+            }
+            .contextMenu {
+                Button("Select", systemImage: "checkmark.circle") { startSelecting(chapter) }
+                Button(chapter.read ? "Mark as unread" : "Mark as read", systemImage: chapter.read ? "eye.slash" : "eye") {
+                    repo.setRead([chapter], !chapter.read)
                 }
-                .contextMenu {
-                    Button("Select", systemImage: "checkmark.circle") { startSelecting(chapter) }
-                    Button(chapter.read ? "Mark as unread" : "Mark as read", systemImage: chapter.read ? "eye.slash" : "eye") {
-                        repo.setRead([chapter], !chapter.read)
-                    }
-                    Button("Mark previous as read", systemImage: "arrow.down.to.line") { repo.markPreviousRead(chapter, in: manga) }
+                Button("Mark previous as read", systemImage: "arrow.down.to.line") { repo.markPreviousRead(chapter, in: manga) }
+                if downloads.isDownloaded(chapter.key) {
+                    Button("Delete download", systemImage: "trash", role: .destructive) { downloads.delete([chapter]) }
+                } else {
+                    Button("Download", systemImage: "arrow.down.circle") { downloads.enqueue([chapter]) }
                 }
+            }
         }
     }
 
@@ -262,10 +280,17 @@ struct MangaDetailView: View {
                 // The newest selected chapter and everything older.
                 finishSelection { if let newest = chosen.min(by: { $0.sourceOrder < $1.sourceOrder }) { repo.markPreviousRead(newest, in: manga) } }
             }
+            Spacer()
+            Button("Download", systemImage: "arrow.down.circle") {
+                // Oldest first, the order they are read in.
+                finishSelection { downloads.enqueue(chosen.sorted { $0.sourceOrder > $1.sourceOrder }) }
+            }
+            Spacer()
+            Button("Delete", systemImage: "trash") { finishSelection { downloads.delete(chosen) } }
         }
         .labelStyle(VerticalLabelStyle())
         .disabled(chosen.isEmpty)
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .background(.bar)
     }
@@ -281,6 +306,9 @@ struct MangaDetailView: View {
                 Button(selection == all ? "Deselect all" : "Select all") { selection = selection == all ? [] : all }
             }
         } else {
+            if let manga, !manga.chapters.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) { downloadMenu(manga) }
+            }
             if manga?.inLibrary == true {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { choosingCategories = true } label: { Image(systemName: "folder") }
@@ -321,6 +349,27 @@ struct MangaDetailView: View {
         }
     }
 
+    /// Mihon's download menu: the next unread chapters, every unread one, or all.
+    private func downloadMenu(_ manga: LibraryManga) -> some View {
+        Menu {
+            Button("Next chapter") { downloadUnread(of: manga, limit: 1) }
+            Button("Next 5 chapters") { downloadUnread(of: manga, limit: 5) }
+            Button("Next 10 chapters") { downloadUnread(of: manga, limit: 10) }
+            Button("Unread") { downloadUnread(of: manga, limit: nil) }
+            Button("All") { downloads.enqueue(manga.chapters.sorted { $0.sourceOrder > $1.sourceOrder }) }
+        } label: {
+            Image(systemName: "arrow.down.circle")
+        }
+        .accessibilityLabel("Download")
+    }
+
+    private func downloadUnread(of manga: LibraryManga, limit: Int?) {
+        let unread = manga.chapters
+            .filter { !$0.read && !downloads.isDownloaded($0.key) }
+            .sorted { $0.sourceOrder > $1.sourceOrder }
+        downloads.enqueue(limit.map { Array(unread.prefix($0)) } ?? unread)
+    }
+
     private func startSelecting(_ chapter: ChapterRecord) {
         selection = [chapter.key]
         withAnimation { selecting = true }
@@ -338,6 +387,7 @@ struct MangaDetailView: View {
         let target = manga ?? repo.upsert(sourceId: ref.sourceId, url: ref.url, title: ref.title, cover: ref.cover)
         if target.inLibrary {
             repo.setInLibrary(target, false)
+            if downloads.downloadedCount(mangaKey: target.key) > 0 { removedWithDownloads = target }
         } else if repo.addToLibrary(target, defaultCategory: defaultCategory) {
             choosingCategories = true
         }
