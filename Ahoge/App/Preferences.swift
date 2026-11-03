@@ -56,6 +56,16 @@ enum Pref {
     /// Source ids pinned to the top of Sources.
     static let pinnedSources = Key<[String]>("browse.pinnedSources", [])
     static let lastUsedSource = Key("browse.lastUsedSource", "")
+    /// Source ids hidden from Sources and global search (they stay installed).
+    static let disabledSources = Key<[String]>("browse.disabledSources", [])
+    /// Language codes hidden from Sources and global search.
+    static let disabledLanguages = Key<[String]>("browse.disabledLanguages", [])
+    /// A `ContentFilter`: which sources to show by the repository's 18+ flag.
+    static let browseContentFilter = Key("browse.contentFilter", "all")
+    /// A `LibraryDisplayMode` for a source's results; Browse offers the compact grid and the list.
+    static let browseDisplayMode = Key("browse.displayMode", "compact")
+    /// Global search covers pinned sources only.
+    static let globalSearchPinnedOnly = Key("browse.globalSearchPinnedOnly", false)
 
     // MARK: Reader
     static let readerMode = Key("reader.mode.default", "webtoon")

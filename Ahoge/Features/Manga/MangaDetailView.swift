@@ -249,9 +249,7 @@ struct MangaDetailView: View {
             }
             .buttonStyle(.plain)
             .contextMenu {
-                if GlobalSearchAvailable.isOn {
-                    Button("Search all sources", systemImage: "magnifyingglass") { globalQuery = genre }
-                }
+                Button("Search all sources", systemImage: "magnifyingglass") { globalQuery = genre }
                 Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = genre }
             }
         }

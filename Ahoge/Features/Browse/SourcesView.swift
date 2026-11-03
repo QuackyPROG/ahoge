@@ -5,6 +5,9 @@ struct SourcesView: View {
     @AppStorage(Pref.lastUsedSource.name) private var lastUsed = ""
     @State private var pinned = Pref.pinnedSources.value()
     @State private var incognito = Pref.incognitoSources.value()
+    @State private var globalQuery = ""
+    /// A submitted search, pushed as the global search screen.
+    @State private var searching: String?
 
     var body: some View {
         let installed = store.installed
@@ -34,6 +37,12 @@ struct SourcesView: View {
             }
         }
         .themedScreen()
+        .searchable(text: $globalQuery, prompt: "Search all sources")
+        .onSubmit(of: .search) {
+            let query = globalQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !query.isEmpty { searching = query }
+        }
+        .navigationDestination(item: $searching) { RouteView(route: .globalSearch($0)) }
     }
 
     private func row(_ item: InstalledSource) -> some View {

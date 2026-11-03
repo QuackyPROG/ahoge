@@ -203,12 +203,10 @@ struct LibraryView: View {
         } else if !search.isEmpty {
             VStack(spacing: 16) {
                 ContentUnavailableView.search(text: search)
-                if GlobalSearchAvailable.isOn {
-                    NavigationLink(value: Route.globalSearch(search)) {
-                        Label("Search globally", systemImage: "globe")
-                    }
-                    .buttonStyle(.bordered)
+                NavigationLink(value: Route.globalSearch(search)) {
+                    Label("Search globally", systemImage: "globe")
                 }
+                .buttonStyle(.bordered)
             }
         } else if filters.isActive {
             ContentUnavailableView("No titles match the filters", systemImage: "line.3.horizontal.decrease.circle", description: Text("Change them from the filter button."))
