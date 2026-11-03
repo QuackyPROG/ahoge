@@ -5,19 +5,25 @@ struct SourcesView: View {
     @AppStorage(Pref.lastUsedSource.name) private var lastUsed = ""
     @State private var pinned = Pref.pinnedSources.value()
     @State private var incognito = Pref.incognitoSources.value()
+    @State private var visibility = SourceVisibility.current()
     @State private var globalQuery = ""
     /// A submitted search, pushed as the global search screen.
     @State private var searching: String?
 
     var body: some View {
-        let installed = store.installed
+        // Sources switched off in the filter screen are left out everywhere here.
+        let installed = store.installed.filter { visibility.shows($0) }
         let pinnedItems = pinned.compactMap { id in installed.first { $0.id == id } }
         // Pinned sources move to their own section; the rest stay grouped by language.
         let rest = installed.filter { !pinned.contains($0.id) }
         let groups = Dictionary(grouping: rest, by: \.lang).sorted { $0.key < $1.key }
         List {
             if installed.isEmpty {
-                ContentUnavailableView("No sources", systemImage: "puzzlepiece.extension", description: Text("Install sources from Extensions."))
+                if store.installed.isEmpty {
+                    ContentUnavailableView("No sources", systemImage: "puzzlepiece.extension", description: Text("Install sources from Extensions."))
+                } else {
+                    ContentUnavailableView("All sources are hidden", systemImage: "line.3.horizontal.decrease.circle", description: Text("Turn them back on from the filter button."))
+                }
             }
             if let recent = installed.first(where: { $0.id == lastUsed }) {
                 Section("Last used") { row(recent) }
@@ -43,6 +49,17 @@ struct SourcesView: View {
             if !query.isEmpty { searching = query }
         }
         .navigationDestination(item: $searching) { RouteView(route: .globalSearch($0)) }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { SourceFilterView() } label: { Image(systemName: "line.3.horizontal.decrease.circle") }
+                    .accessibilityLabel("Filter sources")
+            }
+        }
+        // Back from the filter or details screens, which change these settings.
+        .onAppear {
+            visibility = .current()
+            incognito = Pref.incognitoSources.value()
+        }
     }
 
     private func row(_ item: InstalledSource) -> some View {
