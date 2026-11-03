@@ -147,8 +147,14 @@ struct LibraryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 let all = Set(visible(snap.buckets[snap.currentId] ?? []).map(\.key))
                 let everything = !all.isEmpty && selection.isSuperset(of: all)
-                Button(everything ? "Deselect all" : "Select all") {
-                    if everything { selection.subtract(all) } else { selection.formUnion(all) }
+                Menu("Select") {
+                    Button(everything ? "Deselect all" : "Select all", systemImage: "checkmark.circle") {
+                        if everything { selection.subtract(all) } else { selection.formUnion(all) }
+                    }
+                    // Flips every title on this shelf; selections on other shelves stay.
+                    Button("Select inverse", systemImage: "circle.lefthalf.filled") {
+                        selection = selection.subtracting(all).union(all.subtracting(selection))
+                    }
                 }
             }
         } else {
