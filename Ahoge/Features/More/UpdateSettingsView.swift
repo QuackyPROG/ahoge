@@ -12,6 +12,10 @@ struct UpdateSettingsView: View {
     @AppStorage(Pref.autoUpdateInterval.name) private var interval = Pref.autoUpdateInterval.defaultValue
     @AppStorage(Pref.autoUpdateOnlyCharging.name) private var onlyCharging = Pref.autoUpdateOnlyCharging.defaultValue
 
+    @AppStorage(Pref.updateNotify.name) private var notify = Pref.updateNotify.defaultValue
+    @AppStorage(Pref.updateHideNotificationContent.name) private var hideContent = Pref.updateHideNotificationContent.defaultValue
+    @AppStorage(Pref.updatesBadge.name) private var badge = Pref.updatesBadge.defaultValue
+
     private static let intervalHours = [0, 6, 12, 24, 48, 168]
 
     private static func label(_ hours: Int) -> String {
@@ -71,6 +75,25 @@ struct UpdateSettingsView: View {
             }
             .themedRows()
 
+            Section {
+                Toggle(isOn: $notify) {
+                    Label { Text("Notify about new chapters") } icon: { SettingsIcon(systemName: "bell.badge.fill", color: .red) }
+                }
+                if notify {
+                    Toggle(isOn: $hideContent) {
+                        Label { Text("Hide notification content") } icon: { SettingsIcon(systemName: "eye.slash.fill", color: .gray) }
+                    }
+                }
+                Toggle(isOn: $badge) {
+                    Label { Text("Unseen updates badge") } icon: { SettingsIcon(systemName: "app.badge.fill", color: .blue) }
+                }
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("A notification for each title with new chapters after an update. Hidden content leaves out the title and chapter names. The badge counts new chapters since you last opened Updates, on the tab and the app icon. Notifications are allowed in iOS Settings.")
+            }
+            .themedRows()
+
             if !repo.categories.isEmpty {
                 Section {
                     ForEach(repo.categories) { category in
@@ -90,7 +113,12 @@ struct UpdateSettingsView: View {
         .navigationTitle("Library updates")
         .navigationBarTitleDisplayMode(.inline)
         .themedScreen()
-        .onChange(of: interval) { BackgroundRefresh.schedule() }
+        .onChange(of: interval) { old, new in
+            // Asks for notification permission the first time updates can run unattended.
+            if old == 0, new > 0 { UpdateNotifier.requestAuthorization() }
+            BackgroundRefresh.schedule()
+        }
+        .onChange(of: notify) { _, on in if on { UpdateNotifier.requestAuthorization() } }
         .onChange(of: onlyCharging) { BackgroundRefresh.schedule() }
     }
 }

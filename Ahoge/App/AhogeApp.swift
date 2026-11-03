@@ -8,6 +8,7 @@ struct AhogeApp: App {
     @StateObject private var library: LibraryRepository
     @StateObject private var updater: LibraryUpdater
     @StateObject private var downloads: DownloadManager
+    @StateObject private var navigator = AppNavigator.shared
 
     init() {
         let store = ExtensionStore()
@@ -47,6 +48,7 @@ struct AhogeApp: App {
                 .environmentObject(library)
                 .environmentObject(updater)
                 .environmentObject(downloads)
+                .environmentObject(navigator)
         }
     }
 }

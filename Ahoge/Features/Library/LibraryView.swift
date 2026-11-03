@@ -22,6 +22,7 @@ struct LibraryView: View {
     @AppStorage(Pref.libraryContinueButton.name) private var continueButton = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @State private var path: [Route] = []
+    @EnvironmentObject private var navigator: AppNavigator
     @State private var reading: (manga: LibraryManga, chapter: ChapterRecord)?
     @State private var search = ""
     @State private var selecting = false
@@ -148,6 +149,12 @@ struct LibraryView: View {
             }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
+            // A notification tap (or deep link) asked to show a screen.
+            .onChange(of: navigator.pendingRoute, initial: true) { _, route in
+                guard let route else { return }
+                navigator.pendingRoute = nil
+                path = [route]
+            }
         }
     }
 

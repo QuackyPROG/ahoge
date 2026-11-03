@@ -8,6 +8,8 @@ struct RootView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var extensions: ExtensionStore
     @EnvironmentObject private var downloads: DownloadManager
+    @EnvironmentObject private var navigator: AppNavigator
+    @AppStorage(Pref.updatesBadge.name) private var updatesBadge = Pref.updatesBadge.defaultValue
     @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
@@ -17,19 +19,25 @@ struct RootView: View {
     var body: some View {
         let palette = theme.palette(pureBlack: pureBlack)
         let unseen = repo.updates(since: max(Date(timeIntervalSince1970: lastSeen), UpdatesPrefs.cutoff)).count
-        TabView {
+        let badge = updatesBadge ? unseen : 0
+        TabView(selection: $navigator.tab) {
             LibraryView()
                 .tabItem { Label("Library", systemImage: "books.vertical") }
+                .tag(AppTab.library)
             UpdatesView()
                 .tabItem { Label("Updates", systemImage: "bell") }
-                .badge(unseen)
+                .badge(badge)
+                .tag(AppTab.updates)
             HistoryView()
                 .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+                .tag(AppTab.history)
             BrowseView()
                 .tabItem { Label("Browse", systemImage: "safari") }
+                .tag(AppTab.browse)
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
                 .badge(downloads.queue.count)
+                .tag(AppTab.more)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             // Mihon's banners while Downloaded only or Incognito mode is on.
@@ -57,6 +65,7 @@ struct RootView: View {
         .preferredColorScheme(mode.colorScheme)
         .onAppear(perform: applyWindowStyle)
         .onAppear { BackgroundRefresh.schedule() }
+        .onChange(of: badge, initial: true) { UpdateNotifier.setBadge(badge) }
         .onChange(of: mode, initial: true) { applyWindowStyle() }
         .onChange(of: theme) { applyWindowStyle() }
         .onChange(of: pureBlack) { applyWindowStyle() }

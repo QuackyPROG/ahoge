@@ -49,6 +49,7 @@ final class LibraryUpdater: ObservableObject {
         let titles = queue
         let task = Task { @MainActor in
             var errors: [String] = []
+            var withNew: [(manga: LibraryManga, chapters: [ChapterRecord])] = []
             for title in titles {
                 if Task.isCancelled { break }
                 do {
@@ -63,6 +64,7 @@ final class LibraryUpdater: ObservableObject {
                     let found = before.isEmpty ? [] : title.chapters.filter { !before.contains($0.key) }
                     if !found.isEmpty {
                         self.downloads?.chaptersFound(found, in: title)
+                        withNew.append((title, found))
                     }
                 } catch is CancellationError {
                     // Not the title's fault.
@@ -79,6 +81,8 @@ final class LibraryUpdater: ObservableObject {
             self.failures = errors
             self.isRunning = false
             self.running = nil
+            await UpdateNotifier.notify(newChapters: withNew)
+            if trigger == .automatic, !errors.isEmpty { await UpdateNotifier.notifyFailures(count: errors.count) }
         }
         running = task
         await task.value
