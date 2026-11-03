@@ -15,6 +15,7 @@ struct RootView: View {
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.incognito.name) private var incognito = false
     @Environment(\.scenePhase) private var scenePhase
+    @State private var repoError: String?
 
     var body: some View {
         let palette = theme.palette(pureBlack: pureBlack)
@@ -79,6 +80,24 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .readerDidClose)) { _ in
             DispatchQueue.main.async { applyWindowStyle() }
+        }
+        .onOpenURL { navigator.open($0, sources: extensions.installed) }
+        .alert("Add repository?", isPresented: Binding(get: { navigator.pendingRepo != nil }, set: { if !$0 { navigator.pendingRepo = nil } })) {
+            Button("Add") {
+                guard let url = navigator.pendingRepo else { return }
+                navigator.pendingRepo = nil
+                Task {
+                    do { try await extensions.addRepo(url.absoluteString) } catch { repoError = error.localizedDescription }
+                }
+            }
+            Button("Cancel", role: .cancel) { navigator.pendingRepo = nil }
+        } message: {
+            Text("A link asks to add \(navigator.pendingRepo?.absoluteString ?? "a repository"). Only add repositories you trust.")
+        }
+        .alert("Could not add the repository", isPresented: Binding(get: { repoError != nil }, set: { if !$0 { repoError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(repoError ?? "")
         }
         .alert("Some titles could not be updated", isPresented: Binding(get: { !updater.failures.isEmpty }, set: { if !$0 { updater.failures = [] } })) {
             Button("OK", role: .cancel) {}

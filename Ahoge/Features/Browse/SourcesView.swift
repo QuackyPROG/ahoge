@@ -11,6 +11,12 @@ struct SourcesView: View {
     @State private var searching: String?
     /// A source whose extension details to show (from the context menu).
     @State private var details: String?
+    @State private var openingLink = false
+    @State private var linkText = ""
+    @State private var linkFailed = false
+    /// A title found from a pasted link, pushed as its page.
+    @State private var opened: MangaRef?
+    @EnvironmentObject private var navigator: AppNavigator
 
     var body: some View {
         // Sources switched off in the filter screen are left out everywhere here.
@@ -64,7 +70,31 @@ struct SourcesView: View {
         }
         .navigationDestination(item: $searching) { RouteView(route: .globalSearch($0)) }
         .navigationDestination(item: $details) { RouteView(route: .extensionDetails($0)) }
+        .navigationDestination(item: $opened) { RouteView(route: .manga($0)) }
+        .alert("Open link", isPresented: $openingLink) {
+            TextField("https://…", text: $linkText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+            Button("Open") { openLink() }
+                .disabled(linkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Paste the web address of a title on one of your sources.")
+        }
+        .alert("No source matches this link", isPresented: $linkFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Install the source for that site first.")
+        }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    linkText = ""
+                    openingLink = true
+                } label: { Image(systemName: "link") }
+                    .accessibilityLabel("Open link")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink { SourceFilterView() } label: { Image(systemName: "line.3.horizontal.decrease.circle") }
                     .accessibilityLabel("Filter sources")
@@ -99,6 +129,20 @@ struct SourcesView: View {
             Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") { togglePin(item.id) }
             Button(isIncognito ? "Turn off incognito" : "Read in incognito", systemImage: "eyeglasses") { toggleIncognito(item.id) }
             Button("Extension details", systemImage: "info.circle") { details = item.id }
+        }
+    }
+
+    /// Matches a pasted web address (or `ahoge://` link) against the installed sources' sites.
+    private func openLink() {
+        let text = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: text), let link = DeepLinkResolver.resolve(url, sources: store.installed) else {
+            linkFailed = true
+            return
+        }
+        switch link {
+        case .manga(let sourceId, let path): opened = MangaRef(sourceId: sourceId, url: path, title: "", cover: "")
+        case .search(let query): searching = query
+        case .addRepo: navigator.open(link)
         }
     }
 

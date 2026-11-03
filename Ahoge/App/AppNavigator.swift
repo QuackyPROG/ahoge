@@ -13,10 +13,28 @@ final class AppNavigator: ObservableObject {
 
     @Published var tab: AppTab = .library
     @Published var pendingRoute: Route?
+    /// A repository link waiting for the person to confirm adding it.
+    @Published var pendingRepo: URL?
 
     /// Shows `route` on top of the Library tab.
     func open(_ route: Route) {
         tab = .library
         pendingRoute = route
+    }
+
+    /// Follows a link opened from outside: `ahoge://` or a source's web address. Returns whether it meant anything.
+    @discardableResult
+    func open(_ url: URL, sources: [InstalledSource]) -> Bool {
+        guard let link = DeepLinkResolver.resolve(url, sources: sources) else { return false }
+        open(link)
+        return true
+    }
+
+    func open(_ link: DeepLink) {
+        switch link {
+        case .manga(let sourceId, let path): open(.manga(MangaRef(sourceId: sourceId, url: path, title: "", cover: "")))
+        case .search(let query): open(.globalSearch(query))
+        case .addRepo(let url): pendingRepo = url
+        }
     }
 }

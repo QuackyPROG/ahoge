@@ -33,6 +33,17 @@
 		<string>app.ahoge.update</string>
 		<string>app.ahoge.backup</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.quackyprog.ahoge</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ahoge</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

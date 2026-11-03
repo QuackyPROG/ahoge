@@ -51,6 +51,10 @@ targets:
           - app.ahoge.refresh
           - app.ahoge.update
           - app.ahoge.backup
+        CFBundleURLTypes:
+          - CFBundleURLName: com.quackyprog.ahoge
+            CFBundleURLSchemes:
+              - ahoge
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         UTExportedTypeDeclarations:
