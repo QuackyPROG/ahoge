@@ -1,15 +1,12 @@
 import SwiftUI
-import WebKit
 
 struct MoreView: View {
-    @EnvironmentObject private var sources: SourceManager
     @Environment(\.palette) private var palette
     @EnvironmentObject private var repo: LibraryRepository
     @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
     @State private var showRepos = false
-    @State private var message: String?
 
     var body: some View {
         NavigationStack {
@@ -68,23 +65,8 @@ struct MoreView: View {
                 .themedRows()
 
                 Section("Data") {
-                    Button {
-                        Task {
-                            await ImageLoader.shared.clear()
-                            message = "Image cache cleared."
-                        }
-                    } label: {
-                        Label { Text("Clear image cache").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "photo.stack", color: .gray) }
-                    }
-                    Button(role: .destructive) {
-                        Task {
-                            SharedCookies.removeAll()
-                            await WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
-                            sources.resetSessions()
-                            message = "Cookies and website data cleared."
-                        }
-                    } label: {
-                        Label { Text("Clear cookies and website data") } icon: { SettingsIcon(systemName: "trash.fill", color: .red) }
+                    NavigationLink { DataStorageView() } label: {
+                        Label { Text("Data and storage") } icon: { SettingsIcon(systemName: "externaldrive.fill", color: .gray) }
                     }
                 }
                 .themedRows()
@@ -102,9 +84,6 @@ struct MoreView: View {
             .navigationTitle("More")
             .themedScreen()
             .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
-            .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
-                Button("OK", role: .cancel) {}
-            }
         }
     }
 }

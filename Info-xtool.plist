@@ -22,6 +22,26 @@
 	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save manga pages you share from the reader to your photos.</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.quackyprog.ahoge.backup</string>
+			<key>UTTypeDescription</key>
+			<string>Ahoge Backup</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>ahbk</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
