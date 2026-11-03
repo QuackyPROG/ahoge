@@ -6,6 +6,7 @@ struct MoreView: View {
     @Environment(\.palette) private var palette
     @EnvironmentObject private var repo: LibraryRepository
     @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
+    @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
     @State private var showRepos = false
     @State private var message: String?
 
@@ -47,6 +48,13 @@ struct MoreView: View {
                         ForEach(repo.categories) { Text($0.name).tag(Int($0.id)) }
                     } label: {
                         Label { Text("Default category") } icon: { SettingsIcon(systemName: "tray.and.arrow.down.fill", color: .teal) }
+                    }
+                }
+                .themedRows()
+
+                Section("Browse") {
+                    Toggle(isOn: $hideInLibrary) {
+                        Label { Text("Hide titles in your library") } icon: { SettingsIcon(systemName: "eye.slash.fill", color: .indigo) }
                     }
                 }
                 .themedRows()

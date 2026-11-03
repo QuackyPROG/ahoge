@@ -4,6 +4,8 @@ struct MangaGrid: View {
     let items: [MangaRef]
     var badge: (MangaRef) -> String? = { _ in nil }
     var onItemAppear: (MangaRef) -> Void = { _ in }
+    /// Browse results already saved to the library, to fade.
+    var isInLibrary: (MangaRef) -> Bool = { _ in false }
     /// When set, taps toggle selection (by manga key) instead of opening the manga.
     var selection: Binding<Set<String>>? = nil
     /// In the Library: starts selection from a long-press, and offers "Edit categories".
@@ -24,7 +26,7 @@ struct MangaGrid: View {
 
     @ViewBuilder
     private func cell(_ ref: MangaRef) -> some View {
-        let card = MangaCard(title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref))
+        let card = MangaCard(title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref), inLibrary: isInLibrary(ref))
         if let selection {
             let key = LibraryManga.makeKey(sourceId: ref.sourceId, url: ref.url)
             let selected = selection.wrappedValue.contains(key)

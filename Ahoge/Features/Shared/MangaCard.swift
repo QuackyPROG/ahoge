@@ -6,6 +6,8 @@ struct MangaCard: View {
     let cover: String
     var headers: [String: String] = [:]
     var badge: String?
+    /// A browse result already in the library; shown faded.
+    var inLibrary = false
     @Environment(\.palette) private var palette
 
     /// About three pixels per point of the widest grid card.
@@ -42,6 +44,8 @@ struct MangaCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.black).shadow(color: .black.opacity(0.18), radius: 6, y: 3))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.08)))
+            .opacity(inLibrary ? 0.4 : 1)
             .accessibilityElement(children: .combine)
+            .accessibilityValue(inLibrary ? "In library" : "")
     }
 }

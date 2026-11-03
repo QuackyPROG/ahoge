@@ -105,6 +105,8 @@ final class SourceBrowseModel: ObservableObject {
 
 struct SourceBrowseView: View {
     @EnvironmentObject private var sources: SourceManager
+    @EnvironmentObject private var repo: LibraryRepository
+    @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
     @StateObject private var model: SourceBrowseModel
     @State private var webTarget: WebTarget?
     @State private var editing: FilterState?
@@ -118,8 +120,14 @@ struct SourceBrowseView: View {
 
     private var fetch: SourceBrowseModel.Fetch { SourceBrowseModel.fetch(from: sources, sourceId: model.sourceId) }
 
+    private func inLibrary(_ ref: MangaRef) -> Bool {
+        repo.manga(sourceId: ref.sourceId, url: ref.url)?.inLibrary == true
+    }
+
     var body: some View {
         let info = sources.installed(model.sourceId)
+        let refs = model.items.map { MangaRef(sourceId: model.sourceId, url: $0.url, title: $0.title, cover: $0.cover) }
+        let shown = hideInLibrary ? refs.filter { !inLibrary($0) } : refs
         ScrollView {
             chips
             if let error = model.error, model.items.isEmpty {
@@ -130,11 +138,18 @@ struct SourceBrowseView: View {
                     .padding(.top, 40)
             }
             MangaGrid(
-                items: model.items.map { MangaRef(sourceId: model.sourceId, url: $0.url, title: $0.title, cover: $0.cover) },
+                items: shown,
                 onItemAppear: { ref in
                     if model.shouldLoadMore(after: ref.url) { Task { await model.loadMore(fetch) } }
-                }
+                },
+                isInLibrary: inLibrary
             )
+            // A page that is all hidden has no cell to trigger the next load; the new id re-fires this per load.
+            if hideInLibrary, shown.count < refs.count {
+                Color.clear.frame(height: 1)
+                    .id(refs.count)
+                    .onAppear { Task { await model.loadMore(fetch) } }
+            }
             if model.isLoading { ProgressView().padding() }
         }
         .navigationTitle(genre ?? info?.name ?? "Source")
