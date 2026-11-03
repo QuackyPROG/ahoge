@@ -293,3 +293,37 @@ final class LibraryRepository: ObservableObject {
         _ = try? db.write(updates)
     }
 }
+
+// MARK: Clear database (Mihon's "Clear database")
+extension LibraryRepository {
+    /// Titles that are only here because they were opened, not saved: source id and key. Titles with
+    /// downloads stay (their files are not tied to this table), and `keepRead` spares those with a read chapter.
+    private func clearable(keepRead: Bool) -> [(sourceId: String, key: String)] {
+        var sql = "SELECT sourceId, key FROM manga WHERE inLibrary = 0 AND key NOT IN (SELECT mangaKey FROM download)"
+        if keepRead { sql += " AND key NOT IN (SELECT mangaKey FROM chapter WHERE read = 1)" }
+        let rows = (try? db.read { try Row.fetchAll($0, sql: sql) }) ?? []
+        return rows.map { (sourceId: $0["sourceId"] as String, key: $0["key"] as String) }
+    }
+
+    /// How many titles `clearNonLibrary` would remove, per source id.
+    func nonLibraryCounts(keepRead: Bool) -> [String: Int] {
+        clearable(keepRead: keepRead).reduce(into: [:]) { $0[$1.sourceId, default: 0] += 1 }
+    }
+
+    /// Removes non-library titles of `sources` with their chapters and history; returns how many went.
+    @discardableResult
+    func clearNonLibrary(sources: Set<String>, keepRead: Bool) -> Int {
+        let keys = clearable(keepRead: keepRead).filter { sources.contains($0.sourceId) }.map(\.key)
+        guard !keys.isEmpty else { return 0 }
+        updatesCache = nil
+        objectWillChange.send()
+        write { db in
+            for key in keys { try db.execute(sql: "DELETE FROM manga WHERE key = ?", arguments: [key]) }
+        }
+        for key in keys {
+            loaded[key] = nil
+            absent.insert(key)
+        }
+        return keys.count
+    }
+}

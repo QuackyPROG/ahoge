@@ -19,6 +19,7 @@ struct DataStorageView: View {
     @State private var restoring = false
     @State private var report: RestoreReport?
     @State private var message: String?
+    @State private var confirmResetReader = false
 
     var body: some View {
         List {
@@ -53,6 +54,17 @@ struct DataStorageView: View {
                     Text("Saved in the Ahoge folder in the Files app (Backups). \(Self.lastBackupText(autoLast))")
                 } else {
                     Text("Backups are made when you leave the app. Sideloaded apps lose their data when they expire or are re-signed, so turn this on and copy the files off the device now and then.")
+                }
+            }
+            .themedRows()
+
+            Section("Library data") {
+                NavigationLink { ClearDatabaseView() } label: {
+                    Label { Text("Clear database") } icon: { SettingsIcon(systemName: "trash.slash.fill", color: .red) }
+                }
+                LibraryExportRow()
+                Button { confirmResetReader = true } label: {
+                    Label { Text("Reset per-series reader settings").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "arrow.counterclockwise.circle.fill", color: .orange) }
                 }
             }
             .themedRows()
@@ -130,6 +142,14 @@ struct DataStorageView: View {
         }
         .sheet(item: Binding(get: { report.map(ReportItem.init) }, set: { if $0 == nil { report = nil } })) { item in
             NavigationStack { RestoreReportView(report: item.report) }
+        }
+        .confirmationDialog("Reset per-series reader settings?", isPresented: $confirmResetReader, titleVisibility: .visible) {
+            Button("Reset", role: .destructive) {
+                let count = PerSeriesReaderSettings.reset()
+                message = "Reset \(count) per-series setting\(count == 1 ? "" : "s")."
+            }
+        } message: {
+            Text("Every series goes back to the default reading mode and orientation.")
         }
         .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
@@ -231,5 +251,31 @@ struct RestoreReportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .themedScreen()
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+    }
+}
+
+/// Saves the library list as a CSV file.
+private struct LibraryExportRow: View {
+    @EnvironmentObject private var repo: LibraryRepository
+    @EnvironmentObject private var extensions: ExtensionStore
+    @State private var document: CSVDocument?
+
+    var body: some View {
+        Button(action: export) {
+            Label { Text("Export library list (CSV)").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "tablecells.fill", color: .green) }
+        }
+        .fileExporter(
+            isPresented: Binding(get: { document != nil }, set: { if !$0 { document = nil } }),
+            document: document,
+            contentType: .commaSeparatedText,
+            defaultFilename: "ahoge-library"
+        ) { _ in }
+    }
+
+    private func export() {
+        let text = LibraryCSV.make(repo.library) { id in
+            extensions.installed.first { $0.id == id }.map { ($0.name, $0.baseUrl) }
+        }
+        document = CSVDocument(text: text)
     }
 }

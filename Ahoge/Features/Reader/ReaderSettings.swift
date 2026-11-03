@@ -244,3 +244,13 @@ struct ReaderSettingsSheet: View {
         }
     }
 }
+
+enum PerSeriesReaderSettings {
+    /// Forgets every series' own reading mode and orientation, so each follows the defaults again.
+    @discardableResult
+    static func reset(in defaults: UserDefaults = .standard) -> Int {
+        let keys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("reader.mode\n") || $0.hasPrefix("reader.orientation\n") }
+        for key in keys { defaults.removeObject(forKey: key) }
+        return keys.count
+    }
+}
