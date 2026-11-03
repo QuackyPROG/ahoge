@@ -6,13 +6,13 @@ struct MangaGrid: View {
     var onItemAppear: (MangaRef) -> Void = { _ in }
     /// Browse results already saved to the library, to fade.
     var isInLibrary: (MangaRef) -> Bool = { _ in false }
-    /// In the Library: opens the title's next unread chapter. Nil (or false from `canContinue`) shows no play button.
-    var onContinue: ((MangaRef) -> Void)? = nil
-    var canContinue: (MangaRef) -> Bool = { _ in false }
     /// When set, taps toggle selection (by manga key) instead of opening the manga.
     var selection: Binding<Set<String>>? = nil
     /// In the Library: starts selection from a long-press, and offers "Edit categories".
     var librarySelect: ((MangaRef) -> Void)? = nil
+    /// In the Library: opens the title's next unread chapter. Nil (or false from `canContinue`) shows no play button.
+    var onContinue: ((MangaRef) -> Void)? = nil
+    var canContinue: (MangaRef) -> Bool = { _ in false }
     @EnvironmentObject private var sources: SourceManager
     @Environment(\.palette) private var palette
     @State private var choosingCategories: LibraryManga?
