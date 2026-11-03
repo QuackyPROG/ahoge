@@ -50,7 +50,7 @@ struct ExtensionDetailsView: View {
                 if let listed {
                     LabeledContent("Health") {
                         Label(Self.healthTitle(listed.health.status), systemImage: listed.isReportedBroken ? "exclamationmark.triangle.fill" : "checkmark.seal")
-                            .foregroundStyle(listed.isReportedBroken ? .orange : .secondary)
+                            .foregroundStyle(listed.isReportedBroken ? Color.orange : Color.secondary)
                     }
                     if let checked = listed.health.checkedAt {
                         LabeledContent("Checked", value: checked)
