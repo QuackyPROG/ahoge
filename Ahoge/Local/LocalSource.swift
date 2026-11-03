@@ -1,5 +1,4 @@
 import Foundation
-import ZIPFoundation
 
 /// Reads manga from a folder on this device: `<root>/<Series>/<Chapter>.cbz|.zip|folder`, plus an optional
 /// `cover.jpg` and Mihon's `details.json` in the series folder. A series' `url` is its folder name and a
@@ -199,7 +198,7 @@ final class LocalSource: MangaSource {
         if files.fileExists(atPath: marker.path) { return target }
         try? files.removeItem(at: target)
         try files.createDirectory(at: target, withIntermediateDirectories: true)
-        try files.unzipItem(at: archive, to: target)
+        try ZipArchive.extractAll(from: archive, to: target)
         files.createFile(atPath: marker.path, contents: Data())
         return target
     }

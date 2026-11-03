@@ -1,5 +1,4 @@
 import Foundation
-import ZIPFoundation
 
 /// Where downloaded chapters live on disk. Internal to the downloads module: callers go through
 /// `DownloadManager`.
@@ -89,8 +88,10 @@ struct DownloadStore: Sendable {
         let target = archive(location)
         let temporary = target.appendingPathExtension("tmp")
         try? fm.removeItem(at: temporary)
-        // Pages are already compressed images; storing them keeps zipping fast.
-        try fm.zipItem(at: directory, to: temporary, shouldKeepParent: false, compressionMethod: .none)
+        // Mapped, not read: the archive is written page by page without holding the chapter in memory.
+        let names = try fm.contentsOfDirectory(atPath: directory.path).filter { !$0.hasPrefix(".") }.sorted()
+        let files = try names.map { (name: $0, data: try Data(contentsOf: directory.appendingPathComponent($0), options: .alwaysMapped)) }
+        try ZipArchive.write(files: files, to: temporary)
         try? fm.removeItem(at: target)
         try fm.moveItem(at: temporary, to: target)
         try fm.removeItem(at: directory)
@@ -137,7 +138,7 @@ struct DownloadStore: Sendable {
             try fm.createDirectory(at: target, withIntermediateDirectories: true)
             let marker = target.appendingPathComponent(Self.partialMarker)
             try Data().write(to: marker)
-            try fm.unzipItem(at: archive, to: target)
+            try ZipArchive.extractAll(from: archive, to: target)
             try fm.removeItem(at: marker)
         } catch {
             try? fm.removeItem(at: target)
@@ -154,8 +155,7 @@ struct DownloadStore: Sendable {
         guard FileManager.default.fileExists(atPath: archive.path) else { return nil }
         let count: Int
         do {
-            let zip: Archive = try Archive(url: archive, accessMode: .read)
-            count = zip.reduce(0) { $1.type == .file ? $0 + 1 : $0 }
+            count = try ZipArchive.entries(at: archive).filter { !$0.isDirectory }.count
         } catch {
             return nil
         }

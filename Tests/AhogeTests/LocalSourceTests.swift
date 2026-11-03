@@ -1,5 +1,4 @@
 import XCTest
-import ZIPFoundation
 @testable import Ahoge
 
 final class LocalSourceTests: XCTestCase {
@@ -75,12 +74,10 @@ final class LocalSourceTests: XCTestCase {
     }
 
     func testCBZPagesComeBackInNaturalOrder() async throws {
-        let staging = directory.appendingPathComponent("staging")
-        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-        for name in ["10.jpg", "2.jpg", "1.jpg"] { try Data(name.utf8).write(to: staging.appendingPathComponent(name)) }
         let series = root.appendingPathComponent("S")
         try fm.createDirectory(at: series, withIntermediateDirectories: true)
-        try fm.zipItem(at: staging, to: series.appendingPathComponent("Chapter 1.cbz"), shouldKeepParent: false)
+        let files = ["10.jpg", "2.jpg", "1.jpg"].map { (name: $0, data: Data($0.utf8)) }
+        try ZipArchive.write(files: files, to: series.appendingPathComponent("Chapter 1.cbz"))
 
         let pages = try await source().pages(url: "S/Chapter 1.cbz")
 

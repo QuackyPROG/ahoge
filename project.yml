@@ -11,9 +11,6 @@ packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift
     from: 7.0.0
-  ZIPFoundation:
-    url: https://github.com/weichsel/ZIPFoundation
-    from: 0.9.19
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -29,7 +26,6 @@ targets:
     dependencies:
       - package: SwiftSoup
       - package: GRDB
-      - package: ZIPFoundation
     info:
       path: Ahoge/Info.plist
       properties:
@@ -80,7 +76,6 @@ targets:
       - path: Tests/AhogeTests
     dependencies:
       - target: Ahoge
-      - package: ZIPFoundation
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
