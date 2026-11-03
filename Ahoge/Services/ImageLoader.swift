@@ -40,16 +40,23 @@ actor ImageLoader {
     }
 
     /// The memory-cache key: the URL for full-size pages (so the reader can read hits by URL),
-    /// the URL plus the width for smaller decodes such as covers.
-    nonisolated static func cacheKey(_ url: String, maxPixelWidth: CGFloat) -> String {
-        maxPixelWidth >= Self.maxPixelWidth ? url : "\(url)#w\(Int(maxPixelWidth))"
+    /// the URL plus the width for smaller decodes such as covers, plus the reader's transform if any.
+    nonisolated static func cacheKey(_ url: String, maxPixelWidth: CGFloat, transform: ImageTransform = .plain) -> String {
+        (maxPixelWidth >= Self.maxPixelWidth ? url : "\(url)#w\(Int(maxPixelWidth))") + transform.cacheSuffix
     }
 
-    func image(_ url: String, headers: [String: String] = [:], maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth, priority: TaskPriority = .userInitiated) async throws -> UIImage {
-        let key = Self.cacheKey(url, maxPixelWidth: maxPixelWidth)
+    func image(_ url: String, headers: [String: String] = [:], maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth, transform: ImageTransform = .plain, priority: TaskPriority = .userInitiated) async throws -> UIImage {
+        let key = Self.cacheKey(url, maxPixelWidth: maxPixelWidth, transform: transform)
         if let hit = ImageMemoryCache.shared[key] { return hit }
         // Awaiting a running low-priority prefetch raises its priority to ours.
         if let running = inFlight[key] { return try await running.value }
+        guard transform.isIdentity else {
+            // The plain page is fetched and cached once; each transform of it is made off the actor.
+            let base = try await image(url, headers: headers, maxPixelWidth: maxPixelWidth, priority: priority)
+            if let hit = ImageMemoryCache.shared[key] { return hit }
+            if let running = inFlight[key] { return try await running.value }
+            return try await run(Task.detached(priority: priority) { () throws -> UIImage in transform.apply(to: base) }, key: key)
+        }
         let session = session
         let task = Task.detached(priority: priority) { () throws -> UIImage in
             guard let target = URL(string: url) else { throw URLError(.badURL) }
@@ -68,6 +75,11 @@ actor ImageLoader {
             guard let image = Self.decode(data, maxPixelWidth: maxPixelWidth) else { throw URLError(.cannotDecodeContentData) }
             return image
         }
+        return try await run(task, key: key)
+    }
+
+    /// Shares `task` with other callers of `key` while it runs, then caches what it made.
+    private func run(_ task: Task<UIImage, Error>, key: String) async throws -> UIImage {
         inFlight[key] = task
         defer { inFlight[key] = nil }
         let image = try await task.value
@@ -76,8 +88,8 @@ actor ImageLoader {
     }
 
     /// Reader prefetches run below the page on screen, so they never slow it down.
-    func prefetch(_ url: String, headers: [String: String]) {
-        Task(priority: .utility) { _ = try? await image(url, headers: headers, priority: .utility) }
+    func prefetch(_ url: String, headers: [String: String], transform: ImageTransform = .plain) {
+        Task(priority: .utility) { _ = try? await image(url, headers: headers, transform: transform, priority: .utility) }
     }
 
     /// Bytes the image cache holds on disk.
