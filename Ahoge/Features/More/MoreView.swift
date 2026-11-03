@@ -126,7 +126,7 @@ struct MoreView: View {
                     }
                     if requireUnlock {
                         Picker(selection: $lockAfter) {
-                            ForEach(LockPolicy.afterOptions, id: .self) { Text(LockPolicy.label($0)).tag($0) }
+                            ForEach(LockPolicy.afterOptions, id: \.self) { Text(LockPolicy.label($0)).tag($0) }
                         } label: {
                             Label { Text("Lock") } icon: { SettingsIcon(systemName: "timer", color: .orange) }
                         }
