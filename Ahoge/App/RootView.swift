@@ -7,6 +7,7 @@ struct RootView: View {
     @EnvironmentObject private var updater: LibraryUpdater
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var extensions: ExtensionStore
+    @EnvironmentObject private var downloads: DownloadManager
     @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
     @Environment(\.scenePhase) private var scenePhase
@@ -26,6 +27,7 @@ struct RootView: View {
                 .tabItem { Label("Browse", systemImage: "safari") }
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
+                .badge(downloads.queue.count)
         }
         .tint(palette.primary.color)
         .environment(\.palette, palette)
@@ -37,6 +39,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             PrivacyShield.setVisible(secureScreen && phase != .active)
             if phase == .background { AutoBackup.runIfDue(repo: repo, store: extensions) }
+            downloads.setBackground(phase == .background)
         }
         .onReceive(NotificationCenter.default.publisher(for: .readerDidClose)) { _ in
             DispatchQueue.main.async { applyWindowStyle() }

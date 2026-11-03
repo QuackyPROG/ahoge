@@ -10,6 +10,8 @@ final class LibraryUpdater: ObservableObject {
     /// "Title: reason" for each title that failed in the last run; cleared by the alert.
     @Published var failures: [String] = []
     @Published private(set) var lastUpdated = Pref.libraryLastUpdated.value()
+    /// Told about chapters each update finds ("Download new chapters").
+    weak var downloads: DownloadManager?
 
     /// The run in progress. Unstructured, so it does not inherit the caller's cancellation:
     /// leaving the screen that started it (and its `.refreshable` task) does not abort it.
@@ -30,7 +32,11 @@ final class LibraryUpdater: ObservableObject {
             for title in manga {
                 do {
                     let source = try sources.source(title.sourceId)
+                    let before = Set(title.chapters.map(\.key))
                     repo.applyChapters(try await source.chapters(url: title.url), to: title)
+                    // A title's first fetch is not "new chapters".
+                    let found = before.isEmpty ? [] : title.chapters.filter { !before.contains($0.key) }
+                    if !found.isEmpty { self.downloads?.chaptersFound(found, in: title) }
                 } catch is CancellationError {
                     // Not the title's fault.
                 } catch let error as URLError where error.code == .cancelled {
