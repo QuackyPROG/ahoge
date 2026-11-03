@@ -63,6 +63,15 @@ extension LibraryRepository {
         }
     }
 
+    /// Sets or clears a `flags` mask of a category (1: skip in updates, 2: skip auto-download).
+    func setCategoryFlag(_ id: Int64, mask: Int, on: Bool) {
+        guard let index = categories.firstIndex(where: { $0.id == id }) else { return }
+        objectWillChange.send()
+        if on { categories[index].flags |= mask } else { categories[index].flags &= ~mask }
+        let category = categories[index]
+        write { try category.update($0) }
+    }
+
     func categoryIds(of manga: LibraryManga) -> Set<Int64> { categoryLinks[manga.key] ?? [] }
 
     func setCategories(_ ids: Set<Int64>, for manga: LibraryManga) {
