@@ -30,6 +30,11 @@ final class SourceManager: ObservableObject {
         for entry in cache.values { entry.source.host.http.jar.seed(cookies) }
     }
 
+    /// Drops one source's running instance, so its next call starts with fresh cookies.
+    func resetSession(_ id: String) {
+        cache[id] = nil
+    }
+
     func resetSessions() {
         cache.removeAll()
     }

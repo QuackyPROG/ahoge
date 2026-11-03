@@ -9,6 +9,8 @@ struct SourcesView: View {
     @State private var globalQuery = ""
     /// A submitted search, pushed as the global search screen.
     @State private var searching: String?
+    /// A source whose extension details to show (from the context menu).
+    @State private var details: String?
 
     var body: some View {
         // Sources switched off in the filter screen are left out everywhere here.
@@ -49,6 +51,7 @@ struct SourcesView: View {
             if !query.isEmpty { searching = query }
         }
         .navigationDestination(item: $searching) { RouteView(route: .globalSearch($0)) }
+        .navigationDestination(item: $details) { RouteView(route: .extensionDetails($0)) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink { SourceFilterView() } label: { Image(systemName: "line.3.horizontal.decrease.circle") }
@@ -83,6 +86,7 @@ struct SourcesView: View {
         .contextMenu {
             Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") { togglePin(item.id) }
             Button(isIncognito ? "Turn off incognito" : "Read in incognito", systemImage: "eyeglasses") { toggleIncognito(item.id) }
+            Button("Extension details", systemImage: "info.circle") { details = item.id }
         }
     }
 

@@ -9,6 +9,8 @@ enum Route: Hashable {
     case manga(MangaRef)
     /// Search every source for a query.
     case globalSearch(String)
+    /// An installed source's details: version, repository, cookies, incognito, settings.
+    case extensionDetails(String)
 }
 
 struct RouteView: View {
@@ -21,6 +23,7 @@ struct RouteView: View {
         case .sourceSearch(let id, let query): SourceBrowseView(sourceId: id, query: query)
         case .manga(let ref): MangaDetailView(ref: ref)
         case .globalSearch(let query): GlobalSearchView(query: query)
+        case .extensionDetails(let id): ExtensionDetailsView(sourceId: id)
         }
     }
 }

@@ -6,6 +6,8 @@ struct ExtensionsView: View {
     @State private var showRepos = false
     @State private var busy: Set<String> = []
     @State private var actionError: String?
+    /// An installed source whose details to show.
+    @State private var details: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -53,6 +55,7 @@ struct ExtensionsView: View {
             }
         }
         .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
+        .navigationDestination(item: $details) { RouteView(route: .extensionDetails($0)) }
         .alert("Extension error", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -65,7 +68,12 @@ struct ExtensionsView: View {
         if !rows.isEmpty {
             Section(title) {
                 ForEach(rows) { row in
-                    ExtensionRowView(row: row, busy: busy.contains(row.id)) { await perform(row) }
+                    ExtensionRowView(
+                        row: row,
+                        busy: busy.contains(row.id),
+                        hasDetails: row.state == .installed || row.state == .updateAvailable,
+                        showDetails: { details = row.id }
+                    ) { await perform(row) }
                 }
             }
             .themedRows()
@@ -107,10 +115,27 @@ struct ExtensionsView: View {
 private struct ExtensionRowView: View {
     let row: ExtensionRow
     let busy: Bool
+    /// Installed sources open their details from the icon and name.
+    let hasDetails: Bool
+    let showDetails: () -> Void
     let action: () async -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
+        HStack(spacing: 12) {
+            if hasDetails {
+                Button(action: showDetails) { info.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows extension details")
+            } else {
+                info
+            }
+            Spacer()
+            trailing
+        }
+    }
+
+    private var info: some View {
         HStack(spacing: 12) {
             RemoteImage(url: row.iconURL ?? "")
                 .frame(width: 40, height: 40)
@@ -129,20 +154,23 @@ private struct ExtensionRowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
-            if busy {
-                ProgressView()
-            } else {
-                switch row.state {
-                case .available:
-                    Button("Install") { Task { await action() } }.buttonStyle(.bordered)
-                case .updateAvailable:
-                    Button("Update") { Task { await action() } }.buttonStyle(.borderedProminent).foregroundStyle(palette.onPrimary.color)
-                case .installed:
-                    Button("Uninstall", role: .destructive) { Task { await action() } }.buttonStyle(.bordered)
-                case .requiresAppUpdate:
-                    Text("Needs newer app").font(.caption).foregroundStyle(.secondary)
-                }
+        }
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        if busy {
+            ProgressView()
+        } else {
+            switch row.state {
+            case .available:
+                Button("Install") { Task { await action() } }.buttonStyle(.bordered)
+            case .updateAvailable:
+                Button("Update") { Task { await action() } }.buttonStyle(.borderedProminent).foregroundStyle(palette.onPrimary.color)
+            case .installed:
+                Button("Uninstall", role: .destructive) { Task { await action() } }.buttonStyle(.bordered)
+            case .requiresAppUpdate:
+                Text("Needs newer app").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
