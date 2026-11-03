@@ -16,6 +16,7 @@ struct LibraryView: View {
     @AppStorage(Pref.librarySort.name) private var sort: Sort = .title
     @AppStorage(Pref.libraryShelf.name) private var shelf = 0
     @AppStorage(Pref.libraryContinueButton.name) private var continueButton = false
+    @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @State private var reading: (manga: LibraryManga, chapter: ChapterRecord)?
     @State private var search = ""
     @State private var selecting = false
@@ -33,7 +34,7 @@ struct LibraryView: View {
 
     private func snapshot() -> Snapshot {
         var buckets: [Int: [LibraryManga]] = [:]
-        for title in repo.library {
+        for title in repo.library where !downloadedOnly || downloads.downloadedCount(mangaKey: title.key) > 0 {
             let ids = repo.categoryIds(of: title)
             if ids.isEmpty {
                 buckets[0, default: []].append(title)

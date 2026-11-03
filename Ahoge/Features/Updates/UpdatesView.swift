@@ -16,10 +16,12 @@ struct UpdatesView: View {
     @State private var reading: UpdateEntry?
     @State private var visible = false
     @State private var selecting = false
+    @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @State private var selection = Set<String>()
 
     var body: some View {
-        let entries = repo.updates(since: UpdatesPrefs.cutoff)
+        let all = repo.updates(since: UpdatesPrefs.cutoff)
+        let entries = downloadedOnly ? all.filter { downloads.isDownloaded($0.chapter.key) } : all
         NavigationStack {
             List(selection: $selection) {
                 Section {

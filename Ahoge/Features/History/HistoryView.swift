@@ -4,6 +4,8 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var sources: SourceManager
+    @EnvironmentObject private var downloads: DownloadManager
+    @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @State private var entries: [HistoryEntry] = []
     @State private var search = ""
     @State private var reading: ChapterRecord?
@@ -12,7 +14,8 @@ struct HistoryView: View {
     @State private var confirmClear = false
 
     var body: some View {
-        let shown = search.isEmpty ? entries : entries.filter { $0.manga.title.localizedCaseInsensitiveContains(search) }
+        let available = downloadedOnly ? entries.filter { downloads.downloadedCount(mangaKey: $0.manga.key) > 0 } : entries
+        let shown = search.isEmpty ? available : available.filter { $0.manga.title.localizedCaseInsensitiveContains(search) }
         NavigationStack {
             List {
                 ForEach(DateGrouping.group(shown, by: \.lastRead), id: \.day) { group in
