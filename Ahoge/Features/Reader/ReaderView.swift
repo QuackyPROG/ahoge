@@ -8,6 +8,9 @@ struct ReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var showOverlay = false
+    /// A page long-pressed for "Set as cover", waiting for confirmation.
+    @State private var coverCandidate: UIImage?
+    @State private var coverFailed = false
     @State private var sliderPage = 0
     @State private var scrubbing = false
     @State private var showChapters = false
@@ -98,6 +101,18 @@ struct ReaderView: View {
         }
         .overlay(alignment: .bottom) {
             if showOverlay { bottomBar.transition(.move(edge: .bottom).combined(with: .opacity)) }
+        }
+        .alert("Set as cover?", isPresented: Binding(get: { coverCandidate != nil }, set: { if !$0 { coverCandidate = nil } })) {
+            Button("Set as cover") {
+                if let image = coverCandidate { setCover(image) }
+                coverCandidate = nil
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This page becomes the cover of \(model.manga.title).")
+        }
+        .alert("Couldn't set cover", isPresented: $coverFailed) {
+            Button("OK", role: .cancel) {}
         }
         .statusBarHidden(!showOverlay)
         .persistentSystemOverlays(showOverlay ? .automatic : .hidden)
@@ -348,7 +363,7 @@ struct ReaderView: View {
                 ReaderPageView(
                     page: page, index: index, paged: paged, foreground: background.foreground,
                     transform: pageTransform(paged: paged, half: item.half), zoom: zoomOptions(),
-                    onTap: pagedTap, onSize: sizeReporter(item.chapter, index)
+                    onTap: pagedTap, onSize: sizeReporter(item.chapter, index), onSetCover: setCoverAction
                 )
             } else {
                 spread(item)
@@ -378,12 +393,24 @@ struct ReaderView: View {
                     page: side.page, index: side.index, paged: true, foreground: background.foreground,
                     transform: pageTransform(paged: true), zoom: zoomOptions(alignment: slot == 0 ? 1 : 0),
                     onTap: { point in pagedTap(CGPoint(x: (point.x + CGFloat(slot)) / 2, y: point.y)) },
-                    onSize: sizeReporter(item.chapter, side.index)
+                    onSize: sizeReporter(item.chapter, side.index), onSetCover: setCoverAction
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func setCover(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.95), repo.setCustomCover(data, for: model.manga) else {
+            coverFailed = true
+            return
+        }
+    }
+
+    /// Only titles in the library can take a new cover (Mihon's rule).
+    private var setCoverAction: ((UIImage) -> Void)? {
+        model.manga.inLibrary ? { coverCandidate = $0 } : nil
     }
 
     private func sizeReporter(_ chapter: ChapterRecord, _ index: Int) -> (CGSize) -> Void {

@@ -62,7 +62,7 @@ final class LibraryManga: Identifiable, Codable, FetchableRecord, PersistableRec
     private(set) var unreadCount = 0
 
     func refreshUnreadCount() { unreadCount = chapters.reduce(0) { $0 + ($1.read ? 0 : 1) } }
-    var ref: MangaRef { MangaRef(sourceId: sourceId, url: url, title: title, cover: coverUrl) }
+    var ref: MangaRef { MangaRef(sourceId: sourceId, url: url, title: title, cover: displayCover) }
 }
 
 /// Observable so a row redraws when its read state changes; `LibraryRepository` sends the change.

@@ -35,6 +35,7 @@ enum BackupService {
                 updateInterval: manga.updateInterval,
                 categories: categoryNames.filter { ids.contains($0.id) }.map(\.name),
                 excludedScanlators: excluded[manga.key] ?? [],
+                customCoverData: manga.customCover.flatMap(CoverStore.data(for:))?.base64EncodedString(),
                 chapters: manga.sortedChapters.map { chapter in
                     BackupChapter(
                         url: chapter.url,

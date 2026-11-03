@@ -18,6 +18,8 @@ struct ReaderPageView: View {
     var onTap: (CGPoint) -> Void = { _ in }
     /// Told the page's untransformed size once known, so wide pages can be split or kept alone.
     var onSize: (CGSize) -> Void = { _ in }
+    /// Offered in the long-press menu as "Set as cover"; nil when the title is not in the library.
+    var onSetCover: ((UIImage) -> Void)?
     @State private var image: UIImage?
     /// The cache key `image` was loaded for; a new transform loads again.
     @State private var loadedKey: String?
@@ -29,7 +31,8 @@ struct ReaderPageView: View {
     init(
         page: SourcePage, index: Int, paged: Bool, foreground: Color,
         transform: ImageTransform = .plain, zoom: ZoomOptions = ZoomOptions(),
-        onTap: @escaping (CGPoint) -> Void = { _ in }, onSize: @escaping (CGSize) -> Void = { _ in }
+        onTap: @escaping (CGPoint) -> Void = { _ in }, onSize: @escaping (CGSize) -> Void = { _ in },
+        onSetCover: ((UIImage) -> Void)? = nil
     ) {
         self.page = page
         self.index = index
@@ -39,6 +42,7 @@ struct ReaderPageView: View {
         self.zoom = zoom
         self.onTap = onTap
         self.onSize = onSize
+        self.onSetCover = onSetCover
         // A page already in memory draws on its first frame, without a placeholder or fade.
         let key = ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
         let cached = ImageMemoryCache.shared[key]
@@ -99,6 +103,9 @@ struct ReaderPageView: View {
             }
         }
         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.image = image }
+        if let onSetCover {
+            Button("Set as cover", systemImage: "photo.on.rectangle") { onSetCover(image) }
+        }
         ShareLink(item: preview, preview: SharePreview("Page \(index + 1)", image: preview)) {
             Label("Share", systemImage: "square.and.arrow.up")
         }

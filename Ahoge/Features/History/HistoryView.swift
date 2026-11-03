@@ -98,7 +98,7 @@ private struct HistoryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             NavigationLink(value: Route.manga(entry.manga.ref)) {
-                RemoteImage(url: entry.manga.coverUrl, headers: headers, maxPixelWidth: 150)
+                RemoteImage(url: entry.manga.displayCover, headers: headers, maxPixelWidth: 150)
                     .frame(width: 48, height: 68)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }

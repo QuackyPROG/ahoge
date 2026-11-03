@@ -73,6 +73,9 @@ extension LibraryRepository {
         }
         if manga.notes.isEmpty { manga.notes = item.notes }
         if manga.updateInterval == nil { manga.updateInterval = item.updateInterval }
+        if manga.customCover == nil, let encoded = item.customCoverData, let data = Data(base64Encoded: encoded) {
+            setCustomCover(data, for: manga)
+        }
         if item.inLibrary && !manga.inLibrary {
             setInLibrary(manga, true)
             if let added = item.dateAdded { manga.dateAdded = added }

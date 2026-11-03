@@ -66,6 +66,8 @@ struct BackupManga: Codable, Equatable {
     /// Names, because category ids differ between devices.
     var categories: [String] = []
     var excludedScanlators: [String] = []
+    /// A custom cover, base64. Absent in older backups and when the title uses the source's cover.
+    var customCoverData: String?
     var chapters: [BackupChapter] = []
 }
 
