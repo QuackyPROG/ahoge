@@ -25,10 +25,10 @@ struct UpdatesView: View {
 
     var body: some View {
         let all = repo.updates(since: UpdatesPrefs.cutoff)
-        let bookmarked = TriState(rawValue: bookmarkedFilter) ?? .off
-        let downloadedState = TriState(rawValue: downloadedFilter) ?? .off
-        let unreadState = TriState(rawValue: unreadFilter) ?? .off
-        let startedState = TriState(rawValue: startedFilter) ?? .off
+        let bookmarked = LibraryTriState(rawValue: bookmarkedFilter) ?? .off
+        let downloadedState = LibraryTriState(rawValue: downloadedFilter) ?? .off
+        let unreadState = LibraryTriState(rawValue: unreadFilter) ?? .off
+        let startedState = LibraryTriState(rawValue: startedFilter) ?? .off
         let filtering = [bookmarked, downloadedState, unreadState, startedState].contains { $0 != .off }
         let entries = all.filter { entry in
             let isDownloaded = downloads.isDownloaded(entry.chapter.key)
@@ -103,24 +103,24 @@ struct UpdatesView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Picker("Downloaded", selection: $downloadedFilter) {
-                                Text("Downloaded: any").tag(TriState.off.rawValue)
-                                Text("Downloaded").tag(TriState.include.rawValue)
-                                Text("Not downloaded").tag(TriState.exclude.rawValue)
+                                Text("Downloaded: any").tag(LibraryTriState.off.rawValue)
+                                Text("Downloaded").tag(LibraryTriState.include.rawValue)
+                                Text("Not downloaded").tag(LibraryTriState.exclude.rawValue)
                             }
                             Picker("Unread", selection: $unreadFilter) {
-                                Text("Read state: any").tag(TriState.off.rawValue)
-                                Text("Unread").tag(TriState.include.rawValue)
-                                Text("Read").tag(TriState.exclude.rawValue)
+                                Text("Read state: any").tag(LibraryTriState.off.rawValue)
+                                Text("Unread").tag(LibraryTriState.include.rawValue)
+                                Text("Read").tag(LibraryTriState.exclude.rawValue)
                             }
                             Picker("Started", selection: $startedFilter) {
-                                Text("Title: any").tag(TriState.off.rawValue)
-                                Text("Started").tag(TriState.include.rawValue)
-                                Text("Not started").tag(TriState.exclude.rawValue)
+                                Text("Title: any").tag(LibraryTriState.off.rawValue)
+                                Text("Started").tag(LibraryTriState.include.rawValue)
+                                Text("Not started").tag(LibraryTriState.exclude.rawValue)
                             }
                             Picker("Bookmarked", selection: $bookmarkedFilter) {
-                                Text("Bookmarks: any").tag(TriState.off.rawValue)
-                                Text("Bookmarked").tag(TriState.include.rawValue)
-                                Text("Not bookmarked").tag(TriState.exclude.rawValue)
+                                Text("Bookmarks: any").tag(LibraryTriState.off.rawValue)
+                                Text("Bookmarked").tag(LibraryTriState.include.rawValue)
+                                Text("Not bookmarked").tag(LibraryTriState.exclude.rawValue)
                             }
                         } label: {
                             Image(systemName: filtering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")

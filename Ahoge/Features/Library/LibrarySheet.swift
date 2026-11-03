@@ -84,7 +84,7 @@ struct LibrarySheet: View {
         }
     }
 
-    private func triState(_ title: String, _ state: Binding<TriState>) -> some View {
+    private func triState(_ title: String, _ state: Binding<LibraryTriState>) -> some View {
         Button {
             state.wrappedValue = state.wrappedValue.next
         } label: {
@@ -98,7 +98,7 @@ struct LibrarySheet: View {
         .accessibilityValue(state.wrappedValue == .include ? "Included" : state.wrappedValue == .exclude ? "Excluded" : "Off")
     }
 
-    private func icon(_ state: TriState) -> String {
+    private func icon(_ state: LibraryTriState) -> String {
         switch state {
         case .off: "square"
         case .include: "checkmark.square.fill"

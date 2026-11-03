@@ -335,9 +335,9 @@ struct MangaDetailView: View {
                     ForEach(ChapterDisplay.Filter.allCases) { Text($0.title).tag($0) }
                 }
                 Picker("Bookmarks", selection: $display.bookmarked) {
-                    Text("All chapters").tag(TriState.off)
-                    Text("Bookmarked").tag(TriState.include)
-                    Text("Not bookmarked").tag(TriState.exclude)
+                    Text("All chapters").tag(LibraryTriState.off)
+                    Text("Bookmarked").tag(LibraryTriState.include)
+                    Text("Not bookmarked").tag(LibraryTriState.exclude)
                 }
                 Picker("Titles", selection: $display.numberTitles) {
                     Text("Source title").tag(false)

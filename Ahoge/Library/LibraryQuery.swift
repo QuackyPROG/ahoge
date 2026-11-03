@@ -1,11 +1,11 @@
 import Foundation
 
 /// A filter row's three states (Mihon's tri-state checkbox).
-enum TriState: String, Codable, CaseIterable {
+enum LibraryTriState: String, Codable, CaseIterable {
     case off, include, exclude
 
     /// The order a tap cycles through.
-    var next: TriState {
+    var next: LibraryTriState {
         switch self {
         case .off: .include
         case .include: .exclude
@@ -23,24 +23,24 @@ enum TriState: String, Codable, CaseIterable {
 }
 
 struct LibraryFilters: Codable, Equatable {
-    var downloaded = TriState.off
-    var unread = TriState.off
-    var started = TriState.off
-    var bookmarked = TriState.off
-    var completed = TriState.off
+    var downloaded = LibraryTriState.off
+    var unread = LibraryTriState.off
+    var started = LibraryTriState.off
+    var bookmarked = LibraryTriState.off
+    var completed = LibraryTriState.off
     /// Titles with their own update interval.
-    var customInterval = TriState.off
+    var customInterval = LibraryTriState.off
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        downloaded = try values.decodeIfPresent(TriState.self, forKey: .downloaded) ?? .off
-        unread = try values.decodeIfPresent(TriState.self, forKey: .unread) ?? .off
-        started = try values.decodeIfPresent(TriState.self, forKey: .started) ?? .off
-        bookmarked = try values.decodeIfPresent(TriState.self, forKey: .bookmarked) ?? .off
-        completed = try values.decodeIfPresent(TriState.self, forKey: .completed) ?? .off
-        customInterval = try values.decodeIfPresent(TriState.self, forKey: .customInterval) ?? .off
+        downloaded = try values.decodeIfPresent(LibraryTriState.self, forKey: .downloaded) ?? .off
+        unread = try values.decodeIfPresent(LibraryTriState.self, forKey: .unread) ?? .off
+        started = try values.decodeIfPresent(LibraryTriState.self, forKey: .started) ?? .off
+        bookmarked = try values.decodeIfPresent(LibraryTriState.self, forKey: .bookmarked) ?? .off
+        completed = try values.decodeIfPresent(LibraryTriState.self, forKey: .completed) ?? .off
+        customInterval = try values.decodeIfPresent(LibraryTriState.self, forKey: .customInterval) ?? .off
     }
 
     var isActive: Bool { self != LibraryFilters() }

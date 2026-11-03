@@ -180,9 +180,9 @@ enum Pref {
     // MARK: Updates
     /// When the Updates tab was last open (seconds since 1970); newer chapters count in its badge.
     static let updatesLastSeen = Key("updates.lastSeen", 0.0)
-    /// A `TriState` raw value: only bookmarked chapters (include), none of them (exclude), or all.
+    /// A `LibraryTriState` raw value: only bookmarked chapters (include), none of them (exclude), or all.
     static let updatesBookmarked = Key("updates.bookmarked", "off")
-    /// `TriState` raw values for the other Updates filters.
+    /// `LibraryTriState` raw values for the other Updates filters.
     static let updatesDownloaded = Key("updates.downloaded", "off")
     static let updatesUnread = Key("updates.unread", "off")
     static let updatesStarted = Key("updates.started", "off")

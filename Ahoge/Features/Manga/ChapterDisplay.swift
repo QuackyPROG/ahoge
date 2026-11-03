@@ -32,7 +32,7 @@ struct ChapterDisplay: Codable, Equatable {
     var ascending = false
     var filter: Filter = .all
     /// Bookmarked chapters only (include) or none of them (exclude).
-    var bookmarked = TriState.off
+    var bookmarked = LibraryTriState.off
     /// Rows say "Chapter N" instead of the source's chapter name (Mihon's display mode).
     var numberTitles = false
 
@@ -111,7 +111,7 @@ extension ChapterDisplay {
         sort = try values.decodeIfPresent(Sort.self, forKey: .sort) ?? .source
         ascending = try values.decodeIfPresent(Bool.self, forKey: .ascending) ?? false
         filter = try values.decodeIfPresent(Filter.self, forKey: .filter) ?? .all
-        bookmarked = try values.decodeIfPresent(TriState.self, forKey: .bookmarked) ?? .off
+        bookmarked = try values.decodeIfPresent(LibraryTriState.self, forKey: .bookmarked) ?? .off
         numberTitles = try values.decodeIfPresent(Bool.self, forKey: .numberTitles) ?? false
     }
 }
