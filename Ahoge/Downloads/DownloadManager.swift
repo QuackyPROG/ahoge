@@ -249,6 +249,16 @@ final class DownloadManager: ObservableObject {
 
     func clearChapterCache() { store.clearCache() }
 
+    /// Both sizes, measured off the main thread.
+    func storageUsage() async -> (downloads: Int64, chapterCache: Int64) {
+        let store = store
+        return await Task.detached(priority: .utility) { () -> (downloads: Int64, chapterCache: Int64) in
+            let cache = DownloadStore.size(of: store.cache)
+            let total = DownloadStore.size(of: store.root)
+            return (store.cache.path.hasPrefix(store.root.path) ? total - cache : total, cache)
+        }.value
+    }
+
     // MARK: Tests and background work
 
     /// Returns once nothing is downloading (queued chapters held back by pause or Wi-Fi stay queued).

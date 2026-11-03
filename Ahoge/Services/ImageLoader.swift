@@ -80,6 +80,9 @@ actor ImageLoader {
         Task(priority: .utility) { _ = try? await image(url, headers: headers, priority: .utility) }
     }
 
+    /// Bytes the image cache holds on disk.
+    func diskUsage() -> Int { session.configuration.urlCache?.currentDiskUsage ?? 0 }
+
     func clear() {
         ImageMemoryCache.shared.removeAll()
         session.configuration.urlCache?.removeAllCachedResponses()

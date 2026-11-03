@@ -7,6 +7,9 @@ struct DataStorageView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var extensions: ExtensionStore
     @EnvironmentObject private var sources: SourceManager
+    @EnvironmentObject private var downloads: DownloadManager
+    @AppStorage(Pref.clearChapterCacheOnLaunch.name) private var clearChapterCacheOnLaunch = false
+    @State private var usage: StorageUsage?
     @AppStorage(Pref.autoBackupInterval.name) private var autoInterval = 0
     @AppStorage(Pref.autoBackupKeep.name) private var autoKeep = 4
     @AppStorage(Pref.autoBackupLast.name) private var autoLast = 0.0
@@ -55,13 +58,44 @@ struct DataStorageView: View {
             .themedRows()
 
             Section("Storage") {
+                LabeledContent {
+                    Text(usage.map { Self.bytes($0.downloads) } ?? "…")
+                } label: {
+                    Label { Text("Downloads") } icon: { SettingsIcon(systemName: "arrow.down.circle.fill", color: .blue) }
+                }
                 Button {
                     Task {
                         await ImageLoader.shared.clear()
                         message = "Image cache cleared."
+                        await measure()
                     }
                 } label: {
-                    Label { Text("Clear image cache").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "photo.stack", color: .gray) }
+                    LabeledContent {
+                        Text(usage.map { Self.bytes($0.imageCache) } ?? "…")
+                    } label: {
+                        Label { Text("Clear image cache").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "photo.stack", color: .gray) }
+                    }
+                }
+                Button {
+                    downloads.clearChapterCache()
+                    message = "Chapter cache cleared."
+                    Task { await measure() }
+                } label: {
+                    LabeledContent {
+                        Text(usage.map { Self.bytes($0.chapterCache) } ?? "…")
+                    } label: {
+                        Label { Text("Clear chapter cache").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "doc.zipper", color: .brown) }
+                    }
+                }
+                Toggle(isOn: $clearChapterCacheOnLaunch) {
+                    Label { Text("Clear chapter cache on launch") } icon: { SettingsIcon(systemName: "arrow.uturn.backward.circle.fill", color: .teal) }
+                }
+                Button {
+                    downloads.reindex()
+                    message = "Downloads reindexed."
+                    Task { await measure() }
+                } label: {
+                    Label { Text("Reindex downloads").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "arrow.triangle.2.circlepath", color: .indigo) }
                 }
                 Button(role: .destructive) {
                     Task {
@@ -79,6 +113,7 @@ struct DataStorageView: View {
         .navigationTitle("Data and storage")
         .navigationBarTitleDisplayMode(.inline)
         .themedScreen()
+        .task { await measure() }
         .fileExporter(
             isPresented: Binding(get: { exporting != nil }, set: { if !$0 { exporting = nil } }),
             document: exporting,
@@ -99,6 +134,22 @@ struct DataStorageView: View {
         .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
         }
+    }
+
+    private struct StorageUsage {
+        let downloads: Int64
+        let imageCache: Int64
+        let chapterCache: Int64
+    }
+
+    private func measure() async {
+        let files = await downloads.storageUsage()
+        let images = await ImageLoader.shared.diskUsage()
+        usage = StorageUsage(downloads: files.downloads, imageCache: Int64(images), chapterCache: files.chapterCache)
+    }
+
+    private static func bytes(_ count: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
     }
 
     private static func intervalLabel(_ hours: Int) -> String {
