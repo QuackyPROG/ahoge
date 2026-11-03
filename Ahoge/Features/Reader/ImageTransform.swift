@@ -19,7 +19,8 @@ struct ImageTransform: Hashable, Sendable {
 
     static let plain = ImageTransform()
 
-    var isIdentity: Bool { self == Self.plain }
+    /// Nothing to do (the split order alone changes nothing without a half).
+    var isIdentity: Bool { !cropBorders && half == nil && !rotateWide && !grayscale && !invert }
 
     /// Appended to the cache key; empty for `plain`, so a plain page's key stays its URL.
     var cacheSuffix: String {

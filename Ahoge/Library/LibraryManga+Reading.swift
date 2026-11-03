@@ -26,3 +26,11 @@ extension LibraryManga {
         return baseUrl + (url.hasPrefix("/") ? "" : "/") + url
     }
 }
+
+extension ChapterRecord {
+    /// The chapter's page on the source's website. `url` may be a path or already absolute.
+    func webURL(baseUrl: String) -> String {
+        if url.lowercased().hasPrefix("http://") || url.lowercased().hasPrefix("https://") { return url }
+        return baseUrl + (url.hasPrefix("/") ? "" : "/") + url
+    }
+}

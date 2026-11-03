@@ -493,6 +493,11 @@ extension ChapterRecord {
     var sourceId: String { Self.sourceId(ofKey: key) }
 }
 
+extension DownloadManager {
+    /// On cellular or another metered network; the reader then prefetches less ("Preload only on Wi-Fi").
+    var isOnExpensiveNetwork: Bool { !network.allows(onlyWiFi: true) }
+}
+
 /// Holds downloads back on cellular when "Only on Wi-Fi" is on. An unknown or offline path does not
 /// block: requests then fail and the chapter shows the error, as in Mihon.
 @MainActor

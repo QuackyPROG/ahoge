@@ -13,31 +13,48 @@ struct ReaderPageView: View {
     let index: Int
     let paged: Bool
     let foreground: Color
+    let transform: ImageTransform
+    let zoom: ZoomOptions
     var onTap: (CGPoint) -> Void = { _ in }
+    /// Told the page's untransformed size once known, so wide pages can be split or kept alone.
+    var onSize: (CGSize) -> Void = { _ in }
     @State private var image: UIImage?
+    /// The cache key `image` was loaded for; a new transform loads again.
+    @State private var loadedKey: String?
     @State private var failed = false
     @State private var attempt = 0
     @State private var shown: Bool
     @State private var saveError: String?
 
-    init(page: SourcePage, index: Int, paged: Bool, foreground: Color, onTap: @escaping (CGPoint) -> Void = { _ in }) {
+    init(
+        page: SourcePage, index: Int, paged: Bool, foreground: Color,
+        transform: ImageTransform = .plain, zoom: ZoomOptions = ZoomOptions(),
+        onTap: @escaping (CGPoint) -> Void = { _ in }, onSize: @escaping (CGSize) -> Void = { _ in }
+    ) {
         self.page = page
         self.index = index
         self.paged = paged
         self.foreground = foreground
+        self.transform = transform
+        self.zoom = zoom
         self.onTap = onTap
+        self.onSize = onSize
         // A page already in memory draws on its first frame, without a placeholder or fade.
-        let cached = ImageMemoryCache.shared[page.url]
+        let key = ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
+        let cached = ImageMemoryCache.shared[key]
         _image = State(initialValue: cached)
+        _loadedKey = State(initialValue: cached == nil ? nil : key)
         _shown = State(initialValue: cached != nil)
     }
+
+    private var cacheKey: String { ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform) }
 
     var body: some View {
         Group {
             if let image {
                 Group {
                     if paged {
-                        ZoomableImage(image: image, onTap: onTap)
+                        ZoomableImage(image: image, options: zoom, onTap: onTap)
                     } else {
                         Image(uiImage: image)
                             .resizable()
@@ -57,13 +74,17 @@ struct ReaderPageView: View {
         } message: {
             Text(saveError ?? "")
         }
-        .task(id: "\(page.url)#\(attempt)") {
-            guard image == nil else { return }
+        .task(id: "\(cacheKey)#\(attempt)") {
+            let key = cacheKey
+            if let plain = ImageMemoryCache.shared[page.url] { onSize(plain.size) }
+            guard image == nil || loadedKey != key else { return }
             failed = false
             do {
-                let loaded = try await ImageLoader.shared.image(page.url, headers: page.headers)
-                if loaded.size.height > 0 { PageAspect.known[page.url] = loaded.size.width / loaded.size.height }
+                let loaded = try await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform)
+                if loaded.size.height > 0 { PageAspect.known[key] = loaded.size.width / loaded.size.height }
+                if let plain = ImageMemoryCache.shared[page.url] { onSize(plain.size) }
                 image = loaded
+                loadedKey = key
             } catch {
                 failed = true
             }
@@ -93,7 +114,7 @@ struct ReaderPageView: View {
         } else {
             placeholderContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .aspectRatio(PageAspect.known[page.url] ?? PageAspect.guess, contentMode: .fit)
+                .aspectRatio(PageAspect.known[cacheKey] ?? PageAspect.guess, contentMode: .fit)
         }
     }
 

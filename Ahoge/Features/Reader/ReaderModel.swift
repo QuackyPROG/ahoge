@@ -8,9 +8,30 @@ final class ReaderModel: ObservableObject {
         var id: String { chapter.url }
     }
 
-    /// One scroll target: a page, or the card shown before the first chapter and after each one.
+    /// How pages become scroll items, from the reader's settings.
+    struct Layout: Equatable {
+        /// Wide pages become two items, one per half.
+        var splitWide = false
+        /// Pages are paired into two-page spreads.
+        var dualPage = false
+        var rightToLeft = false
+        /// Spreads start one page later (Mihon's "shift").
+        var shiftSpreads = false
+        /// Off: the card between two loaded chapters shows only when chapters are missing in between.
+        var alwaysShowTransition = true
+    }
+
+    /// One page of a spread, in screen order.
+    struct SpreadPage {
+        let page: SourcePage
+        let index: Int
+    }
+
+    /// One scroll target: a page (or half a page, or a spread), or the card shown before the first
+    /// chapter and after each one.
     struct Item: Identifiable {
         enum Kind {
+            /// The page, or the first page of a spread in reading order.
             case page(SourcePage, index: Int, count: Int)
             /// Before `chapter`: the chapter that comes before it, if any.
             case start(previous: ChapterRecord?)
@@ -21,11 +42,17 @@ final class ReaderModel: ObservableObject {
         let id: String
         let chapter: ChapterRecord
         let kind: Kind
+        /// Which half of a split wide page this item shows.
+        var half: ImageTransform.Half? = nil
+        /// Both pages of a two-page spread, left to right on screen; empty for a single page.
+        var spread: [SpreadPage] = []
+        /// The page ids this item shows, so a page can be found again after pages are re-paired.
+        var pageIDs: [String] = []
     }
 
     let sourceId: String
     let manga: LibraryManga
-    @Published private(set) var sections: [Section] = [] { didSet { items = Self.items(sections, model: self) } }
+    @Published private(set) var sections: [Section] = [] { didSet { rebuildItems() } }
     @Published private(set) var items: [Item] = []
     @Published private(set) var error: Error?
     @Published private(set) var isLoadingNext = false
@@ -35,25 +62,38 @@ final class ReaderModel: ObservableObject {
     @Published var position: String?
     /// False while a chapter loads and the scroll view moves to its starting page.
     @Published private(set) var ready = false
+    var layout = Layout() { didSet { if layout != oldValue { rebuildItems() } } }
+    /// Applied to prefetched pages (crop, colours), so they are ready when shown.
+    var transform = ImageTransform.plain
+    /// Set when the reader opens; the next and previous chapters skip their chapters.
+    var excludedScanlators: Set<String> = [] { didSet { navigator = makeNavigator() } }
+    private let rules: SkipRules
+    private let display: ChapterDisplay
+    private var navigator: ChapterNavigator!
+    /// Sizes of pages decoded so far, by page id.
+    private var pageSizes: [String: CGSize] = [:]
 
-    init(sourceId: String, manga: LibraryManga, start: ChapterRecord) {
+    init(sourceId: String, manga: LibraryManga, start: ChapterRecord, rules: SkipRules = .current(), display: ChapterDisplay? = nil) {
         self.sourceId = sourceId
         self.manga = manga
+        self.rules = rules
+        self.display = display ?? ChapterDisplay.load(for: manga.key)
         currentChapter = start
+        navigator = makeNavigator()
+    }
+
+    private func makeNavigator() -> ChapterNavigator {
+        ChapterNavigator(chapters: manga.chapters, display: display, excludedScanlators: excludedScanlators, rules: rules)
     }
 
     var currentSection: Section? { sections.first { $0.id == currentChapter.url } }
 
     static func pageID(_ chapterURL: String, _ index: Int) -> String { "\(chapterURL)#\(index)" }
 
-    /// The next chapter to read: the closest newer one (lower sourceOrder).
-    func chapter(after chapter: ChapterRecord) -> ChapterRecord? {
-        manga.chapters.filter { $0.sourceOrder < chapter.sourceOrder }.max { $0.sourceOrder < $1.sourceOrder }
-    }
+    /// The next chapter to read, by the chapter list's order and the skip rules.
+    func chapter(after chapter: ChapterRecord) -> ChapterRecord? { navigator.next(after: chapter) }
 
-    func chapter(before chapter: ChapterRecord) -> ChapterRecord? {
-        manga.chapters.filter { $0.sourceOrder > chapter.sourceOrder }.min { $0.sourceOrder < $1.sourceOrder }
-    }
+    func chapter(before chapter: ChapterRecord) -> ChapterRecord? { navigator.previous(before: chapter) }
 
     /// Shows only `chapter`, replacing what was loaded, at `page` (its saved page when nil).
     func open(_ chapter: ChapterRecord, page: Int? = nil, provider: PageProvider) async {
@@ -73,7 +113,7 @@ final class ReaderModel: ObservableObject {
             currentPage = index
             // The scroll view only moves to an item it has laid out.
             try? await Task.sleep(nanoseconds: 60_000_000)
-            position = Self.pageID(chapter.url, index)
+            position = itemID(containing: Self.pageID(chapter.url, index))
             try? await Task.sleep(nanoseconds: 60_000_000)
         } catch {
             self.error = error
@@ -95,7 +135,7 @@ final class ReaderModel: ObservableObject {
     /// Scrolls to `page` of the current chapter.
     func jump(to page: Int) {
         guard let section = currentSection, section.pages.indices.contains(page) else { return }
-        position = Self.pageID(section.id, page)
+        position = itemID(containing: Self.pageID(section.id, page))
     }
 
     /// The item `offset` places from the current one, for tap zones and keys.
@@ -105,19 +145,37 @@ final class ReaderModel: ObservableObject {
         return items.indices.contains(target) ? items[target].id : nil
     }
 
+    /// The item showing the page `pageID`: its own item, or the spread it is part of.
+    func itemID(containing pageID: String) -> String? {
+        items.first { $0.id == pageID || $0.pageIDs.contains(pageID) }?.id
+    }
+
+    /// A page's size became known (decoded on screen or prefetched). Only a page turning out wide
+    /// changes the items, and only while wide pages split or spreads are paired.
+    func learnSize(_ size: CGSize, of pageID: String) {
+        let wasWide = pageSizes[pageID].map(PageGeometry.isWide) ?? false
+        pageSizes[pageID] = size
+        guard PageGeometry.isWide(size) != wasWide, layout.splitWide || layout.dualPage else { return }
+        rebuildItems()
+    }
+
     /// Records progress for the item now on screen and loads what comes next.
     func positionChanged(repo: LibraryRepository, provider: PageProvider) {
         guard ready, let position, let index = items.firstIndex(where: { $0.id == position }) else { return }
         let item = items[index]
         switch item.kind {
-        case .page(_, let page, let count):
+        case .page(_, let first, let count):
+            // A spread counts as read up to its later page.
+            let page = item.spread.map(\.index).max() ?? first
             currentChapter = item.chapter
             currentPage = page
             let wasRead = item.chapter.read
             repo.saveProgress(item.chapter, page: page, pageCount: count)
             if !wasRead, item.chapter.read { provider.downloads.readerFinished(item.chapter) }
-            for case .page(let next, _, _) in items.dropFirst(index + 1).prefix(5).map(\.kind) {
-                Task { await ImageLoader.shared.prefetch(next.url, headers: next.headers) }
+            // "Preload only on Wi-Fi": on cellular, only the next page.
+            let ahead = Pref.readerPreloadOnlyOnWiFi.value() && provider.downloads.isOnExpensiveNetwork ? 1 : 5
+            for next in items.dropFirst(index + 1).prefix(ahead) {
+                for (page, id) in Self.pages(of: next) { prefetch(page, id: id) }
             }
             // Mihon starts on the next chapter a few pages before the end, so it is there when reached.
             if count - page <= 3 { loadNext(after: item.chapter, provider: provider) }
@@ -149,8 +207,9 @@ final class ReaderModel: ObservableObject {
                 if !sections.contains(where: { $0.id == next.url }) {
                     sections.append(Section(chapter: next, pages: pages))
                 }
-                for page in pages.prefix(3) {
-                    Task { await ImageLoader.shared.prefetch(page.url, headers: page.headers) }
+                let ahead = Pref.readerPreloadOnlyOnWiFi.value() && provider.downloads.isOnExpensiveNetwork ? 1 : 3
+                for (index, page) in pages.prefix(ahead).enumerated() {
+                    prefetch(page, id: Self.pageID(next.url, index))
                 }
             } catch {
                 self.error = error
@@ -158,14 +217,91 @@ final class ReaderModel: ObservableObject {
         }
     }
 
-    private static func items(_ sections: [Section], model: ReaderModel) -> [Item] {
+    /// Loads a page below the one on screen and notes its size; the transformed copy follows.
+    private func prefetch(_ page: SourcePage, id: String) {
+        let transform = transform
+        Task { [weak self] in
+            guard let image = try? await ImageLoader.shared.image(page.url, headers: page.headers, priority: .utility) else { return }
+            self?.learnSize(image.size, of: id)
+            if !transform.isIdentity { await ImageLoader.shared.prefetch(page.url, headers: page.headers, transform: transform) }
+        }
+    }
+
+    /// The pages an item shows, with their page ids.
+    private static func pages(of item: Item) -> [(SourcePage, String)] {
+        guard case .page(let page, let index, _) = item.kind else { return [] }
+        if item.spread.isEmpty { return [(page, pageID(item.chapter.url, index))] }
+        return item.spread.map { ($0.page, pageID(item.chapter.url, $0.index)) }
+    }
+
+    private func rebuildItems() {
+        items = buildItems()
+        // A page that joined or left a spread (or a half that is whole again) now has another item: follow it.
+        if let position, !items.contains(where: { $0.id == position }) {
+            let page = position.replacingOccurrences(of: Self.secondHalfSuffix, with: "")
+            if let owner = itemID(containing: page) { self.position = owner }
+        }
+    }
+
+    private static let secondHalfSuffix = "\nsecond"
+
+    private func buildItems() -> [Item] {
         guard let first = sections.first else { return [] }
-        var items = [Item(id: "start\n" + first.id, chapter: first.chapter, kind: .start(previous: model.chapter(before: first.chapter)))]
-        for section in sections {
-            for (index, page) in section.pages.enumerated() {
-                items.append(Item(id: pageID(section.id, index), chapter: section.chapter, kind: .page(page, index: index, count: section.pages.count)))
+        var items = [Item(id: "start\n" + first.id, chapter: first.chapter, kind: .start(previous: chapter(before: first.chapter)))]
+        for (number, section) in sections.enumerated() {
+            items += pageItems(section)
+            let next = chapter(after: section.chapter)
+            let endID = "end\n" + section.id
+            let isLast = number == sections.count - 1
+            // Kept while on screen, so the scroll view never loses the item it shows.
+            if layout.alwaysShowTransition || isLast || position == endID || Self.hasGap(from: section.chapter, to: next) {
+                items.append(Item(id: endID, chapter: section.chapter, kind: .end(next: next)))
             }
-            items.append(Item(id: "end\n" + section.id, chapter: section.chapter, kind: .end(next: model.chapter(after: section.chapter))))
+        }
+        return items
+    }
+
+    /// Chapters are missing between `chapter` and `next` (Mihon shows the card for these).
+    private static func hasGap(from chapter: ChapterRecord, to next: ChapterRecord?) -> Bool {
+        guard let next, chapter.number >= 0, next.number >= 0 else { return false }
+        return abs(next.number.rounded(.down) - chapter.number.rounded(.down)) > 1
+    }
+
+    private func pageItems(_ section: Section) -> [Item] {
+        let count = section.pages.count
+        let ids = (0..<count).map { Self.pageID(section.id, $0) }
+        func single(_ index: Int, half: ImageTransform.Half? = nil) -> Item {
+            Item(
+                id: half == .second ? ids[index] + Self.secondHalfSuffix : ids[index],
+                chapter: section.chapter,
+                kind: .page(section.pages[index], index: index, count: count),
+                half: half,
+                pageIDs: half == .second ? [] : [ids[index]]
+            )
+        }
+        if layout.dualPage {
+            var sizes: [Int: CGSize] = [:]
+            for (index, id) in ids.enumerated() { sizes[index] = pageSizes[id] }
+            return PagePairing.pairs(pages: count, sizes: sizes, rtl: layout.rightToLeft, firstAlone: layout.shiftSpreads).map { group -> Item in
+                guard group.count > 1 else { return single(group[0]) }
+                let first = group.min() ?? group[0]
+                return Item(
+                    id: ids[first],
+                    chapter: section.chapter,
+                    kind: .page(section.pages[first], index: first, count: count),
+                    spread: group.map { SpreadPage(page: section.pages[$0], index: $0) },
+                    pageIDs: group.map { ids[$0] }
+                )
+            }
+        }
+        var items: [Item] = []
+        for index in 0..<count {
+            if layout.splitWide, let size = pageSizes[ids[index]], PageGeometry.isWide(size) {
+                items.append(single(index, half: .first))
+                items.append(single(index, half: .second))
+            } else {
+                items.append(single(index))
+            }
         }
         return items
     }
