@@ -7,6 +7,7 @@ struct MangaDetailView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var downloads: DownloadManager
     @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var isLoading = false
     @State private var error: Error?
     @State private var expanded = false
@@ -58,49 +59,15 @@ struct MangaDetailView: View {
     var body: some View {
         let chapters = manga.map { display.apply(to: $0.chapters, excluding: excluded) } ?? []
         ScrollViewReader { proxy in
-            List(selection: $selection) {
-                Section {
-                    header.listRowInsets(EdgeInsets()).listRowBackground(backdrop)
+            // iPad: details on the left, chapters on the right.
+            if sizeClass == .regular {
+                HStack(spacing: 0) {
+                    list(.details, chapters: chapters, proxy: proxy).frame(width: 400)
+                    Divider()
+                    list(.chapters, chapters: chapters, proxy: proxy)
                 }
-                .listRowSeparator(.hidden)
-                if let error, manga?.chapters.isEmpty ?? true {
-                    Section {
-                        ErrorStateView(error: error, retry: { Task { await refresh() } }, openWeb: { webTarget = WebTarget(url: $0) })
-                    }
-                    .listRowSeparator(.hidden)
-                    .themedRows(plain: true)
-                }
-                if let manga {
-                    Section {
-                        ForEach(Array(chapters.enumerated()), id: \.element.key) { index, chapter in
-                            chapterRow(chapter, in: manga)
-                                .id(chapter.key)
-                                .tag(chapter.key)
-                                .onAppear { visible.appeared(index) }
-                                .onDisappear { visible.disappeared(index) }
-                            if let gap = missing(after: index, in: chapters) { missingRow(gap) }
-                        }
-                    } header: {
-                        chapterHeader(manga, shown: chapters.count)
-                    }
-                    .themedRows(plain: true)
-                }
-            }
-            .listStyle(.plain)
-            .themedScreen()
-            .scrollIndicators(chapters.count > 40 ? .hidden : .automatic)
-            .environment(\.editMode, .constant(selecting ? .active : .inactive))
-            .overlay(alignment: .trailing) {
-                if chapters.count > 40 {
-                    FastScroller(
-                        count: chapters.count,
-                        rows: visible,
-                        label: { chapters[$0].number >= 0 ? "Ch. \(chapters[$0].number.formatted())" : chapters[$0].name },
-                        scrollTo: { proxy.scrollTo(chapters[$0].key, anchor: .top) }
-                    )
-                    .padding(.top, 280)
-                    .padding(.bottom, 90)
-                }
+            } else {
+                list(.all, chapters: chapters, proxy: proxy)
             }
         }
         .overlay(alignment: .bottomTrailing) { if !selecting { resumeButton } }
@@ -166,6 +133,60 @@ struct MangaDetailView: View {
         }
         .fullScreenCover(item: $reading) { chapter in
             if let manga { ReaderView(sourceId: ref.sourceId, manga: manga, chapter: chapter) }
+        }
+    }
+
+    /// What a list shows: everything on a phone, one half on a tablet.
+    private enum Pane { case all, details, chapters }
+
+    private func list(_ pane: Pane, chapters: [ChapterRecord], proxy: ScrollViewProxy) -> some View {
+        List(selection: $selection) {
+            if pane != .chapters {
+                Section {
+                    header.listRowInsets(EdgeInsets()).listRowBackground(backdrop)
+                }
+                .listRowSeparator(.hidden)
+            }
+            if pane != .details {
+                if let error, manga?.chapters.isEmpty ?? true {
+                    Section {
+                        ErrorStateView(error: error, retry: { Task { await refresh() } }, openWeb: { webTarget = WebTarget(url: $0) })
+                    }
+                    .listRowSeparator(.hidden)
+                    .themedRows(plain: true)
+                }
+                if let manga {
+                    Section {
+                        ForEach(Array(chapters.enumerated()), id: \.element.key) { index, chapter in
+                            chapterRow(chapter, in: manga)
+                                .id(chapter.key)
+                                .tag(chapter.key)
+                                .onAppear { visible.appeared(index) }
+                                .onDisappear { visible.disappeared(index) }
+                            if let gap = missing(after: index, in: chapters) { missingRow(gap) }
+                        }
+                    } header: {
+                        chapterHeader(manga, shown: chapters.count)
+                    }
+                    .themedRows(plain: true)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .themedScreen()
+        .scrollIndicators(chapters.count > 40 && pane != .details ? .hidden : .automatic)
+        .environment(\.editMode, .constant(selecting ? .active : .inactive))
+        .overlay(alignment: .trailing) {
+            if chapters.count > 40, pane != .details {
+                FastScroller(
+                    count: chapters.count,
+                    rows: visible,
+                    label: { chapters[$0].number >= 0 ? "Ch. \(chapters[$0].number.formatted())" : chapters[$0].name },
+                    scrollTo: { proxy.scrollTo(chapters[$0].key, anchor: .top) }
+                )
+                .padding(.top, 280)
+                .padding(.bottom, 90)
+            }
         }
     }
 

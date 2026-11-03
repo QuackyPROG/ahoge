@@ -15,6 +15,7 @@ struct RootView: View {
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.incognito.name) private var incognito = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var repoError: String?
     @ObservedObject private var updateCenter = UpdateCenter.shared
     @State private var showOnboarding = false
@@ -23,25 +24,7 @@ struct RootView: View {
         let palette = theme.palette(pureBlack: pureBlack)
         let unseen = repo.updates(since: max(Date(timeIntervalSince1970: lastSeen), UpdatesPrefs.cutoff)).count
         let badge = updatesBadge ? unseen : 0
-        TabView(selection: $navigator.tab) {
-            LibraryView()
-                .tabItem { Label("Library", systemImage: "books.vertical") }
-                .tag(AppTab.library)
-            UpdatesView()
-                .tabItem { Label("Updates", systemImage: "bell") }
-                .badge(badge)
-                .tag(AppTab.updates)
-            HistoryView()
-                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
-                .tag(AppTab.history)
-            BrowseView()
-                .tabItem { Label("Browse", systemImage: "safari") }
-                .tag(AppTab.browse)
-            MoreView()
-                .tabItem { Label("More", systemImage: "ellipsis.circle") }
-                .badge(downloads.queue.count)
-                .tag(AppTab.more)
-        }
+        tabs(badge: badge)
         .safeAreaInset(edge: .top, spacing: 0) {
             // Mihon's banners while Downloaded only or Incognito mode is on.
             VStack(spacing: 0) {
@@ -126,6 +109,59 @@ struct RootView: View {
         } message: {
             Text(updater.failures.joined(separator: "\n"))
         }
+    }
+
+    /// Tabs on a phone; on a wide screen (iPad) a sidebar with the screen beside it.
+    @ViewBuilder private func tabs(badge: Int) -> some View {
+        if sizeClass == .regular {
+            NavigationSplitView {
+                List(selection: sidebarSelection) {
+                    ForEach(AppTab.allCases, id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.symbol)
+                            .badge(tab == .updates ? badge : tab == .more ? downloads.queue.count : 0)
+                            .tag(tab)
+                    }
+                }
+                .navigationTitle(AppInfo.name)
+            } detail: {
+                screen(navigator.tab)
+            }
+        } else {
+            TabView(selection: $navigator.tab) {
+                screen(.library)
+                    .tabItem { Label(AppTab.library.title, systemImage: AppTab.library.symbol) }
+                    .tag(AppTab.library)
+                screen(.updates)
+                    .tabItem { Label(AppTab.updates.title, systemImage: AppTab.updates.symbol) }
+                    .badge(badge)
+                    .tag(AppTab.updates)
+                screen(.history)
+                    .tabItem { Label(AppTab.history.title, systemImage: AppTab.history.symbol) }
+                    .tag(AppTab.history)
+                screen(.browse)
+                    .tabItem { Label(AppTab.browse.title, systemImage: AppTab.browse.symbol) }
+                    .tag(AppTab.browse)
+                screen(.more)
+                    .tabItem { Label(AppTab.more.title, systemImage: AppTab.more.symbol) }
+                    .badge(downloads.queue.count)
+                    .tag(AppTab.more)
+            }
+        }
+    }
+
+    @ViewBuilder private func screen(_ tab: AppTab) -> some View {
+        switch tab {
+        case .library: LibraryView()
+        case .updates: UpdatesView()
+        case .history: HistoryView()
+        case .browse: BrowseView()
+        case .more: MoreView()
+        }
+    }
+
+    /// The sidebar list selects an optional; a tab is always selected.
+    private var sidebarSelection: Binding<AppTab?> {
+        Binding(get: { navigator.tab }, set: { if let tab = $0 { navigator.tab = tab } })
     }
 
     /// Pushes mode and tint onto the UIKit windows too: preferredColorScheme(nil) can stick and covers force .dark.

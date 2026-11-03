@@ -1,7 +1,27 @@
 import SwiftUI
 
-enum AppTab: Hashable {
+enum AppTab: Hashable, CaseIterable {
     case library, updates, history, browse, more
+
+    var title: String {
+        switch self {
+        case .library: "Library"
+        case .updates: "Updates"
+        case .history: "History"
+        case .browse: "Browse"
+        case .more: "More"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .library: "books.vertical"
+        case .updates: "bell"
+        case .history: "clock.arrow.circlepath"
+        case .browse: "safari"
+        case .more: "ellipsis.circle"
+        }
+    }
 }
 
 /// Asks the interface to go somewhere from outside a view: a notification tap, and later deep links.
