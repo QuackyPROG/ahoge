@@ -78,7 +78,7 @@ struct MoreView: View {
                 }
                 .themedRows()
 
-                Section("Chapters") {
+                Section {
                     Picker(selection: $swipeRight) {
                         ForEach(ChapterSwipeAction.allCases) { Text($0.title).tag($0.rawValue) }
                     } label: {
@@ -95,6 +95,8 @@ struct MoreView: View {
                     Toggle(isOn: $markDuplicateRead) {
                         Label { Text("Mark duplicate chapters read") } icon: { SettingsIcon(systemName: "checkmark.circle.fill", color: .green) }
                     }
+                } header: {
+                    Text("Chapters")
                 } footer: {
                     Text("A new chapter with the number of one you already read is marked read when a title refreshes.")
                 }
