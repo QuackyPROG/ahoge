@@ -112,9 +112,12 @@ struct SourceBrowseView: View {
     @State private var editing: FilterState?
     @Environment(\.palette) private var palette
     private let genre: String?
+    /// Searched as soon as the screen opens.
+    private let initialQuery: String?
 
-    init(sourceId: String, genre: String? = nil) {
+    init(sourceId: String, genre: String? = nil, query: String? = nil) {
         self.genre = genre
+        initialQuery = query
         _model = StateObject(wrappedValue: SourceBrowseModel(sourceId: sourceId))
     }
 
@@ -164,6 +167,7 @@ struct SourceBrowseView: View {
             guard model.items.isEmpty else { return }
             await model.loadFilters { try await sources.source(model.sourceId).filters() }
             if let genre, model.query.isEmpty, model.feed != .filtered { model.applyGenre(genre) }
+            if let initialQuery, model.query.isEmpty { model.query = initialQuery }
             await model.reload(fetch)
         }
         .refreshable { await model.reload(fetch) }
