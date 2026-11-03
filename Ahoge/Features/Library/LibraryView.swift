@@ -117,6 +117,11 @@ struct LibraryView: View {
     private func page(_ shelf: LibraryShelf, titles: [LibraryManga]) -> some View {
         let items = visible(titles)
         let unread = Dictionary(items.map { ($0.key, $0.unreadCount) }, uniquingKeysWith: { first, _ in first })
+        let onContinue: ((MangaRef) -> Void)? = continueButton ? { ref in
+            if let manga = repo.manga(sourceId: ref.sourceId, url: ref.url), let chapter = manga.nextUnreadChapter {
+                reading = (manga, chapter)
+            }
+        } : nil
         return ScrollView {
             if items.isEmpty { emptyState(shelf).padding(.top, 80) }
             MangaGrid(
@@ -127,11 +132,7 @@ struct LibraryView: View {
                 },
                 selection: selecting ? $selection : nil,
                 librarySelect: { startSelecting($0) },
-                onContinue: continueButton ? { ref in
-                    if let manga = repo.manga(sourceId: ref.sourceId, url: ref.url), let chapter = manga.nextUnreadChapter {
-                        reading = (manga, chapter)
-                    }
-                } : nil,
+                onContinue: onContinue,
                 canContinue: { (unread[LibraryManga.makeKey(sourceId: $0.sourceId, url: $0.url)] ?? 0) > 0 }
             )
             .padding(.vertical, 8)
