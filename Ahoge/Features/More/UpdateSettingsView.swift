@@ -8,6 +8,7 @@ struct UpdateSettingsView: View {
     @AppStorage(Pref.updateSkipCompleted.name) private var skipCompleted = Pref.updateSkipCompleted.defaultValue
     @AppStorage(Pref.updateSmart.name) private var smart = Pref.updateSmart.defaultValue
     @AppStorage(Pref.updateRefreshMetadata.name) private var refreshMetadata = Pref.updateRefreshMetadata.defaultValue
+    @AppStorage(Pref.updateMatchTitles.name) private var matchTitles = Pref.updateMatchTitles.defaultValue
 
     @AppStorage(Pref.autoUpdateInterval.name) private var interval = Pref.autoUpdateInterval.defaultValue
     @AppStorage(Pref.autoUpdateOnlyCharging.name) private var onlyCharging = Pref.autoUpdateOnlyCharging.defaultValue
@@ -52,6 +53,11 @@ struct UpdateSettingsView: View {
                 }
                 Toggle(isOn: $refreshMetadata) {
                     Label { Text("Refresh metadata") } icon: { SettingsIcon(systemName: "arrow.triangle.2.circlepath", color: .teal) }
+                }
+                if refreshMetadata {
+                    Toggle(isOn: $matchTitles) {
+                        Label { Text("Update titles to match source") } icon: { SettingsIcon(systemName: "textformat", color: .indigo) }
+                    }
                 }
             } footer: {
                 Text("Smart update checks a title about as often as it releases chapters, from the dates of its latest chapters. Refresh metadata also re-fetches details and the cover when a title updates. Each title can have its own interval on its page.")

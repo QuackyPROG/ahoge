@@ -26,7 +26,7 @@ extension Pref {
         swipeRight.name, swipeLeft.name, hideMissingChapters.name, markDuplicateRead.name, chapterDisplayDefault.name,
         updatesBookmarked.name, updatesDownloaded.name, updatesUnread.name, updatesStarted.name, updatesBadge.name,
         autoUpdateInterval.name, autoUpdateOnlyCharging.name, updateSkipUnread.name, updateSkipUnstarted.name,
-        updateSkipCompleted.name, updateSmart.name, updateRefreshMetadata.name, updateNotify.name,
+        updateSkipCompleted.name, updateSmart.name, updateRefreshMetadata.name, updateMatchTitles.name, updateNotify.name,
         updateHideNotificationContent.name,
     ]
 }

@@ -46,6 +46,7 @@ final class LibraryUpdater: ObservableObject {
         done = 0
         total = queue.count
         let refreshMetadata = Pref.updateRefreshMetadata.value()
+        let matchTitles = Pref.updateMatchTitles.value()
         let titles = queue
         let task = Task { @MainActor in
             var errors: [String] = []
@@ -56,7 +57,7 @@ final class LibraryUpdater: ObservableObject {
                     let source = try sources.source(title.sourceId)
                     // A failing details call must not stop the chapters from updating.
                     if refreshMetadata, let details = try? await source.details(url: title.url) {
-                        repo.upsert(sourceId: title.sourceId, url: title.url, details: details)
+                        repo.upsert(sourceId: title.sourceId, url: title.url, details: details, keepTitle: !matchTitles)
                     }
                     let before = Set(title.chapters.map(\.key))
                     repo.applyChapters(try await source.chapters(url: title.url), to: title)

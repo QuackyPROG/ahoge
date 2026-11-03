@@ -181,10 +181,10 @@ final class LibraryRepository: ObservableObject {
     }
 
     @discardableResult
-    func upsert(sourceId: String, url: String, details: MangaDetails) -> LibraryManga {
+    func upsert(sourceId: String, url: String, details: MangaDetails, keepTitle: Bool = false) -> LibraryManga {
         let manga = upsert(sourceId: sourceId, url: url, title: details.title, cover: details.cover)
         objectWillChange.send()
-        if !details.title.isEmpty { manga.title = details.title }
+        if !details.title.isEmpty, !keepTitle { manga.title = details.title }
         if !details.cover.isEmpty { manga.coverUrl = details.cover }
         manga.author = details.author
         manga.artist = details.artist

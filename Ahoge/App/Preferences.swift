@@ -199,6 +199,8 @@ enum Pref {
     static let updateSmart = Key("updates.smart", true)
     /// Library updates also re-fetch details and cover.
     static let updateRefreshMetadata = Key("updates.refreshMetadata", false)
+    /// A metadata refresh also renames the title to the source's current one; off keeps the name you have.
+    static let updateMatchTitles = Key("updates.matchTitles", true)
     /// A notification for each title with new chapters.
     static let updateNotify = Key("updates.notify", true)
     /// Notifications say "New chapters" without the title.
