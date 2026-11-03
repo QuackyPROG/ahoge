@@ -7,7 +7,7 @@ struct StatisticsView: View {
 
     var body: some View {
         let library = repo.library
-        let seconds = repo.historyByChapter().mapValues(\.timeRead)
+        let seconds = repo.historyByChapter().mapValues { $0.timeRead }
         let counts = Dictionary(uniqueKeysWithValues: library.map { ($0.key, downloads.downloadedCount(mangaKey: $0.key)) })
         let stats = LibraryStatistics.compute(manga: library, history: seconds, downloaded: counts)
         List {

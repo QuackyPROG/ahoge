@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 /// First launch: welcome, theme, the Ahoge Extensions repository, notifications, restoring a backup.

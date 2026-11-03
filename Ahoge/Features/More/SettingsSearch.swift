@@ -116,7 +116,7 @@ enum SettingsIndex {
     ]
 
     /// Entries that contain every word of `query` in their title, place or keywords (case and accents ignored).
-    static func search(_ query: String, in entries: [SettingsEntry] = entries) -> [SettingsEntry] {
+    static func search(_ query: String, in entries: [SettingsEntry] = SettingsIndex.entries) -> [SettingsEntry] {
         let words = query.split(whereSeparator: \.isWhitespace).map { normalized(String($0)) }
         guard !words.isEmpty else { return [] }
         return entries.filter { entry in
