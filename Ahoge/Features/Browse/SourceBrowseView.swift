@@ -160,6 +160,7 @@ struct SourceBrowseView: View {
             if query.isEmpty, !old.isEmpty { Task { await model.reload(fetch) } }
         }
         .task {
+            Pref.lastUsedSource.set(model.sourceId)
             guard model.items.isEmpty else { return }
             await model.loadFilters { try await sources.source(model.sourceId).filters() }
             if let genre, model.query.isEmpty, model.feed != .filtered { model.applyGenre(genre) }
