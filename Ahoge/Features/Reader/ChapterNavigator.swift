@@ -29,6 +29,7 @@ struct ChapterNavigator {
         var reading = display
         reading.ascending = true
         reading.filter = .all
+        reading.bookmarked = .off
         order = reading.apply(to: chapters)
         self.display = display
         self.excludedScanlators = excludedScanlators
@@ -53,6 +54,7 @@ struct ChapterNavigator {
             case .unread: if chapter.read { return false }
             case .read: if !chapter.read { return false }
             }
+            if !display.bookmarked.matches(chapter.bookmark) { return false }
             if let scanlator = chapter.scanlator, excludedScanlators.contains(scanlator) { return false }
         }
         return true

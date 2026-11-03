@@ -204,6 +204,8 @@ final class LibraryRepository: ObservableObject {
         let existing = manga.chapters
         let merged = ChapterMerge.merge(existing: existing.map(\.state), fetched: fetched)
         let byURL = Dictionary(existing.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
+        let markDuplicates = Pref.markDuplicateRead.value(in: preferences)
+        let readNumbers = Set(existing.filter(\.read).map(\.number))
         let keep = Set(merged.map(\.url))
         let removed = existing.filter { !keep.contains($0.url) }
         manga.chapters = merged.map { state in
@@ -212,7 +214,10 @@ final class LibraryRepository: ObservableObject {
                 record.apply(state)
                 return record
             }
-            return ChapterRecord(manga: manga, state: state)
+            let record = ChapterRecord(manga: manga, state: state)
+            // The same chapter from another group: already read once (Mihon's "mark duplicate chapters read").
+            if markDuplicates, record.number >= 0, readNumbers.contains(record.number) { record.read = true }
+            return record
         }
         manga.lastChapterFetch = Date()
         manga.refreshUnreadCount()

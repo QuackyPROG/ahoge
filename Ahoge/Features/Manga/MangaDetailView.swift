@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct MangaDetailView: View {
@@ -19,6 +20,14 @@ struct MangaDetailView: View {
     @State private var selection = Set<String>()
     @State private var visible = VisibleRows()
     @State private var removedWithDownloads: LibraryManga?
+    /// Scanlators hidden for this manga, loaded from the repository.
+    @State private var excluded = Set<String>()
+    @State private var filteringScanlators = false
+    @State private var editingNotes = false
+    @State private var choosingDefault = false
+    /// A genre long-pressed for a search across sources.
+    @State private var globalQuery: String?
+    @AppStorage(Pref.hideMissingChapters.name) private var hideMissing = false
 
     init(ref: MangaRef) {
         self.ref = ref
@@ -29,7 +38,7 @@ struct MangaDetailView: View {
     private var manga: LibraryManga? { repo.manga(sourceId: ref.sourceId, url: ref.url) }
     private var info: InstalledSource? { sources.installed(ref.sourceId) }
     private var headers: [String: String] { info.map { ["Referer": $0.baseUrl + "/"] } ?? [:] }
-    private var cover: String { manga?.coverUrl.nonEmpty ?? ref.cover }
+    private var cover: String { manga?.displayCover.nonEmpty ?? ref.cover }
     private var webURL: String? {
         guard let info else { return nil }
         if let manga { return manga.webURL(baseUrl: info.baseUrl) }
@@ -37,7 +46,7 @@ struct MangaDetailView: View {
     }
 
     var body: some View {
-        let chapters = manga.map { display.apply(to: $0.chapters) } ?? []
+        let chapters = manga.map { display.apply(to: $0.chapters, excluding: excluded) } ?? []
         ScrollViewReader { proxy in
             List(selection: $selection) {
                 Section {
@@ -59,6 +68,7 @@ struct MangaDetailView: View {
                                 .tag(chapter.key)
                                 .onAppear { visible.appeared(index) }
                                 .onDisappear { visible.disappeared(index) }
+                            if let gap = missing(after: index, in: chapters) { missingRow(gap) }
                         }
                     } header: {
                         chapterHeader(manga, shown: chapters.count)
@@ -91,12 +101,32 @@ struct MangaDetailView: View {
         .refreshable { await refresh() }
         .task {
             repo.upsert(sourceId: ref.sourceId, url: ref.url, title: ref.title, cover: ref.cover)
+            excluded = repo.excludedScanlators(mangaKey: LibraryManga.makeKey(sourceId: ref.sourceId, url: ref.url))
             if manga?.lastChapterFetch == nil { await refresh() }
         }
         .onChange(of: display) { _, value in value.save(for: LibraryManga.makeKey(sourceId: ref.sourceId, url: ref.url)) }
         .toolbar { toolbarItems(chapters) }
         .sheet(item: $webTarget) { WebViewSheet(target: $0) }
-        .sheet(isPresented: $showCover) { CoverSheet(url: cover, headers: headers) }
+        .sheet(isPresented: $showCover) { CoverSheet(url: cover, headers: headers, manga: manga) }
+        .sheet(isPresented: $filteringScanlators) {
+            if let manga {
+                ScanlatorFilterSheet(scanlators: Set(manga.chapters.compactMap(\.scanlator).filter { !$0.isEmpty }).sorted(), excluded: excluded) {
+                    excluded = $0
+                    repo.setExcludedScanlators($0, for: manga)
+                }
+            }
+        }
+        .sheet(isPresented: $editingNotes) {
+            if let manga { NotesSheet(notes: manga.notes) { repo.setNotes($0, for: manga) } }
+        }
+        .navigationDestination(item: $globalQuery) { RouteView(route: .globalSearch($0)) }
+        .confirmationDialog("Use these chapter settings as the default?", isPresented: $choosingDefault, titleVisibility: .visible) {
+            Button("For new entries") { display.saveAsDefault() }
+            Button("For all entries in my library") {
+                display.saveAsDefault(clearing: repo.library.map(\.key))
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .sheet(isPresented: $choosingCategories) {
             if let manga { SetCategoriesSheet(manga: [manga]) }
         }
@@ -147,10 +177,8 @@ struct MangaDetailView: View {
                         .contextMenu {
                             Button { UIPasteboard.general.string = manga?.title ?? ref.title } label: { Label("Copy title", systemImage: "doc.on.doc") }
                         }
-                    if let author = manga?.author.nonEmpty { Label(author, systemImage: "person").font(.subheadline) }
-                    if let artist = manga?.artist.nonEmpty, artist != manga?.author {
-                        Label(artist, systemImage: "paintbrush").font(.subheadline)
-                    }
+                    if let author = manga?.author.nonEmpty { searchLink(author, icon: "person") }
+                    if let artist = manga?.artist.nonEmpty, artist != manga?.author { searchLink(artist, icon: "paintbrush") }
                     HStack(spacing: 6) {
                         if let status = manga?.status { Label(Self.statusTitle(status), systemImage: Self.statusIcon(status)) }
                         Text("•")
@@ -165,6 +193,7 @@ struct MangaDetailView: View {
             }
             actions
             if let summary = manga?.summary.nonEmpty { MangaDescription(summary: summary, expanded: $expanded) }
+            if let notes = manga?.notes.nonEmpty { notesBlock(notes) }
             if let genres = manga?.genres, !genres.isEmpty { genreChips(genres) }
             if isLoading && (manga?.chapters.isEmpty ?? true) { ProgressView().frame(maxWidth: .infinity) }
         }
@@ -177,10 +206,34 @@ struct MangaDetailView: View {
         HStack(spacing: 0) {
             let inLibrary = manga?.inLibrary == true
             ActionButton(title: inLibrary ? "In library" : "Add to library", icon: inLibrary ? "heart.fill" : "heart", active: inLibrary) { toggleLibrary() }
+            if manga != nil {
+                ActionButton(title: "Notes", icon: manga?.notes.isEmpty == false ? "note.text" : "note.text.badge.plus", active: manga?.notes.isEmpty == false) { editingNotes = true }
+            }
             if let webURL {
                 ActionButton(title: "WebView", icon: "globe") { webTarget = WebTarget(url: webURL) }
             }
         }
+    }
+
+    /// Tapping an author searches the source for their other work.
+    private func searchLink(_ name: String, icon: String) -> some View {
+        NavigationLink(value: Route.sourceSearch(ref.sourceId, query: name)) {
+            Label(name, systemImage: icon).font(.subheadline)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func notesBlock(_ notes: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Notes", systemImage: "note.text").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(DescriptionFormatter.attributed(notes))
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onTapGesture { editingNotes = true }
     }
 
     @ViewBuilder
@@ -195,6 +248,12 @@ struct MangaDetailView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                if GlobalSearchAvailable.isOn {
+                    Button("Search all sources", systemImage: "magnifyingglass") { globalQuery = genre }
+                }
+                Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = genre }
+            }
         }
         if expanded {
             FlowLayout { chips }
@@ -208,7 +267,8 @@ struct MangaDetailView: View {
     // MARK: Chapters
 
     private func chapterHeader(_ manga: LibraryManga, shown: Int) -> some View {
-        HStack {
+        let filtered = display != ChapterDisplay.globalDefault() || !excluded.isEmpty
+        return HStack {
             let total = manga.chapters.count
             Text(shown == total ? "\(total) chapters" : "\(shown) of \(total) chapters")
                 .font(.headline)
@@ -225,11 +285,30 @@ struct MangaDetailView: View {
                 Picker("Show", selection: $display.filter) {
                     ForEach(ChapterDisplay.Filter.allCases) { Text($0.title).tag($0) }
                 }
-                if !display.isDefault {
-                    Button("Reset", systemImage: "arrow.counterclockwise") { display = ChapterDisplay() }
+                Picker("Bookmarks", selection: $display.bookmarked) {
+                    Text("All chapters").tag(TriState.off)
+                    Text("Bookmarked").tag(TriState.include)
+                    Text("Not bookmarked").tag(TriState.exclude)
+                }
+                Picker("Titles", selection: $display.numberTitles) {
+                    Text("Source title").tag(false)
+                    Text("Chapter number").tag(true)
+                }
+                if manga.chapters.contains(where: { $0.scanlator?.isEmpty == false }) {
+                    Button("Scanlators", systemImage: "person.2") { filteringScanlators = true }
+                }
+                Button("Set as default", systemImage: "square.and.arrow.down") { choosingDefault = true }
+                if filtered {
+                    Button("Reset", systemImage: "arrow.counterclockwise") {
+                        display = ChapterDisplay.globalDefault()
+                        if !excluded.isEmpty {
+                            excluded = []
+                            repo.setExcludedScanlators([], for: manga)
+                        }
+                    }
                 }
             } label: {
-                Image(systemName: display.isDefault ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                Image(systemName: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                     .font(.title3)
             }
             .accessibilityLabel("Sort and filter chapters")
@@ -243,21 +322,21 @@ struct MangaDetailView: View {
     @ViewBuilder
     private func chapterRow(_ chapter: ChapterRecord, in manga: LibraryManga) -> some View {
         if selecting {
-            ChapterRow(chapter: chapter)
+            ChapterRow(chapter: chapter, title: display.title(of: chapter))
         } else {
             HStack(spacing: 4) {
-                Button { reading = chapter } label: { ChapterRow(chapter: chapter) }
+                Button { reading = chapter } label: { ChapterRow(chapter: chapter, title: display.title(of: chapter)) }
                     .buttonStyle(.plain)
                 ChapterDownloadButton(chapter: chapter)
             }
-            .swipeActions(edge: .leading) {
-                Button(chapter.read ? "Unread" : "Read", systemImage: chapter.read ? "eye.slash" : "eye") { repo.setRead([chapter], !chapter.read) }
-                    .tint(Color(uiColor: UIColor(rgb: palette.primary.light))) // UIKit draws swipe labels white
-            }
+            .chapterSwipes(chapter)
             .contextMenu {
                 Button("Select", systemImage: "checkmark.circle") { startSelecting(chapter) }
                 Button(chapter.read ? "Mark as unread" : "Mark as read", systemImage: chapter.read ? "eye.slash" : "eye") {
                     repo.setRead([chapter], !chapter.read)
+                }
+                Button(chapter.bookmark ? "Remove bookmark" : "Bookmark", systemImage: chapter.bookmark ? "bookmark.slash" : "bookmark") {
+                    repo.setBookmark([chapter], !chapter.bookmark)
                 }
                 Button("Mark previous as read", systemImage: "arrow.down.to.line") { repo.markPreviousRead(chapter, in: manga) }
                 if downloads.isDownloaded(chapter.key) {
@@ -269,12 +348,34 @@ struct MangaDetailView: View {
         }
     }
 
+    /// Chapters missing between a row and the next, from their numbers. Only for the unfiltered list.
+    private func missing(after index: Int, in chapters: [ChapterRecord]) -> Int? {
+        guard !hideMissing, display.sort != .date, display.filter == .all, display.bookmarked == .off, excluded.isEmpty,
+              index + 1 < chapters.count else { return nil }
+        let count = ChapterGaps.missing(between: chapters[index].number, and: chapters[index + 1].number)
+        return count > 0 ? count : nil
+    }
+
+    private func missingRow(_ count: Int) -> some View {
+        Label(count == 1 ? "1 missing chapter" : "\(count) missing chapters", systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .selectionDisabled()
+            .accessibilityLabel(count == 1 ? "1 chapter missing" : "\(count) chapters missing")
+    }
+
     private func selectionBar(_ manga: LibraryManga) -> some View {
         let chosen = manga.chapters.filter { selection.contains($0.key) }
         return HStack {
             Button("Read", systemImage: "eye") { finishSelection { repo.setRead(chosen, true) } }
             Spacer()
             Button("Unread", systemImage: "eye.slash") { finishSelection { repo.setRead(chosen, false) } }
+            Spacer()
+            Button(chosen.allSatisfy(\.bookmark) ? "Unmark" : "Bookmark", systemImage: chosen.allSatisfy(\.bookmark) ? "bookmark.slash" : "bookmark") {
+                let bookmark = !chosen.allSatisfy(\.bookmark)
+                finishSelection { repo.setBookmark(chosen, bookmark) }
+            }
             Spacer()
             Button("Previous read", systemImage: "arrow.down.to.line") {
                 // The newest selected chapter and everything older.
@@ -477,12 +578,17 @@ private struct VerticalLabelStyle: LabelStyle {
     }
 }
 
-/// The full cover, pinch to zoom.
+/// The full cover, pinch to zoom. Save and share it; a library title can take a picture from Photos instead.
 private struct CoverSheet: View {
     let url: String
     let headers: [String: String]
+    let manga: LibraryManga?
+    @EnvironmentObject private var repo: LibraryRepository
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1
+    @State private var image: UIImage?
+    @State private var picked: PhotosPickerItem?
+    @State private var message: String?
 
     var body: some View {
         NavigationStack {
@@ -493,8 +599,132 @@ private struct CoverSheet: View {
                 .gesture(MagnifyGesture().onChanged { scale = max(1, $0.magnification) }.onEnded { _ in withAnimation { scale = 1 } })
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        if let image {
+                            Button("Save", systemImage: "square.and.arrow.down") { save(image) }
+                            let preview = Image(uiImage: image)
+                            ShareLink(item: preview, preview: SharePreview("Cover", image: preview)) {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                        }
+                        // Like Mihon, only titles in the library can change their cover.
+                        if let manga, manga.inLibrary {
+                            Spacer()
+                            PhotosPicker(selection: $picked, matching: .images) { Label("Edit", systemImage: "photo") }
+                            if manga.customCover != nil {
+                                Button("Reset", systemImage: "arrow.uturn.backward") { repo.resetCover(of: manga) }
+                            }
+                        }
+                    }
+                }
         }
         .presentationDragIndicator(.visible)
+        .task(id: url) { image = try? await ImageLoader.shared.image(url, headers: headers) }
+        .onChange(of: picked) { _, item in
+            guard let item, let manga else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self), repo.setCustomCover(data, for: manga) {
+                    picked = nil
+                } else {
+                    message = "That picture couldn't be used as a cover."
+                    picked = nil
+                }
+            }
+        }
+        .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK", role: .cancel) {}
+        }
+    }
+
+    private func save(_ image: UIImage) {
+        Task {
+            do {
+                try await PhotoSaver.save(image)
+                message = "Saved to Photos."
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+}
+
+/// Which scanlators' chapters to show. A ticked group is shown; unticked ones are hidden from the
+/// chapter list, from Updates and from the reader's next and previous chapter.
+private struct ScanlatorFilterSheet: View {
+    let scanlators: [String]
+    @State var excluded: Set<String>
+    let save: (Set<String>) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    init(scanlators: [String], excluded: Set<String>, save: @escaping (Set<String>) -> Void) {
+        self.scanlators = scanlators
+        _excluded = State(initialValue: excluded)
+        self.save = save
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(scanlators, id: \.self) { name in
+                        Button {
+                            if excluded.contains(name) { excluded.remove(name) } else { excluded.insert(name) }
+                            save(excluded)
+                        } label: {
+                            HStack {
+                                Text(name).foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: excluded.contains(name) ? "square" : "checkmark.square.fill")
+                                    .foregroundStyle(excluded.contains(name) ? Color.secondary : Color.accentColor)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityValue(excluded.contains(name) ? "Hidden" : "Shown")
+                    }
+                } footer: {
+                    Text("Chapters from unticked scanlators are hidden.")
+                }
+                .themedRows()
+            }
+            .navigationTitle("Scanlators")
+            .navigationBarTitleDisplayMode(.inline)
+            .themedScreen()
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/// A note on a title; Markdown such as **bold** and links shows formatted under the description.
+private struct NotesSheet: View {
+    @State var notes: String
+    let save: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    init(notes: String, save: @escaping (String) -> Void) {
+        _notes = State(initialValue: notes)
+        self.save = save
+    }
+
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $notes)
+                .padding(.horizontal)
+                .navigationTitle("Notes")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            save(notes.trimmingCharacters(in: .whitespacesAndNewlines))
+                            dismiss()
+                        }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
