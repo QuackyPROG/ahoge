@@ -40,6 +40,13 @@ struct ExtensionsView: View {
         .refreshable { await store.refresh() }
         .task { if store.indexes.isEmpty && !store.repos.isEmpty { await store.refresh() } }
         .toolbar {
+            let updates = rows.filter { $0.state == .updateAvailable }
+            if !updates.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Update all") { Task { await updateAll(updates) } }
+                        .disabled(updates.contains { busy.contains($0.id) })
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showRepos = true } label: { Image(systemName: "tray.full") }
                     .accessibilityLabel("Repositories")
@@ -81,6 +88,11 @@ struct ExtensionsView: View {
         } catch {
             actionError = error.localizedDescription
         }
+    }
+
+    /// One after another, so a failing script doesn't hide which ones installed; the first error is shown.
+    private func updateAll(_ rows: [ExtensionRow]) async {
+        for row in rows { await perform(row) }
     }
 
     private func addDefault() async {
