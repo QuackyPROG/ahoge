@@ -222,3 +222,9 @@ extension Pref {
     /// The welcome guide was shown (or skipped). Device state, not backed up.
     static let onboarded = Key("app.onboarded", false)
 }
+
+extension Pref {
+    // MARK: Advanced
+    /// Sent to sources and image servers instead of the built-in Safari one; empty keeps the built-in.
+    static let customUserAgent = Key("advanced.userAgent", "")
+}

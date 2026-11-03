@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Re-fetches chapter lists of library titles (Mihon's library update). Shared by Library and
 /// Updates so only one runs at a time.
@@ -73,6 +74,7 @@ final class LibraryUpdater: ObservableObject {
                     // Not the title's fault.
                 } catch {
                     errors.append("\(title.title): \(error.localizedDescription)")
+                    AppLog.logger.error("Update failed for \(title.title, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
                 self.done += 1
             }

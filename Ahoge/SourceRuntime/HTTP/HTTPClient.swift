@@ -29,7 +29,12 @@ enum HTTPClientError: LocalizedError, Equatable {
 
 /// The `http` host object of HOST_API.md, minus the JS-side form encoding.
 final class HTTPClient {
-    static let defaultUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+    static let builtInUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+    /// The custom user agent from Advanced settings, else the built-in one.
+    static var defaultUserAgent: String {
+        let custom = Pref.customUserAgent.value().trimmingCharacters(in: .whitespacesAndNewlines)
+        return custom.isEmpty ? builtInUserAgent : custom
+    }
 
     let jar: CookieJar
     private let transport: HTTPTransport

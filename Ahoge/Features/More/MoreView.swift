@@ -144,6 +144,9 @@ struct MoreView: View {
                     NavigationLink { DataStorageView() } label: {
                         Label { Text("Data and storage") } icon: { SettingsIcon(systemName: "externaldrive.fill", color: .gray) }
                     }
+                    NavigationLink { AdvancedView() } label: {
+                        Label { Text("Advanced") } icon: { SettingsIcon(systemName: "wrench.and.screwdriver.fill", color: .gray) }
+                    }
                 }
                 .themedRows()
 

@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import GRDB
+import OSLog
 import Network
 import UIKit
 
@@ -379,6 +380,7 @@ final class DownloadManager: ObservableObject {
         } catch {
             guard isCurrent(key, worker), let index = queue.firstIndex(where: { $0.chapterKey == key }) else { return }
             queue[index].state = .error(error.localizedDescription)
+            AppLog.logger.error("Download failed (\(key, privacy: .public)): \(error.localizedDescription, privacy: .public)")
         }
     }
 
