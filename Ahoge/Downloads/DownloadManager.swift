@@ -127,7 +127,8 @@ final class DownloadManager: ObservableObject {
     /// Adds chapters to the end of the queue; downloaded and queued ones are skipped, failed ones retried.
     func enqueue(_ chapters: [ChapterRecord]) {
         var changed = false
-        for chapter in chapters where downloaded[chapter.key] == nil {
+        // Local chapters are files on this device already.
+        for chapter in chapters where downloaded[chapter.key] == nil && chapter.sourceId != LocalSource.id {
             if let index = queue.firstIndex(where: { $0.chapterKey == chapter.key }) {
                 if queue[index].isError {
                     queue[index].state = .queued

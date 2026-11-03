@@ -49,7 +49,8 @@ struct MangaDetailView: View {
     private var headers: [String: String] { info.map { ["Referer": $0.baseUrl + "/"] } ?? [:] }
     private var cover: String { manga?.displayCover.nonEmpty ?? ref.cover }
     private var webURL: String? {
-        guard let info else { return nil }
+        // The local source has no website (empty base URL).
+        guard let info, !info.baseUrl.isEmpty else { return nil }
         if let manga { return manga.webURL(baseUrl: info.baseUrl) }
         return LibraryManga(sourceId: ref.sourceId, url: ref.url, title: ref.title, coverUrl: "").webURL(baseUrl: info.baseUrl)
     }

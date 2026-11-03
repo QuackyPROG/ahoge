@@ -10,11 +10,16 @@ final class SourceManager: ObservableObject {
         self.extensions = extensions
     }
 
+    /// The folder source is always there and is not an extension, so it never shows in `extensions.installed`.
+    let local = LocalSource()
+
     func installed(_ id: String) -> InstalledSource? {
-        extensions.installed.first { $0.id == id }
+        if id == LocalSource.id { return LocalSource.info }
+        return extensions.installed.first { $0.id == id }
     }
 
-    func source(_ id: String) throws -> ScriptSource {
+    func source(_ id: String) throws -> any MangaSource {
+        if id == LocalSource.id { return local }
         guard let info = installed(id) else { throw SourceError.notInstalled(id) }
         if let hit = cache[id], hit.sha256 == info.sha256 { return hit.source }
         let jar = CookieJar()

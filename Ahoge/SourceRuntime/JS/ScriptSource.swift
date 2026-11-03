@@ -1,8 +1,10 @@
 import Foundation
 
 /// A typed view of one source script.
-final class ScriptSource {
+final class ScriptSource: MangaSource {
     let host: JSHost
+
+    var hasPreferences: Bool { host.hasMethod("preferences") }
 
     init(script: String, http: HTTPClient = HTTPClient()) throws {
         host = try JSHost(script: script, http: http)

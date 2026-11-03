@@ -490,7 +490,7 @@ struct ReaderView: View {
 
     /// The chapter on the source's website.
     private var chapterWebURL: String? {
-        sources.installed(model.sourceId).map { model.currentChapter.webURL(baseUrl: $0.baseUrl) }
+        sources.installed(model.sourceId).flatMap { $0.baseUrl.isEmpty ? nil : $0 }.map { model.currentChapter.webURL(baseUrl: $0.baseUrl) }
     }
 
     private var topBar: some View {

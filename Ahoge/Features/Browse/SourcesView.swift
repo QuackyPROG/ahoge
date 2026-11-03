@@ -20,6 +20,18 @@ struct SourcesView: View {
         let rest = installed.filter { !pinned.contains($0.id) }
         let groups = Dictionary(grouping: rest, by: \.lang).sorted { $0.key < $1.key }
         List {
+            // Always there: the folder of files on this device.
+            Section {
+                NavigationLink(value: Route.source(LocalSource.id)) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "folder.fill")
+                            .frame(width: 32, height: 32)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                        Text("Local")
+                    }
+                }
+            }
+            .themedRows()
             if installed.isEmpty {
                 if store.installed.isEmpty {
                     ContentUnavailableView("No sources", systemImage: "puzzlepiece.extension", description: Text("Install sources from Extensions."))

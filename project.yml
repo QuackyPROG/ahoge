@@ -75,6 +75,7 @@ targets:
       - path: Tests/AhogeTests
     dependencies:
       - target: Ahoge
+      - package: ZIPFoundation
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

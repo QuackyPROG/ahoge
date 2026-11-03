@@ -14,7 +14,7 @@ struct SourcePreferencesLink: View {
                 }
             }
         }
-        .task { hasPreferences = (try? sources.source(sourceId).host.hasMethod("preferences")) ?? false }
+        .task { hasPreferences = (try? sources.source(sourceId).hasPreferences) ?? false }
     }
 }
 

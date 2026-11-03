@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class SourceBrowseModel: ObservableObject {
@@ -111,6 +112,8 @@ struct SourceBrowseView: View {
     @StateObject private var model: SourceBrowseModel
     @State private var webTarget: WebTarget?
     @State private var editing: FilterState?
+    @State private var importing = false
+    @State private var importError: String?
     @Environment(\.palette) private var palette
     private let genre: String?
     /// Searched as soon as the screen opens.
@@ -185,13 +188,33 @@ struct SourceBrowseView: View {
                 .accessibilityLabel("Display mode")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                if let info {
+                if model.sourceId == LocalSource.id {
+                    Button { importing = true } label: { Image(systemName: "square.and.arrow.down") }
+                        .accessibilityLabel("Import")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if let info, !info.baseUrl.isEmpty {
                     Button { webTarget = WebTarget(url: info.baseUrl) } label: { Image(systemName: "globe") }
                         .accessibilityLabel("Open in web view")
                 }
             }
         }
         .sheet(item: $webTarget) { WebViewSheet(target: $0) }
+        // Archives or folders copied into Documents/Local, which the Files app shows too.
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.zip, .folder, UTType(filenameExtension: "cbz") ?? .zip], allowsMultipleSelection: true) { result in
+            do {
+                try sources.local.importItems(try result.get())
+                Task { await model.reload(fetch) }
+            } catch {
+                importError = error.localizedDescription
+            }
+        }
+        .alert("Could not import", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importError ?? "")
+        }
         .sheet(isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
             FilterSheet(
                 state: Binding(get: { editing ?? model.filters }, set: { editing = $0 }),
