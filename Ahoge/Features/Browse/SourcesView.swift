@@ -72,7 +72,7 @@ struct SourcesView: View {
         .navigationDestination(item: $details) { RouteView(route: .extensionDetails($0)) }
         .navigationDestination(item: $opened) { RouteView(route: .manga($0)) }
         .alert("Open link", isPresented: $openingLink) {
-            TextField("https://…", text: $linkText)
+            TextField("https://â€¦", text: $linkText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
