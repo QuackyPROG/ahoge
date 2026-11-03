@@ -46,7 +46,8 @@ final class LibraryRepository: ObservableObject {
         try LibraryRepository(db: DatabaseQueue())
     }
 
-    private nonisolated static var migrator: DatabaseMigrator {
+    /// Internal so tests can migrate a database only part of the way (`migrate(_:upTo:)`).
+    nonisolated static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in
             try db.create(table: LibraryManga.databaseTableName) { t in
@@ -96,6 +97,39 @@ final class LibraryRepository: ObservableObject {
                 t.primaryKey("chapterKey", .text).references(ChapterRecord.databaseTableName, onDelete: .cascade)
                 t.column("mangaKey", .text).notNull().indexed().references(LibraryManga.databaseTableName, onDelete: .cascade)
                 t.column("lastRead", .datetime).notNull().indexed()
+            }
+        }
+        migrator.registerMigration("v3") { db in
+            try db.alter(table: ChapterRecord.databaseTableName) { t in
+                t.add(column: "bookmark", .boolean).notNull().defaults(to: false)
+            }
+            try db.alter(table: LibraryManga.databaseTableName) { t in
+                t.add(column: "notes", .text).notNull().defaults(to: "")
+                t.add(column: "customCover", .text)
+                t.add(column: "updateInterval", .integer)
+                t.add(column: "nextUpdate", .datetime)
+                t.add(column: "chapterFlags", .integer).notNull().defaults(to: 0)
+            }
+            // `sort` is already the display order here, so the per-category sort is `sortMode`.
+            try db.alter(table: "category") { t in
+                t.add(column: "flags", .integer).notNull().defaults(to: 0)
+                t.add(column: "sortMode", .text)
+            }
+            try db.alter(table: "history") { t in
+                t.add(column: "timeRead", .integer).notNull().defaults(to: 0)
+            }
+            try db.create(table: "excludedScanlator") { t in
+                t.column("mangaKey", .text).notNull().references(LibraryManga.databaseTableName, onDelete: .cascade)
+                t.column("scanlator", .text).notNull()
+                t.primaryKey(["mangaKey", "scanlator"])
+            }
+            try db.create(table: "download") { t in
+                t.primaryKey("chapterKey", .text).references(ChapterRecord.databaseTableName, onDelete: .cascade)
+                t.column("mangaKey", .text).notNull().indexed()
+                t.column("state", .integer).notNull()
+                t.column("pageCount", .integer).notNull()
+                t.column("bytes", .integer).notNull()
+                t.column("dateAdded", .datetime).notNull()
             }
         }
         return migrator

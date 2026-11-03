@@ -21,11 +21,19 @@ final class LibraryManga: Identifiable, Codable, FetchableRecord, PersistableRec
     var dateAdded: Date?
     var lastReadAt: Date?
     var lastChapterFetch: Date?
+    var notes: String
+    /// File name in Application Support/covers; nil uses the source's cover.
+    var customCover: String?
+    /// Days between library updates; nil is smart, 0 is never.
+    var updateInterval: Int?
+    var nextUpdate: Date?
+    /// Per-entry chapter sort/filter/display override bits.
+    var chapterFlags: Int
     /// Loaded by `LibraryRepository` with the manga; not a column.
     var chapters: [ChapterRecord] = []
 
     enum CodingKeys: String, CodingKey {
-        case key, sourceId, url, title, coverUrl, author, artist, summary, genres, status, inLibrary, dateAdded, lastReadAt, lastChapterFetch
+        case key, sourceId, url, title, coverUrl, author, artist, summary, genres, status, inLibrary, dateAdded, lastReadAt, lastChapterFetch, notes, customCover, updateInterval, nextUpdate, chapterFlags
     }
 
     init(sourceId: String, url: String, title: String, coverUrl: String) {
@@ -40,6 +48,8 @@ final class LibraryManga: Identifiable, Codable, FetchableRecord, PersistableRec
         genres = []
         status = "unknown"
         inLibrary = false
+        notes = ""
+        chapterFlags = 0
     }
 
     static func makeKey(sourceId: String, url: String) -> String { sourceId + "\n" + url }
@@ -70,11 +80,12 @@ final class ChapterRecord: ObservableObject, Identifiable, Codable, FetchableRec
     var lastPageRead: Int
     var sourceOrder: Int
     var dateFetch: Date?
+    var bookmark: Bool
     /// Set by `LibraryRepository`; not a column.
     weak var manga: LibraryManga?
 
     enum CodingKeys: String, CodingKey {
-        case key, mangaKey, url, name, number, dateUpload, scanlator, read, lastPageRead, sourceOrder, dateFetch
+        case key, mangaKey, url, name, number, dateUpload, scanlator, read, lastPageRead, sourceOrder, dateFetch, bookmark
     }
 
     init(manga: LibraryManga, state: ChapterState) {
@@ -89,6 +100,7 @@ final class ChapterRecord: ObservableObject, Identifiable, Codable, FetchableRec
         lastPageRead = state.lastPageRead
         sourceOrder = state.sourceOrder
         dateFetch = state.dateFetch
+        bookmark = false
         self.manga = manga
     }
 
