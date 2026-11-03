@@ -22,6 +22,8 @@ extension Pref {
         downloadConcurrentSources.name, downloadConcurrentPages.name, downloadOnlyOnWiFi.name, saveAsCBZ.name,
         removeAfterMarkedRead.name, removeAfterReading.name, removeBookmarkedToo.name, downloadAhead.name,
         downloadNewChapters.name, downloadedOnly.name, clearChapterCacheOnLaunch.name,
+        swipeRight.name, swipeLeft.name, hideMissingChapters.name, markDuplicateRead.name, chapterDisplayDefault.name,
+        updatesBookmarked.name,
     ]
 }
 

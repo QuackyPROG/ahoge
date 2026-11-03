@@ -108,6 +108,17 @@ enum Pref {
     /// On cellular, prefetch only the next page.
     static let readerPreloadOnlyOnWiFi = Key("reader.preloadOnlyOnWiFi", false)
 
+    // MARK: Entry screen
+    /// What swiping a chapter row does: none, bookmark, read or download. Right is the swipe that starts at the left edge.
+    static let swipeRight = Key("entry.swipeRight", "read")
+    static let swipeLeft = Key("entry.swipeLeft", "bookmark")
+    /// Hides the "N missing chapters" notice between chapter rows.
+    static let hideMissingChapters = Key("entry.hideMissingChapters", false)
+    /// A newly fetched chapter with the number of a chapter already read is marked read.
+    static let markDuplicateRead = Key("entry.markDuplicateRead", false)
+    /// The `ChapterDisplay` JSON ("Set as default"); empty is the built-in default.
+    static let chapterDisplayDefault = Key("entry.chapterDisplayDefault", "")
+
     // MARK: Appearance
     static let theme = Key("ui.theme", "standard")
     static let themeMode = Key("ui.themeMode", "system")
@@ -155,4 +166,6 @@ enum Pref {
     // MARK: Updates
     /// When the Updates tab was last open (seconds since 1970); newer chapters count in its badge.
     static let updatesLastSeen = Key("updates.lastSeen", 0.0)
+    /// A `TriState` raw value: only bookmarked chapters (include), none of them (exclude), or all.
+    static let updatesBookmarked = Key("updates.bookmarked", "off")
 }

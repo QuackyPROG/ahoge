@@ -17,11 +17,15 @@ struct UpdatesView: View {
     @State private var visible = false
     @State private var selecting = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
+    @AppStorage(Pref.updatesBookmarked.name) private var bookmarkedFilter = Pref.updatesBookmarked.defaultValue
     @State private var selection = Set<String>()
 
     var body: some View {
         let all = repo.updates(since: UpdatesPrefs.cutoff)
-        let entries = downloadedOnly ? all.filter { downloads.isDownloaded($0.chapter.key) } : all
+        let bookmarked = TriState(rawValue: bookmarkedFilter) ?? .off
+        let entries = all.filter { entry in
+            (!downloadedOnly || downloads.isDownloaded(entry.chapter.key)) && bookmarked.matches(entry.chapter.bookmark)
+        }
         NavigationStack {
             List(selection: $selection) {
                 Section {
@@ -39,17 +43,14 @@ struct UpdatesView: View {
                                 if !selecting { ChapterDownloadButton(chapter: entry.chapter) }
                             }
                             .tag(entry.id)
-                            .swipeActions(edge: .leading) {
-                                Button(entry.chapter.read ? "Unread" : "Read", systemImage: entry.chapter.read ? "eye.slash" : "eye") {
-                                    repo.setRead([entry.chapter], !entry.chapter.read)
-                                }
-                                // UIKit draws swipe labels white and dark-mode primaries are pastels, so use the light primary.
-                                .tint(Color(uiColor: UIColor(rgb: palette.primary.light)))
-                            }
+                            .chapterSwipes(entry.chapter)
                             .contextMenu {
                                 Button("Select", systemImage: "checkmark.circle") {
                                     selection = [entry.id]
                                     withAnimation { selecting = true }
+                                }
+                                Button(entry.chapter.bookmark ? "Remove bookmark" : "Bookmark", systemImage: entry.chapter.bookmark ? "bookmark.slash" : "bookmark") {
+                                    repo.setBookmark([entry.chapter], !entry.chapter.bookmark)
                                 }
                                 Button("Mark previous as read", systemImage: "arrow.down.to.line") {
                                     repo.markPreviousRead(entry.chapter, in: entry.manga)
@@ -87,6 +88,18 @@ struct UpdatesView: View {
                         Button(selection == all ? "Deselect all" : "Select all") { selection = selection == all ? [] : all }
                     }
                 } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Picker("Bookmarked", selection: $bookmarkedFilter) {
+                                Text("All chapters").tag(TriState.off.rawValue)
+                                Text("Bookmarked").tag(TriState.include.rawValue)
+                                Text("Not bookmarked").tag(TriState.exclude.rawValue)
+                            }
+                        } label: {
+                            Image(systemName: bookmarked == .off ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        }
+                        .accessibilityLabel("Filter updates")
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Update library", systemImage: "arrow.clockwise") {
                             Task { await updater.update(repo.library, repo: repo, sources: sources) }
@@ -128,6 +141,11 @@ struct UpdatesView: View {
             Spacer()
             Button("Delete", systemImage: "trash") {
                 downloads.delete(chosen)
+                endSelection()
+            }
+            Spacer()
+            Button(chosen.allSatisfy(\.bookmark) ? "Unmark" : "Bookmark", systemImage: chosen.allSatisfy(\.bookmark) ? "bookmark.slash" : "bookmark") {
+                repo.setBookmark(chosen, !chosen.allSatisfy(\.bookmark))
                 endSelection()
             }
             Spacer()
@@ -173,7 +191,7 @@ private struct UpdateRow: View {
     var body: some View {
         HStack(spacing: 12) {
             NavigationLink(value: Route.manga(manga.ref)) {
-                RemoteImage(url: manga.coverUrl, headers: headers, maxPixelWidth: 150)
+                RemoteImage(url: manga.displayCover, headers: headers, maxPixelWidth: 150)
                     .frame(width: 44, height: 62)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
@@ -189,6 +207,9 @@ private struct UpdateRow: View {
                         }
                     }
                     Spacer(minLength: 0)
+                    if chapter.bookmark {
+                        Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(palette.primary.color)
+                    }
                     if !chapter.read {
                         Circle().fill(palette.primary.color).frame(width: 8, height: 8)
                     }

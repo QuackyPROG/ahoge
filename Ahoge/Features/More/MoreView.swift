@@ -9,6 +9,10 @@ struct MoreView: View {
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
     @AppStorage(Pref.incognito.name) private var incognito = false
+    @AppStorage(Pref.swipeRight.name) private var swipeRight = Pref.swipeRight.defaultValue
+    @AppStorage(Pref.swipeLeft.name) private var swipeLeft = Pref.swipeLeft.defaultValue
+    @AppStorage(Pref.hideMissingChapters.name) private var hideMissing = false
+    @AppStorage(Pref.markDuplicateRead.name) private var markDuplicateRead = false
     @State private var showRepos = false
 
     var body: some View {
@@ -59,6 +63,28 @@ struct MoreView: View {
                     } label: {
                         Label { Text("Default category") } icon: { SettingsIcon(systemName: "tray.and.arrow.down.fill", color: .teal) }
                     }
+                }
+                .themedRows()
+
+                Section("Chapters") {
+                    Picker(selection: $swipeRight) {
+                        ForEach(ChapterSwipeAction.allCases) { Text($0.title).tag($0.rawValue) }
+                    } label: {
+                        Label { Text("Swipe right") } icon: { SettingsIcon(systemName: "arrow.right.circle.fill", color: .blue) }
+                    }
+                    Picker(selection: $swipeLeft) {
+                        ForEach(ChapterSwipeAction.allCases) { Text($0.title).tag($0.rawValue) }
+                    } label: {
+                        Label { Text("Swipe left") } icon: { SettingsIcon(systemName: "arrow.left.circle.fill", color: .orange) }
+                    }
+                    Toggle(isOn: $hideMissing) {
+                        Label { Text("Hide missing chapter count") } icon: { SettingsIcon(systemName: "exclamationmark.triangle.fill", color: .yellow) }
+                    }
+                    Toggle(isOn: $markDuplicateRead) {
+                        Label { Text("Mark duplicate chapters read") } icon: { SettingsIcon(systemName: "checkmark.circle.fill", color: .green) }
+                    }
+                } footer: {
+                    Text("A new chapter with the number of one you already read is marked read when a title refreshes.")
                 }
                 .themedRows()
 
