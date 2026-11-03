@@ -19,6 +19,8 @@ final class LibraryRepository: ObservableObject {
     /// Told when chapters are marked read by hand (not by finishing them in the reader), so
     /// downloads can remove them ("Remove after marked as read").
     var didMarkRead: (([ChapterRecord]) -> Void)?
+    /// Where settings that change what is saved (incognito) are read; tests swap in their own.
+    var preferences: UserDefaults = .standard
 
     /// Library titles and their chapters are loaded up front; other manga on first lookup.
     init(db: any DatabaseWriter) throws {
@@ -254,6 +256,7 @@ final class LibraryRepository: ObservableObject {
     }
 
     func saveProgress(_ chapter: ChapterRecord, page: Int, pageCount: Int) {
+        guard !isIncognito(sourceId: chapter.sourceId) else { return }
         guard chapter.lastPageRead != page || (page >= pageCount - 1 && !chapter.read) else { return }
         chapter.objectWillChange.send()
         let wasRead = chapter.read

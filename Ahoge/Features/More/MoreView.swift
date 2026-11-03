@@ -8,6 +8,7 @@ struct MoreView: View {
     @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
+    @AppStorage(Pref.incognito.name) private var incognito = false
     @State private var showRepos = false
 
     var body: some View {
@@ -80,6 +81,9 @@ struct MoreView: View {
                 .themedRows()
 
                 Section("Privacy") {
+                    Toggle(isOn: $incognito) {
+                        Label { Text("Incognito mode") } icon: { SettingsIcon(systemName: "eyeglasses", color: .gray) }
+                    }
                     Toggle(isOn: $secureScreen) {
                         Label { Text("Hide content in app switcher") } icon: { SettingsIcon(systemName: "lock.shield.fill", color: .green) }
                     }

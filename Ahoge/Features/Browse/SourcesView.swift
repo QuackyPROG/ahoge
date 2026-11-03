@@ -4,6 +4,7 @@ struct SourcesView: View {
     @EnvironmentObject private var store: ExtensionStore
     @AppStorage(Pref.lastUsedSource.name) private var lastUsed = ""
     @State private var pinned = Pref.pinnedSources.value()
+    @State private var incognito = Pref.incognitoSources.value()
 
     var body: some View {
         let installed = store.installed
@@ -37,25 +38,36 @@ struct SourcesView: View {
 
     private func row(_ item: InstalledSource) -> some View {
         let isPinned = pinned.contains(item.id)
+        let isIncognito = incognito.contains(item.id)
         return NavigationLink(value: Route.source(item.id)) {
             HStack(spacing: 12) {
                 RemoteImage(url: item.iconURL ?? "")
                     .frame(width: 32, height: 32)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 Text(item.name)
+                if isPinned || isIncognito { Spacer() }
+                if isIncognito {
+                    Image(systemName: "eyeglasses").font(.caption).foregroundStyle(.secondary).accessibilityLabel("Incognito")
+                }
                 if isPinned {
-                    Spacer()
                     Image(systemName: "pin.fill").font(.caption).foregroundStyle(.secondary).accessibilityLabel("Pinned")
                 }
             }
         }
         .contextMenu {
             Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") { togglePin(item.id) }
+            Button(isIncognito ? "Turn off incognito" : "Read in incognito", systemImage: "eyeglasses") { toggleIncognito(item.id) }
         }
     }
 
     private func togglePin(_ id: String) {
         if let index = pinned.firstIndex(of: id) { pinned.remove(at: index) } else { pinned.append(id) }
         Pref.pinnedSources.set(pinned)
+    }
+
+    /// Reading this source saves no progress or history, whatever the global incognito switch says.
+    private func toggleIncognito(_ id: String) {
+        if let index = incognito.firstIndex(of: id) { incognito.remove(at: index) } else { incognito.append(id) }
+        Pref.incognitoSources.set(incognito)
     }
 }

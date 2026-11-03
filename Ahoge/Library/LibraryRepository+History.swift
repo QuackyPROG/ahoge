@@ -18,6 +18,7 @@ struct HistoryEntry: Identifiable {
 extension LibraryRepository {
     /// Notes that `chapter` is being read, for History and the "Last read" sort.
     func recordHistory(_ chapter: ChapterRecord, at date: Date = Date()) {
+        guard !isIncognito(sourceId: chapter.sourceId) else { return }
         let manga = chapter.manga
         manga?.lastReadAt = date
         write { db in

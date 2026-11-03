@@ -11,6 +11,7 @@ struct RootView: View {
     @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
+    @AppStorage(Pref.incognito.name) private var incognito = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -31,14 +32,24 @@ struct RootView: View {
                 .badge(downloads.queue.count)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            // Mihon's banner while Downloaded only is on.
-            if downloadedOnly {
-                Text("Downloaded only")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(palette.onPrimary.color)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 3)
-                    .background(palette.primary.color)
+            // Mihon's banners while Downloaded only or Incognito mode is on.
+            VStack(spacing: 0) {
+                if downloadedOnly {
+                    Text("Downloaded only")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(palette.onPrimary.color)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 3)
+                        .background(palette.primary.color)
+                }
+                if incognito {
+                    Text("Incognito mode")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 3)
+                        .background(Color.gray)
+                }
             }
         }
         .tint(palette.primary.color)
