@@ -322,7 +322,10 @@ final class DownloadManager: ObservableObject {
         queue[index].state = .downloading
         let id = UUID()
         // Runs on the main actor after this returns, so `running` already holds it.
-        let task = Task { [weak self] in await self?.run(key, worker: id) }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.run(key, worker: id)
+        }
         running[key] = Worker(id: id, task: task)
     }
 
