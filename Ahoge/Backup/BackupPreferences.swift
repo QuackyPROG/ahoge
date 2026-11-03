@@ -10,6 +10,9 @@ extension Pref {
         readerTapZones.name, readerInvertTaps.name, readerWebtoonPadding.name, readerWebtoonGap.name,
         theme.name, themeMode.name, pureBlack.name,
         secureScreen.name, autoBackupInterval.name, autoBackupKeep.name,
+        downloadConcurrentSources.name, downloadConcurrentPages.name, downloadOnlyOnWiFi.name, saveAsCBZ.name,
+        removeAfterMarkedRead.name, removeAfterReading.name, removeBookmarkedToo.name, downloadAhead.name,
+        downloadNewChapters.name, downloadedOnly.name, clearChapterCacheOnLaunch.name,
     ]
 }
 

@@ -5,7 +5,10 @@ import Foundation
 final class StubTransport: HTTPTransport {
     typealias Reply = (status: Int, headers: [String: String], body: Data, finalURL: URL?)
     private let handler: (URLRequest) throws -> Reply
-    private(set) var requests: [URLRequest] = []
+    private let lock = NSLock()
+    private var recorded: [URLRequest] = []
+    /// Locked: downloads send pages from several tasks at once.
+    var requests: [URLRequest] { lock.withLock { recorded } }
 
     init(_ handler: @escaping (URLRequest) throws -> Reply) {
         self.handler = handler
@@ -16,7 +19,7 @@ final class StubTransport: HTTPTransport {
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        requests.append(request)
+        lock.withLock { recorded.append(request) }
         let reply = try handler(request)
         let url = reply.finalURL ?? request.url!
         let response = HTTPURLResponse(url: url, statusCode: reply.status, httpVersion: "HTTP/1.1", headerFields: reply.headers)!

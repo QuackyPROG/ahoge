@@ -67,6 +67,29 @@ enum Pref {
     /// When the last automatic backup was made (seconds since 1970).
     static let autoBackupLast = Key("backup.autoLast", 0.0)
 
+    // MARK: Downloads
+    /// How many sources download at once; each source downloads one chapter at a time (Mihon's rule).
+    static let downloadConcurrentSources = Key("download.concurrentSources", 2)
+    /// Pages fetched at once within one chapter.
+    static let downloadConcurrentPages = Key("download.concurrentPages", 3)
+    static let downloadOnlyOnWiFi = Key("download.onlyOnWiFi", true)
+    /// Whether the queue was paused, so a relaunch keeps it paused. Device state, not backed up.
+    static let downloadPaused = Key("download.paused", false)
+    /// Zips each finished chapter into one .cbz file.
+    static let saveAsCBZ = Key("download.saveAsCBZ", false)
+    static let removeAfterMarkedRead = Key("download.removeAfterMarkedRead", false)
+    /// 0 is off, 1 deletes the chapter just read, 2–5 the 2nd–5th to last read.
+    static let removeAfterReading = Key("download.removeAfterReading", 0)
+    static let removeBookmarkedToo = Key("download.removeBookmarked", false)
+    /// Unread chapters to fetch ahead while reading a downloaded chapter; 0 is off.
+    static let downloadAhead = Key("download.ahead", 0)
+    /// Downloads chapters a library update finds (categories with flag bit 1 are left out).
+    static let downloadNewChapters = Key("download.newChapters", false)
+    /// Library, Updates and History show only what is downloaded.
+    static let downloadedOnly = Key("download.downloadedOnly", false)
+    /// Empties the extracted-CBZ chapter cache each launch.
+    static let clearChapterCacheOnLaunch = Key("download.clearChapterCacheOnLaunch", false)
+
     // MARK: Updates
     /// When the Updates tab was last open (seconds since 1970); newer chapters count in its badge.
     static let updatesLastSeen = Key("updates.lastSeen", 0.0)

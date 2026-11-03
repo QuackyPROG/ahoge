@@ -16,6 +16,9 @@ final class LibraryRepository: ObservableObject {
     var categoryLinks: [String: Set<Int64>] = [:]
     /// Every Updates entry, newest first; cleared whenever chapters are fetched or library membership changes.
     var updatesCache: [UpdateEntry]?
+    /// Told when chapters are marked read by hand (not by finishing them in the reader), so
+    /// downloads can remove them ("Remove after marked as read").
+    var didMarkRead: (([ChapterRecord]) -> Void)?
 
     /// Library titles and their chapters are loaded up front; other manga on first lookup.
     init(db: any DatabaseWriter) throws {
@@ -242,6 +245,7 @@ final class LibraryRepository: ObservableObject {
         write { db in
             for chapter in chapters { try chapter.update(db) }
         }
+        if read { didMarkRead?(chapters) }
     }
 
     /// Marks this chapter and every older one (higher sourceOrder) as read.

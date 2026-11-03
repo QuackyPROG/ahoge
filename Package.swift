@@ -16,11 +16,12 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/scinfu/SwiftSoup", from: "2.7.0"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation", from: "0.9.19"),
     ],
     targets: [
         .target(
             name: "Ahoge",
-            dependencies: ["SwiftSoup", .product(name: "GRDB", package: "GRDB.swift")],
+            dependencies: ["SwiftSoup", .product(name: "GRDB", package: "GRDB.swift"), "ZIPFoundation"],
             path: "Ahoge",
             // XcodeGen writes Info.plist and compiles the asset catalog; xtool uses Info-xtool.plist and the icon PNG (see xtool.yml).
             exclude: ["Info.plist", "Assets.xcassets"],
