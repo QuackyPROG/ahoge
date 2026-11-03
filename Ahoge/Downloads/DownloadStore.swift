@@ -126,12 +126,12 @@ struct DownloadStore: Sendable {
 
     /// The chapter's pages: the folder, or the archive unpacked into the chapter cache.
     func localPages(_ location: Location) -> [URL]? {
-        if let pages = pages(in: chapterDirectory(location)) { return pages }
-        let archive = archive(location)
+        if let pages = self.pages(in: chapterDirectory(location)) { return pages }
+        let archive = self.archive(location)
         let fm = FileManager.default
         guard fm.fileExists(atPath: archive.path) else { return nil }
         let target = unpacked(location)
-        if let pages = pages(in: target) { return pages }
+        if let pages = self.pages(in: target) { return pages }
         do {
             try? fm.removeItem(at: target)
             try fm.createDirectory(at: target, withIntermediateDirectories: true)
@@ -149,8 +149,8 @@ struct DownloadStore: Sendable {
     /// Page count and size of a finished chapter on disk, or nil when there is none.
     func completed(_ location: Location) -> (pages: Int, bytes: Int64)? {
         let directory = chapterDirectory(location)
-        if let pages = pages(in: directory) { return (pages.count, Self.size(of: directory)) }
-        let archive = archive(location)
+        if let pages = self.pages(in: directory) { return (pages.count, Self.size(of: directory)) }
+        let archive = self.archive(location)
         guard FileManager.default.fileExists(atPath: archive.path) else { return nil }
         let count: Int
         do {

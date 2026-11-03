@@ -251,7 +251,7 @@ final class DownloadManager: ObservableObject {
 
     /// Both sizes, measured off the main thread.
     func storageUsage() async -> (downloads: Int64, chapterCache: Int64) {
-        let store = store
+        let store = self.store
         return await Task.detached(priority: .utility) { () -> (downloads: Int64, chapterCache: Int64) in
             let cache = DownloadStore.size(of: store.cache)
             let total = DownloadStore.size(of: store.root)
@@ -341,7 +341,7 @@ final class DownloadManager: ObservableObject {
             schedule()
         }
         guard let item = queue.first(where: { $0.chapterKey == key }) else { return }
-        let location = location(item)
+        let location = self.location(item)
         do {
             let pages = try await sources.source(item.sourceId).pages(url: item.chapterURL)
             guard isCurrent(key, worker) else { return }
@@ -371,7 +371,7 @@ final class DownloadManager: ObservableObject {
             }
             guard isCurrent(key, worker) else { return }
             let zip = Pref.saveAsCBZ.value(in: defaults)
-            let store = store
+            let store = self.store
             let result = try await Task.detached(priority: .utility) { try store.finish(location, zip: zip) }.value
             guard isCurrent(key, worker) else { return }
             completed(item, pages: result.pages, bytes: result.bytes)

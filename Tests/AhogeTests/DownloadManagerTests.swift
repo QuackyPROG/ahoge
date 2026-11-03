@@ -9,7 +9,7 @@ final class DownloadManagerTests: XCTestCase {
     private var cache: URL!
     private var defaults: UserDefaults!
 
-    override func setUp() async throws {
+    override func setUp() {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         root = base.appendingPathComponent("downloads")
         cache = base.appendingPathComponent("cache")

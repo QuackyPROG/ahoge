@@ -15,17 +15,20 @@ final class BackgroundTransport: NSObject, HTTPTransport, URLSessionDownloadDele
     private var landed: [Int: Data] = [:]
     private var finishEvents: (() -> Void)?
 
-    private lazy var session: URLSession = {
+    /// Set once in `init`; a session with this identifier must exist only once per process.
+    private var session: URLSession!
+
+    private override init() {
+        super.init()
         let config = URLSessionConfiguration.background(withIdentifier: Self.identifier)
         config.sessionSendsLaunchEvents = true
         config.isDiscretionary = false
-        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
-    }()
+        session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }
 
     /// The app delegate hands this over when iOS wakes the app for our session's events.
     func setEventsCompletionHandler(_ handler: @escaping () -> Void) {
         lock.withLock { finishEvents = handler }
-        _ = session
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -63,10 +66,10 @@ final class BackgroundTransport: NSObject, HTTPTransport, URLSessionDownloadDele
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        let handler = lock.withLock {
-            let handler = finishEvents
+        let handler = lock.withLock { () -> (() -> Void)? in
+            let pending = finishEvents
             finishEvents = nil
-            return handler
+            return pending
         }
         DispatchQueue.main.async { handler?() }
     }
