@@ -49,7 +49,7 @@ struct Backup: Codable, Equatable {
 
 struct BackupManga: Codable, Equatable {
     var sourceId: String
-    /// Set when `sourceId` is not an Ahoge source id (a Mihon import), so a report can name it.
+    /// The source's display name when the backup knows it (a Mihon import), so a report can name it.
     var sourceName: String?
     var url: String
     var title: String
@@ -100,7 +100,7 @@ enum BackupError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .notABackup: return "This file is not an Ahoge backup."
+        case .notABackup: return "This file is not an Ahoge or Mihon backup."
         case .newerVersion(let version): return "This backup was made by a newer version of Ahoge (format \(version)). Update the app to restore it."
         }
     }

@@ -70,6 +70,15 @@ enum BackupService {
         )
     }
 
+    /// A `.ahbk` file, or a Mihon/Tachiyomi `.tachibk` one (matched to `sources` by name), as a `Backup`.
+    static func load(_ data: Data, sources: [RepoSource]) throws -> Backup {
+        do {
+            return try BackupCodec.decode(data)
+        } catch BackupError.notABackup {
+            return try MihonBackupImporter.decode(data, sources: sources).backup
+        }
+    }
+
     /// Adds and merges; nothing already on the device is removed. Repositories are added first and
     /// sources the backup had installed are installed when a repository lists them.
     static func restore(_ backup: Backup, into repo: LibraryRepository, store: ExtensionStore, defaults: UserDefaults) async -> RestoreReport {

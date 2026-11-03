@@ -30,7 +30,7 @@ struct DataStorageView: View {
             } header: {
                 Text("Backup")
             } footer: {
-                Text("A backup holds your library, categories, reading progress, history, repositories and settings. Restoring merges it into what is already here.")
+                Text("A backup holds your library, categories, reading progress, history, repositories and settings. Restoring merges it into what is already here. Mihon and Tachiyomi backups (.tachibk) work too; their sources are matched by name.")
             }
             .themedRows()
 
@@ -134,7 +134,7 @@ struct DataStorageView: View {
         restoring = true
         defer { restoring = false }
         do {
-            let backup = try BackupCodec.decode(try Data(contentsOf: url))
+            let backup = try BackupService.load(try Data(contentsOf: url), sources: extensions.rows().map { $0.source })
             report = await BackupService.restore(backup, into: repo, store: extensions, defaults: .standard)
         } catch {
             message = error.localizedDescription
