@@ -8,6 +8,7 @@ struct ExtensionsView: View {
     @State private var actionError: String?
     /// An installed source whose details to show.
     @State private var details: String?
+    @AppStorage(Pref.browseContentFilter.name) private var content = ContentFilter.all.rawValue
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -34,8 +35,10 @@ struct ExtensionsView: View {
             }
             section("Updates", rows.filter { $0.state == .updateAvailable })
             section("Installed", rows.filter { $0.state == .installed })
-            section("Available", rows.filter { $0.state == .available })
-            section("Requires app update", rows.filter { $0.state == .requiresAppUpdate })
+            // The content filter hides sources not installed yet; installed ones always show here.
+            let filter = ContentFilter(rawValue: content) ?? .all
+            section("Available", rows.filter { $0.state == .available && filter.allows(nsfw: $0.source.nsfw) })
+            section("Requires app update", rows.filter { $0.state == .requiresAppUpdate && filter.allows(nsfw: $0.source.nsfw) })
         }
         .themedScreen()
         .overlay { if store.isRefreshing && rows.isEmpty { ProgressView() } }

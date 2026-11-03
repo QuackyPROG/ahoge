@@ -6,10 +6,19 @@ struct SourceFilterView: View {
     @EnvironmentObject private var store: ExtensionStore
     @State private var disabledSources = Set(Pref.disabledSources.value())
     @State private var disabledLanguages = Set(Pref.disabledLanguages.value())
+    @AppStorage(Pref.browseContentFilter.name) private var content = ContentFilter.all.rawValue
 
     var body: some View {
         let groups = Dictionary(grouping: store.installed, by: \.lang).sorted { $0.key < $1.key }
         List {
+            Section {
+                Picker("Content", selection: $content) {
+                    ForEach(ContentFilter.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+            } footer: {
+                Text("Uses the 18+ flag from the extension repository. Also applies to sources not yet installed in Extensions.")
+            }
+            .themedRows()
             ForEach(groups, id: \.key) { lang, items in
                 Section {
                     Toggle(Self.languageName(lang), isOn: languageBinding(lang))
