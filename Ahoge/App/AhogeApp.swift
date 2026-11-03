@@ -36,6 +36,7 @@ struct AhogeApp: App {
         updater.downloads = downloads
         _downloads = StateObject(wrappedValue: downloads)
         _updater = StateObject(wrappedValue: updater)
+        BackgroundRefresh.context = BackgroundRefresh.Context(repo: library, sources: sources, updater: updater, extensions: store)
     }
 
     var body: some Scene {

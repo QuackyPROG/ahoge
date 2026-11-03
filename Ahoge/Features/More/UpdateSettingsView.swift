@@ -9,8 +9,39 @@ struct UpdateSettingsView: View {
     @AppStorage(Pref.updateSmart.name) private var smart = Pref.updateSmart.defaultValue
     @AppStorage(Pref.updateRefreshMetadata.name) private var refreshMetadata = Pref.updateRefreshMetadata.defaultValue
 
+    @AppStorage(Pref.autoUpdateInterval.name) private var interval = Pref.autoUpdateInterval.defaultValue
+    @AppStorage(Pref.autoUpdateOnlyCharging.name) private var onlyCharging = Pref.autoUpdateOnlyCharging.defaultValue
+
+    private static let intervalHours = [0, 6, 12, 24, 48, 168]
+
+    private static func label(_ hours: Int) -> String {
+        switch hours {
+        case 0: "Off"
+        case 168: "Every week"
+        case 24: "Every day"
+        case 48: "Every 2 days"
+        default: "Every \(hours) hours"
+        }
+    }
+
     var body: some View {
         List {
+            Section {
+                Picker(selection: $interval) {
+                    ForEach(Self.intervalHours, id: \.self) { Text(Self.label($0)).tag($0) }
+                } label: {
+                    Label { Text("Automatic updates") } icon: { SettingsIcon(systemName: "clock.arrow.2.circlepath", color: .orange) }
+                }
+                if interval > 0 {
+                    Toggle(isOn: $onlyCharging) {
+                        Label { Text("Only while charging") } icon: { SettingsIcon(systemName: "bolt.fill", color: .green) }
+                    }
+                }
+            } footer: {
+                Text("iOS decides when the app gets to run in the background, so updates can come later than the interval, or be skipped when the device is low on power or the app is rarely opened. Opening the app and pulling down always works.")
+            }
+            .themedRows()
+
             Section {
                 Toggle(isOn: $smart) {
                     Label { Text("Smart update") } icon: { SettingsIcon(systemName: "calendar.badge.clock", color: .purple) }
@@ -59,5 +90,7 @@ struct UpdateSettingsView: View {
         .navigationTitle("Library updates")
         .navigationBarTitleDisplayMode(.inline)
         .themedScreen()
+        .onChange(of: interval) { BackgroundRefresh.schedule() }
+        .onChange(of: onlyCharging) { BackgroundRefresh.schedule() }
     }
 }

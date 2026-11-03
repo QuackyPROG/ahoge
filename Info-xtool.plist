@@ -22,6 +22,17 @@
 	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save manga pages you share from the reader to your photos.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>app.ahoge.refresh</string>
+		<string>app.ahoge.update</string>
+		<string>app.ahoge.backup</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

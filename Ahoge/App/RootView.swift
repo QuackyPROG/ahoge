@@ -56,12 +56,16 @@ struct RootView: View {
         .environment(\.palette, palette)
         .preferredColorScheme(mode.colorScheme)
         .onAppear(perform: applyWindowStyle)
+        .onAppear { BackgroundRefresh.schedule() }
         .onChange(of: mode, initial: true) { applyWindowStyle() }
         .onChange(of: theme) { applyWindowStyle() }
         .onChange(of: pureBlack) { applyWindowStyle() }
         .onChange(of: scenePhase) { _, phase in
             PrivacyShield.setVisible(secureScreen && phase != .active)
-            if phase == .background { AutoBackup.runIfDue(repo: repo, store: extensions) }
+            if phase == .background {
+                AutoBackup.runIfDue(repo: repo, store: extensions)
+                BackgroundRefresh.schedule()
+            }
             downloads.setBackground(phase == .background)
         }
         .onReceive(NotificationCenter.default.publisher(for: .readerDidClose)) { _ in
