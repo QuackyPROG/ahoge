@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "createdAt": 1793700000000,
+  "manga": [
+    {
+      "sourceId": "en.demo",
+      "url": "/m/1",
+      "title": "One",
+      "cover": "https://c/1.jpg",
+      "author": "Author",
+      "artist": "Artist",
+      "summary": "About One",
+      "genres": ["Action", "Drama"],
+      "status": "ongoing",
+      "inLibrary": true,
+      "dateAdded": 1793600000000,
+      "notes": "my note",
+      "updateInterval": 7,
+      "categories": ["Reading"],
+      "excludedScanlators": ["Slow Group"],
+      "chapters": [
+        {
+          "url": "/c/2",
+          "name": "Ch 2",
+          "number": 2,
+          "scanlator": "Fast Group",
+          "dateUpload": 1793500000000,
+          "sourceOrder": 0,
+          "read": true,
+          "bookmark": true,
+          "lastPageRead": 11,
+          "lastRead": 1793650000000,
+          "timeRead": 300
+        },
+        {
+          "url": "/c/1",
+          "name": "Ch 1",
+          "number": 1,
+          "sourceOrder": 1,
+          "read": false,
+          "bookmark": false,
+          "lastPageRead": 0,
+          "timeRead": 0
+        }
+      ]
+    }
+  ],
+  "categories": [
+    { "name": "Reading", "sort": 0, "flags": 1, "sortMode": "Title:asc" }
+  ],
+  "repos": ["https://repo.test/index.json"],
+  "installedSourceIds": ["en.demo"],
+  "preferences": {
+    "reader.mode.default": "paged",
+    "reader.keepScreenOn": false,
+    "reader.dim": 0.25,
+    "library.shelf": 2,
+    "browse.pinnedSources": ["en.demo"]
+  }
+}
