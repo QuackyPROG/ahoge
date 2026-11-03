@@ -28,7 +28,11 @@ struct MangaDetailView: View {
     private var info: InstalledSource? { sources.installed(ref.sourceId) }
     private var headers: [String: String] { info.map { ["Referer": $0.baseUrl + "/"] } ?? [:] }
     private var cover: String { manga?.coverUrl.nonEmpty ?? ref.cover }
-    private var webURL: String? { info.map { $0.baseUrl + ref.url } }
+    private var webURL: String? {
+        guard let info else { return nil }
+        if let manga { return manga.webURL(baseUrl: info.baseUrl) }
+        return LibraryManga(sourceId: ref.sourceId, url: ref.url, title: ref.title, coverUrl: "").webURL(baseUrl: info.baseUrl)
+    }
 
     var body: some View {
         let chapters = manga.map { display.apply(to: $0.chapters) } ?? []
@@ -165,11 +169,6 @@ struct MangaDetailView: View {
             ActionButton(title: inLibrary ? "In library" : "Add to library", icon: inLibrary ? "heart.fill" : "heart", active: inLibrary) { toggleLibrary() }
             if let webURL {
                 ActionButton(title: "WebView", icon: "globe") { webTarget = WebTarget(url: webURL) }
-                if let url = URL(string: webURL) {
-                    ShareLink(item: url) { ActionLabel(title: "Share", icon: "square.and.arrow.up") }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity)
-                }
             }
         }
     }
@@ -288,6 +287,12 @@ struct MangaDetailView: View {
                         .accessibilityLabel("Edit categories")
                 }
             }
+            if let webURL, let url = URL(string: webURL) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }
+                        .accessibilityLabel("Share")
+                }
+            }
             if let webURL {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { webTarget = WebTarget(url: webURL) } label: { Image(systemName: "globe") }
@@ -300,9 +305,8 @@ struct MangaDetailView: View {
     @ViewBuilder
     private var resumeButton: some View {
         if let next = nextChapter {
-            let started = next.lastPageRead > 0 || (manga?.chapters.contains { $0.read } ?? false)
             Button { reading = next } label: {
-                Label(started ? "Resume" : "Start", systemImage: "play.fill")
+                Label(manga?.hasStartedReading == true ? "Resume" : "Start", systemImage: "play.fill")
                     .font(.headline)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
@@ -328,11 +332,7 @@ struct MangaDetailView: View {
         withAnimation { selecting = false }
     }
 
-    /// The oldest unread chapter (chapters are newest first), else the newest.
-    private var nextChapter: ChapterRecord? {
-        guard let list = manga?.sortedChapters, !list.isEmpty else { return nil }
-        return list.last { !$0.read } ?? list.first
-    }
+    private var nextChapter: ChapterRecord? { manga?.nextChapter }
 
     private func toggleLibrary() {
         let target = manga ?? repo.upsert(sourceId: ref.sourceId, url: ref.url, title: ref.title, cover: ref.cover)
