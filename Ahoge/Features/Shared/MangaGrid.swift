@@ -6,6 +6,9 @@ struct MangaGrid: View {
     var onItemAppear: (MangaRef) -> Void = { _ in }
     /// Browse results already saved to the library, to fade.
     var isInLibrary: (MangaRef) -> Bool = { _ in false }
+    /// In the Library: opens the title's next unread chapter. Nil (or false from `canContinue`) shows no play button.
+    var onContinue: ((MangaRef) -> Void)? = nil
+    var canContinue: (MangaRef) -> Bool = { _ in false }
     /// When set, taps toggle selection (by manga key) instead of opening the manga.
     var selection: Binding<Set<String>>? = nil
     /// In the Library: starts selection from a long-press, and offers "Edit categories".
@@ -55,6 +58,22 @@ struct MangaGrid: View {
         } else {
             NavigationLink(value: Route.manga(ref)) { card }
                 .buttonStyle(PressableCardStyle())
+                .overlay(alignment: .bottomTrailing) {
+                    if let onContinue, canContinue(ref) {
+                        Button { onContinue(ref) } label: {
+                            Image(systemName: "play.fill")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(palette.onPrimary.color)
+                                .frame(width: 30, height: 30)
+                                .background(palette.primary.color, in: Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+                                .padding(6)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Continue reading \(ref.title)")
+                    }
+                }
                 .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .contextMenu {
                     LibraryCardMenu(ref: ref, librarySelect: librarySelect) { target in

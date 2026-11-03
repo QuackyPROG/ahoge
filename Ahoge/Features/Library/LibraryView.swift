@@ -14,6 +14,8 @@ struct LibraryView: View {
     @EnvironmentObject private var updater: LibraryUpdater
     @AppStorage(Pref.librarySort.name) private var sort: Sort = .title
     @AppStorage(Pref.libraryShelf.name) private var shelf = 0
+    @AppStorage(Pref.libraryContinueButton.name) private var continueButton = false
+    @State private var reading: (manga: LibraryManga, chapter: ChapterRecord)?
     @State private var search = ""
     @State private var selecting = false
     @State private var selection = Set<String>()
@@ -104,6 +106,9 @@ struct LibraryView: View {
                     endSelection()
                 }
             }
+            .fullScreenCover(isPresented: Binding(get: { reading != nil }, set: { if !$0 { reading = nil } })) {
+                if let reading { ReaderView(sourceId: reading.manga.sourceId, manga: reading.manga, chapter: reading.chapter) }
+            }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
@@ -121,7 +126,13 @@ struct LibraryView: View {
                     return count > 0 ? "\(count)" : nil
                 },
                 selection: selecting ? $selection : nil,
-                librarySelect: { startSelecting($0) }
+                librarySelect: { startSelecting($0) },
+                onContinue: continueButton ? { ref in
+                    if let manga = repo.manga(sourceId: ref.sourceId, url: ref.url), let chapter = manga.nextUnreadChapter {
+                        reading = (manga, chapter)
+                    }
+                } : nil,
+                canContinue: { (unread[LibraryManga.makeKey(sourceId: $0.sourceId, url: $0.url)] ?? 0) > 0 }
             )
             .padding(.vertical, 8)
         }
@@ -163,6 +174,7 @@ struct LibraryView: View {
                     Picker("Sort", selection: $sort) {
                         ForEach(Sort.allCases) { Text($0.rawValue).tag($0) }
                     }
+                    Toggle("Continue reading button", systemImage: "play.circle", isOn: $continueButton)
                     Button("Select", systemImage: "checkmark.circle") { withAnimation { selecting = true } }
                     Button("Update library", systemImage: "arrow.clockwise") {
                         Task { await updater.update(repo.library, repo: repo, sources: sources) }
