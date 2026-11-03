@@ -107,6 +107,7 @@ struct SourceBrowseView: View {
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
+    @AppStorage(Pref.browseDisplayMode.name) private var displayMode = LibraryDisplayMode.compact.rawValue
     @StateObject private var model: SourceBrowseModel
     @State private var webTarget: WebTarget?
     @State private var editing: FilterState?
@@ -145,7 +146,8 @@ struct SourceBrowseView: View {
                 onItemAppear: { ref in
                     if model.shouldLoadMore(after: ref.url) { Task { await model.loadMore(fetch) } }
                 },
-                isInLibrary: inLibrary
+                isInLibrary: inLibrary,
+                mode: LibraryDisplayMode(rawValue: displayMode) ?? .compact
             )
             // A page that is all hidden has no cell to trigger the next load; the new id re-fires this per load.
             if hideInLibrary, shown.count < refs.count {
@@ -172,6 +174,16 @@ struct SourceBrowseView: View {
         }
         .refreshable { await model.reload(fetch) }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Display", selection: $displayMode) {
+                        ForEach([LibraryDisplayMode.compact, .comfortable, .list]) { Text($0.label).tag($0.rawValue) }
+                    }
+                } label: {
+                    Image(systemName: displayMode == LibraryDisplayMode.list.rawValue ? "list.bullet" : "square.grid.2x2")
+                }
+                .accessibilityLabel("Display mode")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 if let info {
                     Button { webTarget = WebTarget(url: info.baseUrl) } label: { Image(systemName: "globe") }
