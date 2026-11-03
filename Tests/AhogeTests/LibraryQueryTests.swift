@@ -250,4 +250,27 @@ final class LibraryQueryTests: XCTestCase {
         XCTAssertEqual(sort.tapping(.title), LibrarySort(key: .title, ascending: false))
         XCTAssertEqual(sort.tapping(.lastRead), LibrarySort(key: .lastRead, ascending: true))
     }
+
+    // MARK: Per-category sort
+
+    func testEffectiveSortFollowsGlobalUnlessPerCategory() {
+        let categories = [MangaCategory(id: 5, name: "Reading", sort: 0, flags: 0, sortMode: "lastRead:desc")]
+        let global = "title:asc"
+        XCTAssertEqual(
+            LibrarySort.effective(global: global, perCategory: false, shelfId: 5, defaultShelf: "", categories: categories),
+            LibrarySort(key: .title, ascending: true))
+        XCTAssertEqual(
+            LibrarySort.effective(global: global, perCategory: true, shelfId: 5, defaultShelf: "", categories: categories),
+            LibrarySort(key: .lastRead, ascending: false))
+    }
+
+    func testEffectiveSortFallsBackAndUsesTheDefaultShelfPref() {
+        let categories = [MangaCategory(id: 5, name: "Reading", sort: 0)]
+        XCTAssertEqual(
+            LibrarySort.effective(global: "unreadCount:desc", perCategory: true, shelfId: 5, defaultShelf: "", categories: categories),
+            LibrarySort(key: .unreadCount, ascending: false))
+        XCTAssertEqual(
+            LibrarySort.effective(global: "unreadCount:desc", perCategory: true, shelfId: 0, defaultShelf: "dateAdded:asc", categories: categories),
+            LibrarySort(key: .dateAdded, ascending: true))
+    }
 }

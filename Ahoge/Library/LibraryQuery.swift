@@ -110,6 +110,19 @@ struct LibrarySort: Codable, Equatable {
     }
 }
 
+extension LibrarySort {
+    static let `default` = LibrarySort(key: .title, ascending: true)
+
+    /// The sort a shelf shows. With per-category sort on, a shelf's own sort wins over `global`
+    /// (the stored global sort); shelf 0 is Default, whose sort lives in `defaultShelf`.
+    static func effective(global: String, perCategory: Bool, shelfId: Int, defaultShelf: String, categories: [MangaCategory]) -> LibrarySort {
+        let fallback = LibrarySort(stored: global) ?? .default
+        guard perCategory else { return fallback }
+        let own = shelfId == 0 ? defaultShelf : categories.first { Int($0.id) == shelfId }?.sortMode
+        return own.flatMap { LibrarySort(stored: $0) } ?? fallback
+    }
+}
+
 /// What the query needs to know beyond the titles themselves: downloads live in `DownloadManager`.
 struct LibraryFacts {
     var downloadedCount: (String) -> Int = { _ in 0 }

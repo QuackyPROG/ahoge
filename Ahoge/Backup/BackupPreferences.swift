@@ -5,6 +5,9 @@ extension Pref {
     /// Left out on purpose: the default category (an id that differs per device) and timestamps.
     static let backupNames: [String] = [
         libraryShelf.name, librarySort.name, libraryContinueButton.name,
+        libraryFilters.name, perCategorySort.name, libraryDefaultShelfSort.name, libraryDisplayMode.name,
+        libraryColumnsPortrait.name, libraryColumnsLandscape.name, libraryBadgeUnread.name, libraryBadgeDownloaded.name,
+        libraryBadgeLanguage.name, libraryBadgeLocal.name, libraryShowCategoryTabs.name, libraryShowItemCount.name,
         browseHideInLibrary.name, pinnedSources.name,
         readerMode.name, readerBackground.name, readerShowPageNumber.name, readerKeepScreenOn.name, readerBrightness.name,
         readerTapLayout.name, readerInvertTaps.name, readerShowTapZones.name, readerShowModeToast.name, readerDrawUnderCutout.name,

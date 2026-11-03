@@ -24,7 +24,25 @@ enum Pref {
     }
 
     // MARK: Library
-    static let librarySort = Key("library.sort", "Title")
+    /// A `LibrarySort.stored` ("title:asc"); older versions kept a plain label, which still reads.
+    static let librarySort = Key("library.sort", "title:asc")
+    /// A `LibraryFilters.stored` (JSON); empty is no filter.
+    static let libraryFilters = Key("library.filters", "")
+    /// Each category keeps its own sort (`MangaCategory.sortMode`, and `libraryDefaultShelfSort` for Default).
+    static let perCategorySort = Key("library.perCategorySort", false)
+    /// Default (titles in no category) has no category row, so its own sort lives here; empty follows the global sort.
+    static let libraryDefaultShelfSort = Key("library.defaultShelfSort", "")
+    /// A `LibraryDisplayMode`.
+    static let libraryDisplayMode = Key("library.displayMode", "compact")
+    /// Grid columns in portrait and landscape; 0 fits as many as the width allows.
+    static let libraryColumnsPortrait = Key("library.columnsPortrait", 0)
+    static let libraryColumnsLandscape = Key("library.columnsLandscape", 0)
+    static let libraryBadgeUnread = Key("library.badge.unread", true)
+    static let libraryBadgeDownloaded = Key("library.badge.downloaded", false)
+    static let libraryBadgeLanguage = Key("library.badge.language", false)
+    static let libraryBadgeLocal = Key("library.badge.local", false)
+    static let libraryShowCategoryTabs = Key("library.showCategoryTabs", true)
+    static let libraryShowItemCount = Key("library.showItemCount", true)
     static let libraryShelf = Key("library.shelf", 0)
     /// A category id, `LibraryPrefs.uncategorized` or `LibraryPrefs.alwaysAsk`.
     static let libraryDefaultCategory = Key("library.defaultCategory", LibraryPrefs.alwaysAsk)

@@ -72,6 +72,15 @@ extension LibraryRepository {
         write { try category.update($0) }
     }
 
+    /// Sets a category's own sort; nil makes it follow the global sort again.
+    func setCategorySort(_ id: Int64, _ sort: LibrarySort?) {
+        guard let index = categories.firstIndex(where: { $0.id == id }) else { return }
+        objectWillChange.send()
+        categories[index].sortMode = sort?.stored
+        let category = categories[index]
+        write { try category.update($0) }
+    }
+
     func categoryIds(of manga: LibraryManga) -> Set<Int64> { categoryLinks[manga.key] ?? [] }
 
     func setCategories(_ ids: Set<Int64>, for manga: LibraryManga) {

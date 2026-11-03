@@ -5,6 +5,13 @@ enum Route: Hashable {
     /// A source's browse screen filtered to one genre (tapped on a manga page).
     case sourceGenre(String, genre: String)
     case manga(MangaRef)
+    /// Search every source for a query. Phase 6 builds the screen; until `GlobalSearchAvailable.isOn`, nothing links here.
+    case globalSearch(String)
+}
+
+/// Switched on by the task that adds global search, so the Library's "Search globally" row stays hidden until then.
+enum GlobalSearchAvailable {
+    static let isOn = false
 }
 
 struct RouteView: View {
@@ -15,6 +22,8 @@ struct RouteView: View {
         case .source(let id): SourceBrowseView(sourceId: id)
         case .sourceGenre(let id, let genre): SourceBrowseView(sourceId: id, genre: genre)
         case .manga(let ref): MangaDetailView(ref: ref)
+        // Replaced by the global search screen in Phase 6; unreachable while `GlobalSearchAvailable.isOn` is false.
+        case .globalSearch: EmptyView()
         }
     }
 }

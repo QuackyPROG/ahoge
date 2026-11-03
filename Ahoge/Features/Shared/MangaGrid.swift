@@ -13,23 +13,58 @@ struct MangaGrid: View {
     /// In the Library: opens the title's next unread chapter. Nil (or false from `canContinue`) shows no play button.
     var onContinue: ((MangaRef) -> Void)? = nil
     var canContinue: (MangaRef) -> Bool = { _ in false }
+    /// Library display options; Browse keeps the compact auto grid.
+    var mode = LibraryDisplayMode.compact
+    /// Fixed grid columns; 0 fits as many as the width allows.
+    var columns = 0
+    var leadingBadges: (MangaRef) -> [CardBadge] = { _ in [] }
+    var trailingBadges: (MangaRef) -> [CardBadge] = { _ in [] }
     @EnvironmentObject private var sources: SourceManager
     @Environment(\.palette) private var palette
     @State private var choosingCategories: LibraryManga?
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12, alignment: .top)], spacing: 12) {
-            ForEach(items, id: \.self) { ref in
-                cell(ref).onAppear { onItemAppear(ref) }
+        Group {
+            if mode == .list {
+                LazyVStack(spacing: 4) {
+                    ForEach(items, id: \.self) { ref in
+                        cell(ref).onAppear { onItemAppear(ref) }
+                    }
+                }
+            } else {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
+                    ForEach(items, id: \.self) { ref in
+                        cell(ref).onAppear { onItemAppear(ref) }
+                    }
+                }
             }
         }
         .padding(.horizontal)
         .sheet(item: $choosingCategories) { SetCategoriesSheet(manga: [$0]) }
     }
 
+    private var gridColumns: [GridItem] {
+        columns > 0
+            ? Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: columns)
+            : [GridItem(.adaptive(minimum: 110), spacing: 12, alignment: .top)]
+    }
+
+    @ViewBuilder
+    private func cardContent(_ ref: MangaRef) -> some View {
+        if mode == .list {
+            MangaListRow(title: ref.title, cover: ref.cover, headers: referer(ref), badges: leadingBadges(ref) + trailingBadges(ref))
+        } else {
+            MangaCard(
+                title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref),
+                leadingBadges: leadingBadges(ref), trailingBadges: trailingBadges(ref),
+                style: mode, inLibrary: isInLibrary(ref)
+            )
+        }
+    }
+
     @ViewBuilder
     private func cell(_ ref: MangaRef) -> some View {
-        let card = MangaCard(title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref), inLibrary: isInLibrary(ref))
+        let card = cardContent(ref)
         if let selection {
             let key = LibraryManga.makeKey(sourceId: ref.sourceId, url: ref.url)
             let selected = selection.wrappedValue.contains(key)

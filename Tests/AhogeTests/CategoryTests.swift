@@ -47,6 +47,17 @@ final class CategoryTests: XCTestCase {
         XCTAssertEqual(repo.library(in: nil).count, 2)
     }
 
+    func testCategorySortIsStoredPerCategory() throws {
+        let (repo, _, _) = try libraryWithTwo()
+        let one = try XCTUnwrap(repo.createCategory(named: "One"))
+        let two = try XCTUnwrap(repo.createCategory(named: "Two"))
+        repo.setCategorySort(one.id, LibrarySort(key: .unreadCount, ascending: false))
+        XCTAssertEqual(repo.categories.first { $0.id == one.id }?.sortMode, "unreadCount:desc")
+        XCTAssertNil(repo.categories.first { $0.id == two.id }?.sortMode)
+        repo.setCategorySort(one.id, nil)
+        XCTAssertNil(repo.categories.first { $0.id == one.id }?.sortMode)
+    }
+
     func testCategoriesSurviveReopen() throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("library-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: file) }
