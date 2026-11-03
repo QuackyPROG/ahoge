@@ -56,7 +56,7 @@ final class ReaderModel: ObservableObject {
     }
 
     /// Shows only `chapter`, replacing what was loaded, at `page` (its saved page when nil).
-    func open(_ chapter: ChapterRecord, page: Int? = nil, manager: SourceManager) async {
+    func open(_ chapter: ChapterRecord, page: Int? = nil, provider: PageProvider) async {
         ready = false
         error = nil
         sections = []
@@ -64,8 +64,10 @@ final class ReaderModel: ObservableObject {
         currentChapter = chapter
         currentPage = 0
         do {
-            let pages = try await manager.source(sourceId).pages(url: chapter.url)
+            let loaded = try await provider.pages(for: chapter)
+            let pages = loaded.map(\.sourcePage)
             sections = [Section(chapter: chapter, pages: pages)]
+            if case .local? = loaded.first { provider.downloads.readerOpened(chapter) }
             let start = page ?? (chapter.read ? 0 : chapter.lastPageRead)
             let index = min(max(start, 0), max(pages.count - 1, 0))
             currentPage = index
@@ -104,42 +106,46 @@ final class ReaderModel: ObservableObject {
     }
 
     /// Records progress for the item now on screen and loads what comes next.
-    func positionChanged(repo: LibraryRepository, manager: SourceManager) {
+    func positionChanged(repo: LibraryRepository, provider: PageProvider) {
         guard ready, let position, let index = items.firstIndex(where: { $0.id == position }) else { return }
         let item = items[index]
         switch item.kind {
         case .page(_, let page, let count):
             currentChapter = item.chapter
             currentPage = page
+            let wasRead = item.chapter.read
             repo.saveProgress(item.chapter, page: page, pageCount: count)
+            if !wasRead, item.chapter.read { provider.downloads.readerFinished(item.chapter) }
             for case .page(let next, _, _) in items.dropFirst(index + 1).prefix(5).map(\.kind) {
                 Task { await ImageLoader.shared.prefetch(next.url, headers: next.headers) }
             }
             // Mihon starts on the next chapter a few pages before the end, so it is there when reached.
-            if count - page <= 3 { loadNext(after: item.chapter, manager: manager) }
+            if count - page <= 3 { loadNext(after: item.chapter, provider: provider) }
         case .end:
             if let count = sections.first(where: { $0.id == item.chapter.url })?.pages.count, count > 0 {
+                let wasRead = item.chapter.read
                 repo.saveProgress(item.chapter, page: count - 1, pageCount: count)
+                if !wasRead, item.chapter.read { provider.downloads.readerFinished(item.chapter) }
             }
-            loadNext(after: item.chapter, manager: manager)
+            loadNext(after: item.chapter, provider: provider)
         case .start:
             break
         }
     }
 
-    func retryNext(manager: SourceManager) {
+    func retryNext(provider: PageProvider) {
         guard let last = sections.last else { return }
         error = nil
-        loadNext(after: last.chapter, manager: manager)
+        loadNext(after: last.chapter, provider: provider)
     }
 
-    private func loadNext(after chapter: ChapterRecord, manager: SourceManager) {
+    private func loadNext(after chapter: ChapterRecord, provider: PageProvider) {
         guard chapter.url == sections.last?.id, !isLoadingNext, error == nil, let next = self.chapter(after: chapter) else { return }
         isLoadingNext = true
         Task {
             defer { isLoadingNext = false }
             do {
-                let pages = try await manager.source(sourceId).pages(url: next.url)
+                let pages = try await provider.pages(for: next).map(\.sourcePage)
                 if !sections.contains(where: { $0.id == next.url }) {
                     sections.append(Section(chapter: next, pages: pages))
                 }

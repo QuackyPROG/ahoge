@@ -53,6 +53,11 @@ actor ImageLoader {
         let session = session
         let task = Task.detached(priority: priority) { () throws -> UIImage in
             guard let target = URL(string: url) else { throw URLError(.badURL) }
+            // Downloaded pages: read from disk, same downsampling, no network.
+            if target.isFileURL {
+                guard let image = Self.decode(try Data(contentsOf: target), maxPixelWidth: maxPixelWidth) else { throw URLError(.cannotDecodeContentData) }
+                return image
+            }
             var request = URLRequest(url: target)
             request.setValue(HTTPClient.defaultUserAgent, forHTTPHeaderField: "User-Agent")
             for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }

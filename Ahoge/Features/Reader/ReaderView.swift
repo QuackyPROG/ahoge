@@ -4,6 +4,7 @@ struct ReaderView: View {
     @StateObject private var model: ReaderModel
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
+    @EnvironmentObject private var downloads: DownloadManager
     @Environment(\.dismiss) private var dismiss
     @State private var showOverlay = false
     @State private var sliderPage = 0
@@ -39,7 +40,7 @@ struct ReaderView: View {
             if !model.ready && model.error == nil {
                 ProgressView().tint(background.foreground)
             } else if let error = model.error, model.sections.isEmpty {
-                ErrorStateView(error: error, retry: { Task { await model.open(model.currentChapter, manager: sources) } })
+                ErrorStateView(error: error, retry: { Task { await model.open(model.currentChapter, provider: pages) } })
                     .foregroundStyle(background.foreground)
             }
             Color.black.opacity(dim)
@@ -61,9 +62,9 @@ struct ReaderView: View {
         .preferredColorScheme(.dark)
         .task {
             guard model.sections.isEmpty else { return }
-            await model.open(start, manager: sources)
+            await model.open(start, provider: pages)
         }
-        .onChange(of: model.position) { model.positionChanged(repo: repo, manager: sources) }
+        .onChange(of: model.position) { model.positionChanged(repo: repo, provider: pages) }
         .onChange(of: model.ready) { _, ready in
             if ready, model.error == nil { repo.recordHistory(model.currentChapter) }
         }
@@ -82,12 +83,13 @@ struct ReaderView: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenOn }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
+            downloads.readerClosed()
             NotificationCenter.default.post(name: .readerDidClose, object: nil)
         }
         .onChange(of: keepScreenOn) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .sheet(isPresented: $showChapters) {
             ReaderChapterList(manga: model.manga, current: model.currentChapter) { chapter in
-                Task { await model.open(chapter, manager: sources) }
+                Task { await model.open(chapter, provider: pages) }
             }
             .preferredColorScheme(.dark)
         }
@@ -95,6 +97,7 @@ struct ReaderView: View {
     }
 
     private var pageCount: Int { model.currentSection?.pages.count ?? 0 }
+    private var pages: PageProvider { PageProvider(sources: sources, downloads: downloads) }
 
     private func toggleOverlay() {
         withAnimation(.easeInOut(duration: 0.22)) { showOverlay.toggle() }
@@ -102,7 +105,7 @@ struct ReaderView: View {
 
     private func open(_ chapter: ChapterRecord?) {
         guard let chapter else { return }
-        Task { await model.open(chapter, manager: sources) }
+        Task { await model.open(chapter, provider: pages) }
     }
 
     // MARK: Pages
@@ -165,7 +168,7 @@ struct ReaderView: View {
                 isLoadingNext: model.isLoadingNext,
                 error: model.error,
                 openPrevious: { open($0) },
-                retry: { model.retryNext(manager: sources) }
+                retry: { model.retryNext(provider: pages) }
             )
             .environment(\.layoutDirection, .leftToRight)
             .frame(maxWidth: .infinity, maxHeight: paged ? .infinity : nil)
