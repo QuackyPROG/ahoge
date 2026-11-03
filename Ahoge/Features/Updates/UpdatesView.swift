@@ -18,13 +18,25 @@ struct UpdatesView: View {
     @State private var selecting = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.updatesBookmarked.name) private var bookmarkedFilter = Pref.updatesBookmarked.defaultValue
+    @AppStorage(Pref.updatesDownloaded.name) private var downloadedFilter = Pref.updatesDownloaded.defaultValue
+    @AppStorage(Pref.updatesUnread.name) private var unreadFilter = Pref.updatesUnread.defaultValue
+    @AppStorage(Pref.updatesStarted.name) private var startedFilter = Pref.updatesStarted.defaultValue
     @State private var selection = Set<String>()
 
     var body: some View {
         let all = repo.updates(since: UpdatesPrefs.cutoff)
         let bookmarked = TriState(rawValue: bookmarkedFilter) ?? .off
+        let downloadedState = TriState(rawValue: downloadedFilter) ?? .off
+        let unreadState = TriState(rawValue: unreadFilter) ?? .off
+        let startedState = TriState(rawValue: startedFilter) ?? .off
+        let filtering = [bookmarked, downloadedState, unreadState, startedState].contains { $0 != .off }
         let entries = all.filter { entry in
-            (!downloadedOnly || downloads.isDownloaded(entry.chapter.key)) && bookmarked.matches(entry.chapter.bookmark)
+            let isDownloaded = downloads.isDownloaded(entry.chapter.key)
+            return (!downloadedOnly || isDownloaded)
+                && bookmarked.matches(entry.chapter.bookmark)
+                && downloadedState.matches(isDownloaded)
+                && unreadState.matches(!entry.chapter.read)
+                && startedState.matches(entry.manga.hasStartedReading)
         }
         NavigationStack {
             List(selection: $selection) {
@@ -90,13 +102,28 @@ struct UpdatesView: View {
                 } else {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
+                            Picker("Downloaded", selection: $downloadedFilter) {
+                                Text("Downloaded: any").tag(TriState.off.rawValue)
+                                Text("Downloaded").tag(TriState.include.rawValue)
+                                Text("Not downloaded").tag(TriState.exclude.rawValue)
+                            }
+                            Picker("Unread", selection: $unreadFilter) {
+                                Text("Read state: any").tag(TriState.off.rawValue)
+                                Text("Unread").tag(TriState.include.rawValue)
+                                Text("Read").tag(TriState.exclude.rawValue)
+                            }
+                            Picker("Started", selection: $startedFilter) {
+                                Text("Title: any").tag(TriState.off.rawValue)
+                                Text("Started").tag(TriState.include.rawValue)
+                                Text("Not started").tag(TriState.exclude.rawValue)
+                            }
                             Picker("Bookmarked", selection: $bookmarkedFilter) {
-                                Text("All chapters").tag(TriState.off.rawValue)
+                                Text("Bookmarks: any").tag(TriState.off.rawValue)
                                 Text("Bookmarked").tag(TriState.include.rawValue)
                                 Text("Not bookmarked").tag(TriState.exclude.rawValue)
                             }
                         } label: {
-                            Image(systemName: bookmarked == .off ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                            Image(systemName: filtering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                         }
                         .accessibilityLabel("Filter updates")
                     }
