@@ -59,6 +59,14 @@ enum Pref {
     /// Covers the app in the app switcher.
     static let secureScreen = Key("security.secureScreen", false)
 
+    // MARK: Backup
+    /// Hours between automatic backups; 0 is off.
+    static let autoBackupInterval = Key("backup.autoInterval", 0)
+    /// How many automatic backups to keep in Documents/Backups.
+    static let autoBackupKeep = Key("backup.autoKeep", 4)
+    /// When the last automatic backup was made (seconds since 1970).
+    static let autoBackupLast = Key("backup.autoLast", 0.0)
+
     // MARK: Updates
     /// When the Updates tab was last open (seconds since 1970); newer chapters count in its badge.
     static let updatesLastSeen = Key("updates.lastSeen", 0.0)

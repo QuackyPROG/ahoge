@@ -40,6 +40,8 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryAddUsageDescription: Save manga pages you share from the reader to your photos.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: com.quackyprog.ahoge.backup
             UTTypeDescription: Ahoge Backup

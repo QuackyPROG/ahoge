@@ -7,6 +7,9 @@ struct DataStorageView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var extensions: ExtensionStore
     @EnvironmentObject private var sources: SourceManager
+    @AppStorage(Pref.autoBackupInterval.name) private var autoInterval = 0
+    @AppStorage(Pref.autoBackupKeep.name) private var autoKeep = 4
+    @AppStorage(Pref.autoBackupLast.name) private var autoLast = 0.0
     @State private var exporting: BackupDocument?
     @State private var exportName = ""
     @State private var importing = false
@@ -28,6 +31,26 @@ struct DataStorageView: View {
                 Text("Backup")
             } footer: {
                 Text("A backup holds your library, categories, reading progress, history, repositories and settings. Restoring merges it into what is already here.")
+            }
+            .themedRows()
+
+            Section {
+                Picker(selection: $autoInterval) {
+                    ForEach(BackupSchedule.intervalHours, id: \.self) { Text(Self.intervalLabel($0)).tag($0) }
+                } label: {
+                    Label { Text("Automatic backup") } icon: { SettingsIcon(systemName: "clock.arrow.2.circlepath", color: .orange) }
+                }
+                if autoInterval > 0 {
+                    Stepper(value: $autoKeep, in: 1...20) {
+                        Label { Text("Backups to keep: \(autoKeep)") } icon: { SettingsIcon(systemName: "tray.full.fill", color: .teal) }
+                    }
+                }
+            } footer: {
+                if autoInterval > 0 {
+                    Text("Saved in the Ahoge folder in the Files app (Backups). \(Self.lastBackupText(autoLast))")
+                } else {
+                    Text("Backups are made when you leave the app. Sideloaded apps lose their data when they expire or are re-signed, so turn this on and copy the files off the device now and then.")
+                }
             }
             .themedRows()
 
@@ -76,6 +99,23 @@ struct DataStorageView: View {
         .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
         }
+    }
+
+    private static func intervalLabel(_ hours: Int) -> String {
+        switch hours {
+        case 0: "Off"
+        case 6: "Every 6 hours"
+        case 12: "Every 12 hours"
+        case 24: "Daily"
+        case 48: "Every 2 days"
+        default: "Weekly"
+        }
+    }
+
+    private static func lastBackupText(_ seconds: Double) -> String {
+        guard seconds > 0 else { return "Last automatically backed up: never" }
+        let date = Date(timeIntervalSince1970: seconds)
+        return "Last automatically backed up: \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private func createBackup() {

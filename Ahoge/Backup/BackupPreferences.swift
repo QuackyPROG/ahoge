@@ -9,7 +9,7 @@ extension Pref {
         readerMode.name, readerBackground.name, readerShowPageNumber.name, readerKeepScreenOn.name, readerDim.name,
         readerTapZones.name, readerInvertTaps.name, readerWebtoonPadding.name, readerWebtoonGap.name,
         theme.name, themeMode.name, pureBlack.name,
-        secureScreen.name,
+        secureScreen.name, autoBackupInterval.name, autoBackupKeep.name,
     ]
 }
 
