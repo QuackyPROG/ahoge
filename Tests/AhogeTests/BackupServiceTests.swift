@@ -145,11 +145,11 @@ final class BackupServiceTests: XCTestCase {
         let target = try LibraryRepository.inMemory()
         let backup = Backup(
             createdAt: Date(timeIntervalSince1970: 5000),
-            preferences: ["reader.dim": .double(0.5), "not.a.pref": .string("x")]
+            preferences: ["reader.brightness": .int(-30), "not.a.pref": .string("x")]
         )
         let restoredDefaults = defaults()
         _ = await BackupService.restore(backup, into: target, store: store(), defaults: restoredDefaults)
-        XCTAssertEqual(Pref.readerDim.value(in: restoredDefaults), 0.5)
+        XCTAssertEqual(Pref.readerBrightness.value(in: restoredDefaults), -30)
         XCTAssertNil(restoredDefaults.object(forKey: "not.a.pref"))
     }
 }

@@ -44,11 +44,51 @@ enum Pref {
     static let readerBackground = Key("reader.background", "black")
     static let readerShowPageNumber = Key("reader.showPageNumber", true)
     static let readerKeepScreenOn = Key("reader.keepScreenOn", true)
-    static let readerDim = Key("reader.dim", 0.0)
-    static let readerTapZones = Key("reader.tapZones", true)
+    /// −75…100: below 0 a black overlay, above 0 the screen's own brightness (restored on close); 0 is off.
+    static let readerBrightness = Key("reader.brightness", 0)
+    /// A `TapZoneLayout`.
+    static let readerTapLayout = Key("reader.tapLayout", "standard")
     static let readerInvertTaps = Key("reader.invertTaps", false)
+    /// Shows the tap zones for a moment when a paged reader opens.
+    static let readerShowTapZones = Key("reader.showTapZones", true)
+    static let readerShowModeToast = Key("reader.showModeToast", true)
+    static let readerDrawUnderCutout = Key("reader.drawUnderCutout", true)
     static let readerWebtoonPadding = Key("reader.webtoonPadding", 0.0)
     static let readerWebtoonGap = Key("reader.webtoonGap", false)
+    /// Webtoon: how little scrolling hides the menu. 0 off, 1 low, 2 medium, 3 high.
+    static let readerHideMenuOnScroll = Key("reader.hideMenuOnScroll", 2)
+    static let readerCropBordersPaged = Key("reader.cropBordersPaged", false)
+    static let readerCropBordersWebtoon = Key("reader.cropBordersWebtoon", false)
+    /// A `ReaderScaleType`.
+    static let readerScaleType = Key("reader.scaleType", "fitScreen")
+    /// A `ReaderZoomStart`.
+    static let readerZoomStart = Key("reader.zoomStart", "auto")
+    /// A `WidePageMode`.
+    static let readerWidePages = Key("reader.widePages", "off")
+    static let readerInvertSplit = Key("reader.invertSplit", false)
+    /// A `DualPageMode`.
+    static let readerDualPage = Key("reader.dualPage", "off")
+    /// A `ReaderOrientation`, for series without their own.
+    static let readerOrientation = Key("reader.orientation.default", "free")
+    static let readerDoubleTapZoom = Key("reader.doubleTapZoom", true)
+    static let readerDisableZoomOut = Key("reader.disableZoomOut", false)
+    /// 0 no animation, 1 normal, 2 fast.
+    static let readerDoubleTapSpeed = Key("reader.doubleTapSpeed", 1)
+    static let readerColorFilter = Key("reader.colorFilter", false)
+    /// 0xAARRGGBB.
+    static let readerColorFilterColor = Key("reader.colorFilterColor", 0x40FF_8C00)
+    /// A `ColorFilterMode`.
+    static let readerColorFilterMode = Key("reader.colorFilterMode", "normal")
+    static let readerGrayscale = Key("reader.grayscale", false)
+    static let readerInvertColors = Key("reader.invertColors", false)
+    static let readerSkipRead = Key("reader.skipRead", false)
+    /// Skips chapters the chapter list filters out, excluded scanlators included.
+    static let readerSkipFiltered = Key("reader.skipFiltered", true)
+    static let readerSkipDuplicates = Key("reader.skipDuplicates", false)
+    /// Off: the card between chapters shows only when chapters are missing in between.
+    static let readerAlwaysShowTransition = Key("reader.alwaysShowTransition", true)
+    /// On cellular, prefetch only the next page.
+    static let readerPreloadOnlyOnWiFi = Key("reader.preloadOnlyOnWiFi", false)
 
     // MARK: Appearance
     static let theme = Key("ui.theme", "standard")
@@ -58,6 +98,10 @@ enum Pref {
     // MARK: Privacy
     /// Covers the app in the app switcher.
     static let secureScreen = Key("security.secureScreen", false)
+    /// Reading saves no progress or history.
+    static let incognito = Key("security.incognito", false)
+    /// Source ids read in incognito whatever the global switch says.
+    static let incognitoSources = Key<[String]>("security.incognitoSources", [])
 
     // MARK: Backup
     /// Hours between automatic backups; 0 is off.

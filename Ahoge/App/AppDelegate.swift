@@ -11,4 +11,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             completionHandler()
         }
     }
+
+    /// The reader's rotation lock (`OrientationLock`); every orientation otherwise.
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        OrientationLock.mask
+    }
 }
