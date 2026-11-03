@@ -18,6 +18,7 @@ struct ReaderPageView: View {
     @State private var failed = false
     @State private var attempt = 0
     @State private var shown: Bool
+    @State private var saveError: String?
 
     init(page: SourcePage, index: Int, paged: Bool, foreground: Color, onTap: @escaping (CGPoint) -> Void = { _ in }) {
         self.page = page
@@ -46,9 +47,15 @@ struct ReaderPageView: View {
                 }
                 .opacity(shown ? 1 : 0)
                 .onAppear { withAnimation(.easeOut(duration: 0.2)) { shown = true } }
+                .contextMenu { pageMenu(image) }
             } else {
                 placeholder
             }
+        }
+        .alert("Couldn't save page", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "")
         }
         .task(id: "\(page.url)#\(attempt)") {
             guard image == nil else { return }
@@ -60,6 +67,19 @@ struct ReaderPageView: View {
             } catch {
                 failed = true
             }
+        }
+    }
+
+    @ViewBuilder private func pageMenu(_ image: UIImage) -> some View {
+        let preview = Image(uiImage: image)
+        Button("Save to Photos", systemImage: "square.and.arrow.down") {
+            Task {
+                do { try await PhotoSaver.save(image) } catch { saveError = error.localizedDescription }
+            }
+        }
+        Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.image = image }
+        ShareLink(item: preview, preview: SharePreview("Page \(index + 1)", image: preview)) {
+            Label("Share", systemImage: "square.and.arrow.up")
         }
     }
 
