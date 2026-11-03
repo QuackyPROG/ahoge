@@ -12,6 +12,7 @@ struct LibraryView: View {
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var updater: LibraryUpdater
+    @EnvironmentObject private var downloads: DownloadManager
     @AppStorage(Pref.librarySort.name) private var sort: Sort = .title
     @AppStorage(Pref.libraryShelf.name) private var shelf = 0
     @AppStorage(Pref.libraryContinueButton.name) private var continueButton = false
@@ -21,6 +22,7 @@ struct LibraryView: View {
     @State private var selection = Set<String>()
     @State private var settingCategories = false
     @State private var confirmRemove = false
+    @State private var removedWithDownloads: [LibraryManga] = []
 
     /// One pass over the library: titles per shelf (0 = in no category), the shelf list and the current shelf.
     private struct Snapshot {
@@ -102,9 +104,17 @@ struct LibraryView: View {
             .sheet(isPresented: $settingCategories) { SetCategoriesSheet(manga: selectedManga, onSave: endSelection) }
             .confirmationDialog(selection.count == 1 ? "Remove 1 title from your library?" : "Remove \(selection.count) titles from your library?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) {
-                    for manga in selectedManga { repo.setInLibrary(manga, false) }
+                    let removed = selectedManga
+                    for manga in removed { repo.setInLibrary(manga, false) }
+                    removedWithDownloads = removed.filter { downloads.downloadedCount(mangaKey: $0.key) > 0 }
                     endSelection()
                 }
+            }
+            .alert("Delete downloaded chapters?", isPresented: Binding(get: { !removedWithDownloads.isEmpty }, set: { if !$0 { removedWithDownloads = [] } })) {
+                Button("Delete", role: .destructive) { downloads.delete(removedWithDownloads.flatMap(\.chapters)) }
+                Button("Keep", role: .cancel) {}
+            } message: {
+                Text("These titles are no longer in your library.")
             }
             .fullScreenCover(isPresented: Binding(get: { reading != nil }, set: { if !$0 { reading = nil } })) {
                 if let reading { ReaderView(sourceId: reading.manga.sourceId, manga: reading.manga, chapter: reading.chapter) }
