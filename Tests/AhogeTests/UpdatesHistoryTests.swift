@@ -85,3 +85,25 @@ final class UpdatesHistoryTests: XCTestCase {
         XCTAssertEqual(repo.history().first?.chapter.url, "/c/1")
     }
 }
+
+@MainActor
+final class ReadingTimeTests: XCTestCase {
+    func testReadingTimeAddsUpAndSkipsIncognito() throws {
+        let repo = try LibraryRepository.inMemory()
+        let suite = "ahoge.test.readingtime.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        repo.preferences = defaults
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        repo.applyChapters([SourceChapter(url: "/c/1", name: "Ch 1", number: 1, date: nil, scanlator: nil)], to: manga)
+        let chapter = try XCTUnwrap(manga.chapters.first)
+        repo.recordHistory(chapter)
+
+        repo.addReadingTime(40, to: chapter)
+        repo.addReadingTime(25, to: chapter)
+        Pref.incognito.set(true, in: defaults)
+        repo.addReadingTime(1000, to: chapter)
+
+        XCTAssertEqual(repo.historyByChapter()[chapter.key]?.timeRead, 65)
+    }
+}

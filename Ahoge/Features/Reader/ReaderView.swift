@@ -7,6 +7,7 @@ struct ReaderView: View {
     @EnvironmentObject private var downloads: DownloadManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showOverlay = false
     /// A page long-pressed for "Set as cover", waiting for confirmation.
     @State private var coverCandidate: UIImage?
@@ -125,10 +126,13 @@ struct ReaderView: View {
         .task { await flashHints(tapZones: true) }
         .onChange(of: model.position) { model.positionChanged(repo: repo, provider: pages) }
         .onChange(of: model.ready) { _, ready in
-            if ready, model.error == nil { repo.recordHistory(model.currentChapter) }
+            if ready, model.error == nil { repo.recordHistory(model.currentChapter); model.startClock() }
         }
         .onChange(of: model.currentChapter.key) { _, _ in
-            if model.ready { repo.recordHistory(model.currentChapter) }
+            if model.ready { repo.recordHistory(model.currentChapter); model.restartClock(repo: repo) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.startClock() } else { model.stopClock(repo: repo) }
         }
         .onChange(of: model.currentPage) { _, page in if !scrubbing { sliderPage = page } }
         .onChange(of: sliderPage) { _, page in
@@ -157,6 +161,7 @@ struct ReaderView: View {
             applyBrightness()
         }
         .onDisappear {
+            model.stopClock(repo: repo)
             UIApplication.shared.isIdleTimerDisabled = false
             restoreBrightness()
             // Back to every orientation, like the window style below.

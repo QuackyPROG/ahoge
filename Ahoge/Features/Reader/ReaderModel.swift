@@ -191,6 +191,37 @@ final class ReaderModel: ObservableObject {
         }
     }
 
+
+    // MARK: Reading time
+
+    /// When the clock started and which chapter it counts for, nil while paused. Time is credited to
+    /// the chapter the clock started on, so a chapter change flushes it first.
+    private var clockSince: Date?
+    private var clockChapter: ChapterRecord?
+    /// A reader left open (screen kept on) must not count for hours.
+    private static let longestStretch: TimeInterval = 30 * 60
+
+    func startClock(now: Date = Date()) {
+        guard ready, error == nil, clockSince == nil else { return }
+        clockSince = now
+        clockChapter = currentChapter
+    }
+
+    /// Saves the whole seconds read since the clock started (to history, unless incognito) and pauses it.
+    func stopClock(repo: LibraryRepository, now: Date = Date()) {
+        guard let since = clockSince, let chapter = clockChapter else { return }
+        clockSince = nil
+        clockChapter = nil
+        let seconds = min(now.timeIntervalSince(since), Self.longestStretch)
+        if seconds >= 1 { repo.addReadingTime(Int(seconds), to: chapter) }
+    }
+
+    /// The reader moved to another chapter: credit the old one and start counting the new one.
+    func restartClock(repo: LibraryRepository, now: Date = Date()) {
+        stopClock(repo: repo, now: now)
+        startClock(now: now)
+    }
+
     func retryNext(provider: PageProvider) {
         guard let last = sections.last else { return }
         error = nil

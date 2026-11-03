@@ -135,6 +135,9 @@ struct MoreView: View {
                 .themedRows()
 
                 Section("Data") {
+                    NavigationLink { StatisticsView() } label: {
+                        Label { Text("Statistics") } icon: { SettingsIcon(systemName: "chart.bar.fill", color: .pink) }
+                    }
                     NavigationLink { DataStorageView() } label: {
                         Label { Text("Data and storage") } icon: { SettingsIcon(systemName: "externaldrive.fill", color: .gray) }
                     }
