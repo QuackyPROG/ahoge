@@ -3,6 +3,8 @@ import SwiftUI
 struct MoreView: View {
     @Environment(\.palette) private var palette
     @EnvironmentObject private var repo: LibraryRepository
+    @EnvironmentObject private var downloads: DownloadManager
+    @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
@@ -27,6 +29,15 @@ struct MoreView: View {
                 .listRowBackground(Color.clear)
 
                 Section {
+                    Toggle(isOn: $downloadedOnly) {
+                        Label { Text("Downloaded only") } icon: { SettingsIcon(systemName: "icloud.slash.fill", color: .blue) }
+                    }
+                } footer: {
+                    Text("Library, Updates and History show only downloaded chapters.")
+                }
+                .themedRows()
+
+                Section {
                     NavigationLink { AppearanceView() } label: {
                         Label { Text("Appearance") } icon: { SettingsIcon(systemName: "paintpalette.fill", color: .purple) }
                     }
@@ -46,6 +57,17 @@ struct MoreView: View {
                         ForEach(repo.categories) { Text($0.name).tag(Int($0.id)) }
                     } label: {
                         Label { Text("Default category") } icon: { SettingsIcon(systemName: "tray.and.arrow.down.fill", color: .teal) }
+                    }
+                }
+                .themedRows()
+
+                Section("Downloads") {
+                    NavigationLink { DownloadQueueView() } label: {
+                        Label { Text("Download queue") } icon: { SettingsIcon(systemName: "arrow.down.circle.fill", color: .blue) }
+                            .badge(downloads.queue.count)
+                    }
+                    NavigationLink { DownloadSettingsView() } label: {
+                        Label { Text("Download settings") } icon: { SettingsIcon(systemName: "gearshape.fill", color: .gray) }
                     }
                 }
                 .themedRows()
