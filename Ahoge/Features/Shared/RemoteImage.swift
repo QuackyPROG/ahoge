@@ -5,10 +5,13 @@ struct RemoteImage: View {
     var headers: [String: String] = [:]
     /// Decode no wider than this many pixels; covers in grids pass a small value.
     var maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth
+    /// Covers fill their frame; images inside text fit it.
+    var contentMode: ContentMode = .fill
     @State private var image: UIImage?
     @State private var failed = false
 
-    init(url: String, headers: [String: String] = [:], maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth) {
+    init(url: String, headers: [String: String] = [:], maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth, contentMode: ContentMode = .fill) {
+        self.contentMode = contentMode
         self.url = url
         self.headers = headers
         self.maxPixelWidth = maxPixelWidth
@@ -19,7 +22,7 @@ struct RemoteImage: View {
     var body: some View {
         ZStack {
             if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image).resizable().aspectRatio(contentMode: contentMode)
             } else if failed {
                 Image(systemName: "photo").foregroundStyle(.secondary)
             } else {

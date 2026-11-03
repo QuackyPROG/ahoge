@@ -240,7 +240,7 @@ struct MangaDetailView: View {
             }
             actions
             if manga?.inLibrary == true, let manga { UpdateIntervalRow(manga: manga) }
-            if let summary = manga?.summary.nonEmpty { MangaDescription(summary: summary, expanded: $expanded) }
+            if let summary = manga?.summary.nonEmpty { MangaDescription(summary: summary, expanded: $expanded, baseURL: info?.baseUrl, headers: headers) }
             if let notes = manga?.notes.nonEmpty { notesBlock(notes) }
             if let genres = manga?.genres, !genres.isEmpty { genreChips(genres) }
             if isLoading && (manga?.chapters.isEmpty ?? true) { ProgressView().frame(maxWidth: .infinity) }
