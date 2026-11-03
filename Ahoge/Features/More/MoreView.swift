@@ -16,6 +16,8 @@ struct MoreView: View {
     @AppStorage(Pref.hideMissingChapters.name) private var hideMissing = false
     @AppStorage(Pref.markDuplicateRead.name) private var markDuplicateRead = false
     @State private var showRepos = false
+    @ObservedObject private var updates = UpdateCenter.shared
+    @AppStorage(Pref.checkUpdates.name) private var checkUpdates = Pref.checkUpdates.defaultValue
 
     var body: some View {
         NavigationStack {
@@ -150,6 +152,16 @@ struct MoreView: View {
                     }
                     NavigationLink { LicensesView() } label: {
                         Label { Text("Licenses") } icon: { SettingsIcon(systemName: "doc.text.fill", color: .gray) }
+                    }
+                    NavigationLink { WhatsNewView() } label: {
+                        Label { Text("What's new") } icon: { SettingsIcon(systemName: "sparkles", color: .yellow) }
+                    }
+                    Button { Task { await updates.checkNow() } } label: {
+                        Label { Text(updates.checking ? "Checking…" : "Check for updates").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "arrow.down.app.fill", color: .blue) }
+                    }
+                    .disabled(updates.checking)
+                    Toggle(isOn: $checkUpdates) {
+                        Label { Text("Check for updates on launch") } icon: { SettingsIcon(systemName: "bell.badge.fill", color: .red) }
                     }
                 }
                 .themedRows()

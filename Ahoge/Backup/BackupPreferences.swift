@@ -19,7 +19,7 @@ extension Pref {
         readerSkipRead.name, readerSkipFiltered.name, readerSkipDuplicates.name, readerAlwaysShowTransition.name,
         readerPreloadOnlyOnWiFi.name, incognito.name, incognitoSources.name,
         theme.name, themeMode.name, pureBlack.name,
-        secureScreen.name, requireUnlock.name, lockAfter.name, autoBackupInterval.name, autoBackupKeep.name,
+        checkUpdates.name, skippedVersion.name, secureScreen.name, requireUnlock.name, lockAfter.name, autoBackupInterval.name, autoBackupKeep.name,
         downloadConcurrentSources.name, downloadConcurrentPages.name, downloadOnlyOnWiFi.name, saveAsCBZ.name,
         removeAfterMarkedRead.name, removeAfterReading.name, removeBookmarkedToo.name, downloadAhead.name,
         downloadNewChapters.name, downloadedOnly.name, clearChapterCacheOnLaunch.name,
