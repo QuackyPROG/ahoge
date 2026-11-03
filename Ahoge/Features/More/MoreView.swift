@@ -17,6 +17,7 @@ struct MoreView: View {
     @AppStorage(Pref.markDuplicateRead.name) private var markDuplicateRead = false
     @State private var showRepos = false
     @State private var showGuide = false
+    @State private var query = ""
     @ObservedObject private var updates = UpdateCenter.shared
     @AppStorage(Pref.checkUpdates.name) private var checkUpdates = Pref.checkUpdates.defaultValue
 
@@ -179,6 +180,10 @@ struct MoreView: View {
             }
             .navigationTitle("More")
             .themedScreen()
+            .searchable(text: $query, prompt: "Search settings")
+            .overlay {
+                if !query.trimmingCharacters(in: .whitespaces).isEmpty { SettingsSearchResults(query: query) }
+            }
             .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
             .fullScreenCover(isPresented: $showGuide) { OnboardingView { showGuide = false } }
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
