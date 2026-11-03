@@ -9,6 +9,8 @@ struct MoreView: View {
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
     @AppStorage(Pref.secureScreen.name) private var secureScreen = false
     @AppStorage(Pref.incognito.name) private var incognito = false
+    @AppStorage(Pref.requireUnlock.name) private var requireUnlock = false
+    @AppStorage(Pref.lockAfter.name) private var lockAfter = 0
     @AppStorage(Pref.swipeRight.name) private var swipeRight = Pref.swipeRight.defaultValue
     @AppStorage(Pref.swipeLeft.name) private var swipeLeft = Pref.swipeLeft.defaultValue
     @AppStorage(Pref.hideMissingChapters.name) private var hideMissing = false
@@ -118,6 +120,16 @@ struct MoreView: View {
                     }
                     Toggle(isOn: $secureScreen) {
                         Label { Text("Hide content in app switcher") } icon: { SettingsIcon(systemName: "lock.shield.fill", color: .green) }
+                    }
+                    Toggle(isOn: $requireUnlock) {
+                        Label { Text("Require unlock") } icon: { SettingsIcon(systemName: "faceid", color: .blue) }
+                    }
+                    if requireUnlock {
+                        Picker(selection: $lockAfter) {
+                            ForEach(LockPolicy.afterOptions, id: .self) { Text(LockPolicy.label($0)).tag($0) }
+                        } label: {
+                            Label { Text("Lock") } icon: { SettingsIcon(systemName: "timer", color: .orange) }
+                        }
                     }
                 }
                 .themedRows()

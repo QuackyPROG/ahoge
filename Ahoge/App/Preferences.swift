@@ -141,6 +141,10 @@ enum Pref {
     static let incognito = Key("security.incognito", false)
     /// Source ids read in incognito whatever the global switch says.
     static let incognitoSources = Key<[String]>("security.incognitoSources", [])
+    /// Asks for Face ID, Touch ID or the passcode on launch and after the app was in the background (`lockAfter`).
+    static let requireUnlock = Key("security.requireUnlock", false)
+    /// Minutes in the background before the lock asks again (`LockPolicy.afterOptions`): 0 always, -1 never.
+    static let lockAfter = Key("security.lockAfter", 0)
 
     // MARK: Backup
     /// Hours between automatic backups; 0 is off.

@@ -66,12 +66,14 @@ struct RootView: View {
         .preferredColorScheme(mode.colorScheme)
         .onAppear(perform: applyWindowStyle)
         .onAppear { BackgroundRefresh.schedule() }
+        .onAppear { AppLock.shared.start() }
         .onChange(of: badge, initial: true) { UpdateNotifier.setBadge(badge) }
         .onChange(of: mode, initial: true) { applyWindowStyle() }
         .onChange(of: theme) { applyWindowStyle() }
         .onChange(of: pureBlack) { applyWindowStyle() }
         .onChange(of: scenePhase) { _, phase in
-            PrivacyShield.setVisible(secureScreen && phase != .active)
+            PrivacyShield.setVisible((secureScreen || Pref.requireUnlock.value()) && phase != .active)
+            AppLock.shared.phaseChanged(to: phase)
             if phase == .background {
                 AutoBackup.runIfDue(repo: repo, store: extensions)
                 BackgroundRefresh.schedule()

@@ -44,6 +44,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryAddUsageDescription: Save manga pages you share from the reader to your photos.
+        NSFaceIDUsageDescription: Unlock Ahoge with Face ID.
         UIBackgroundModes:
           - fetch
           - processing
