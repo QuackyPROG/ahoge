@@ -29,6 +29,13 @@ struct MangaDetailView: View {
     @State private var globalQuery: String?
     /// This entry, pushed as the migration search.
     @State private var migrating: MangaRef?
+    /// Library entries that look like this title, found when adding it.
+    @State private var duplicates: [LibraryManga] = []
+    /// A duplicate to migrate to this title, opened once the duplicates sheet has closed.
+    @State private var pendingMigration: LibraryManga?
+    @State private var migratingFrom: LibraryManga?
+    /// "Add anyway" was chosen; adding waits for the sheet to close so a categories sheet can open.
+    @State private var pendingAdd = false
     @AppStorage(Pref.hideMissingChapters.name) private var hideMissing = false
 
     init(ref: MangaRef) {
@@ -129,6 +136,21 @@ struct MangaDetailView: View {
                 display.saveAsDefault(clearing: repo.library.map(\.key))
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: Binding(get: { !duplicates.isEmpty }, set: { if !$0 { duplicates = [] } }), onDismiss: {
+            migratingFrom = pendingMigration
+            pendingMigration = nil
+            if pendingAdd, let manga { add(manga) }
+            pendingAdd = false
+        }) {
+            DuplicatesSheet(
+                duplicates: duplicates,
+                migrate: { pendingMigration = $0 },
+                addAnyway: { pendingAdd = true }
+            )
+        }
+        .sheet(item: $migratingFrom) { old in
+            MigrateSheet(old: old, target: manga?.ref ?? ref)
         }
         .sheet(isPresented: $choosingCategories) {
             if let manga { SetCategoriesSheet(manga: [manga]) }
@@ -493,9 +515,14 @@ struct MangaDetailView: View {
         if target.inLibrary {
             repo.setInLibrary(target, false)
             if downloads.downloadedCount(mangaKey: target.key) > 0 { removedWithDownloads = target }
-        } else if repo.addToLibrary(target, defaultCategory: defaultCategory) {
-            choosingCategories = true
+        } else {
+            let similar = TitleMatcher.similar(target.title, to: repo.library.filter { $0.key != target.key })
+            if similar.isEmpty { add(target) } else { duplicates = similar }
         }
+    }
+
+    private func add(_ target: LibraryManga) {
+        if repo.addToLibrary(target, defaultCategory: defaultCategory) { choosingCategories = true }
     }
 
     private func refresh() async {
