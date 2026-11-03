@@ -11,6 +11,8 @@ enum Route: Hashable {
     case globalSearch(String)
     /// An installed source's details: version, repository, cookies, incognito, settings.
     case extensionDetails(String)
+    /// Global search for a library entry's title, other sources only; a result opens the migration options.
+    case migrate(MangaRef)
 }
 
 struct RouteView: View {
@@ -24,6 +26,7 @@ struct RouteView: View {
         case .manga(let ref): MangaDetailView(ref: ref)
         case .globalSearch(let query): GlobalSearchView(query: query)
         case .extensionDetails(let id): ExtensionDetailsView(sourceId: id)
+        case .migrate(let ref): GlobalSearchView(query: ref.title, migrating: ref)
         }
     }
 }

@@ -27,6 +27,8 @@ struct MangaDetailView: View {
     @State private var choosingDefault = false
     /// A genre long-pressed for a search across sources.
     @State private var globalQuery: String?
+    /// This entry, pushed as the migration search.
+    @State private var migrating: MangaRef?
     @AppStorage(Pref.hideMissingChapters.name) private var hideMissing = false
 
     init(ref: MangaRef) {
@@ -120,6 +122,7 @@ struct MangaDetailView: View {
             if let manga { NotesSheet(notes: manga.notes) { repo.setNotes($0, for: manga) } }
         }
         .navigationDestination(item: $globalQuery) { RouteView(route: .globalSearch($0)) }
+        .navigationDestination(item: $migrating) { RouteView(route: .migrate($0)) }
         .confirmationDialog("Use these chapter settings as the default?", isPresented: $choosingDefault, titleVisibility: .visible) {
             Button("For new entries") { display.saveAsDefault() }
             Button("For all entries in my library") {
@@ -208,6 +211,9 @@ struct MangaDetailView: View {
             ActionButton(title: inLibrary ? "In library" : "Add to library", icon: inLibrary ? "heart.fill" : "heart", active: inLibrary) { toggleLibrary() }
             if manga != nil {
                 ActionButton(title: "Notes", icon: manga?.notes.isEmpty == false ? "note.text" : "note.text.badge.plus", active: manga?.notes.isEmpty == false) { editingNotes = true }
+            }
+            if inLibrary, let manga {
+                ActionButton(title: "Migrate", icon: "arrow.left.arrow.right") { migrating = manga.ref }
             }
             if let webURL {
                 ActionButton(title: "WebView", icon: "globe") { webTarget = WebTarget(url: webURL) }

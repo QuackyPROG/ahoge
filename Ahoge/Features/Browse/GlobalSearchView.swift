@@ -3,10 +3,12 @@ import SwiftUI
 /// Searches every visible source at once: one row of results per source (Mihon's global search).
 struct GlobalSearchView: View {
     let query: String
+    /// A library entry being migrated: its source is left out and a result opens the migration options.
+    var migrating: MangaRef?
     @EnvironmentObject private var sources: SourceManager
 
     var body: some View {
-        GlobalSearchScreen(initialQuery: query, makeSearch: GlobalSearch(searcher: GlobalSearch.searcher(from: sources)))
+        GlobalSearchScreen(initialQuery: query, migrating: migrating, makeSearch: GlobalSearch(searcher: GlobalSearch.searcher(from: sources)))
     }
 }
 
@@ -19,8 +21,14 @@ private struct GlobalSearchScreen: View {
     @AppStorage(Pref.globalSearchPinnedOnly.name) private var pinnedOnly = false
     @State private var onlyWithResults = false
     @Environment(\.palette) private var palette
+    private let migrating: MangaRef?
+    /// The result picked to migrate to.
+    @State private var target: MangaRef?
+    /// The new entry after a migration, opened in place of the search.
+    @State private var migrated: MangaRef?
 
-    init(initialQuery: String, makeSearch: @autoclosure @escaping () -> GlobalSearch) {
+    init(initialQuery: String, migrating: MangaRef?, makeSearch: @autoclosure @escaping () -> GlobalSearch) {
+        self.migrating = migrating
         _query = State(initialValue: initialQuery)
         _search = StateObject(wrappedValue: makeSearch())
     }
@@ -40,14 +48,19 @@ private struct GlobalSearchScreen: View {
                     .padding(.top, 40)
             }
         }
-        .navigationTitle("Global search")
+        .navigationTitle(migrating == nil ? "Global search" : "Migrate")
         .navigationBarTitleDisplayMode(.inline)
         .themedScreen()
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search all sources")
         .onSubmit(of: .search) { start() }
         .onChange(of: pinnedOnly) { start() }
         .task { if searched.isEmpty { start() } }
-        .onDisappear { search.cancel() }
+        .sheet(isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } })) {
+            if let target, let migrating, let old = repo.manga(sourceId: migrating.sourceId, url: migrating.url) {
+                MigrateSheet(old: old, target: target) { migrated = $0 }
+            }
+        }
+        .navigationDestination(item: $migrated) { MangaDetailView(ref: $0) }
     }
 
     private func start() {
@@ -56,7 +69,8 @@ private struct GlobalSearchScreen: View {
             store.installed,
             visibility: .current(),
             pinned: Pref.pinnedSources.value(),
-            pinnedOnly: pinnedOnly
+            pinnedOnly: pinnedOnly,
+            excluding: migrating?.sourceId
         )
         search.run(query, sources: eligible)
     }
@@ -129,11 +143,15 @@ private struct GlobalSearchScreen: View {
             LazyHStack(alignment: .top, spacing: 10) {
                 ForEach(manga, id: \.url) { stub in
                     let ref = MangaRef(sourceId: source.id, url: stub.url, title: stub.title, cover: stub.cover)
-                    NavigationLink(value: Route.manga(ref)) {
-                        MangaCard(title: stub.title, cover: stub.cover, headers: headers, inLibrary: inLibrary(ref))
-                            .frame(width: 110)
+                    let card = MangaCard(title: stub.title, cover: stub.cover, headers: headers, inLibrary: inLibrary(ref))
+                        .frame(width: 110)
+                    if migrating != nil {
+                        Button { target = ref } label: { card }
+                            .buttonStyle(PressableCardStyle())
+                    } else {
+                        NavigationLink(value: Route.manga(ref)) { card }
+                            .buttonStyle(PressableCardStyle())
                     }
-                    .buttonStyle(PressableCardStyle())
                 }
             }
             .padding(.horizontal)

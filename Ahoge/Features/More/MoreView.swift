@@ -56,6 +56,9 @@ struct MoreView: View {
                     NavigationLink { CategoriesView() } label: {
                         Label { Text("Categories") } icon: { SettingsIcon(systemName: "folder.fill", color: .blue) }
                     }
+                    NavigationLink { MigrateSourcesView() } label: {
+                        Label { Text("Migrate") } icon: { SettingsIcon(systemName: "arrow.left.arrow.right", color: .green) }
+                    }
                     Picker(selection: $defaultCategory) {
                         Text("Always ask").tag(LibraryPrefs.alwaysAsk)
                         Text("Default").tag(LibraryPrefs.uncategorized)
@@ -136,6 +139,7 @@ struct MoreView: View {
             .navigationTitle("More")
             .themedScreen()
             .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
+            .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
     }
 }
