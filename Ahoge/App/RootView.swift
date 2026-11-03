@@ -7,6 +7,8 @@ struct RootView: View {
     @EnvironmentObject private var updater: LibraryUpdater
     @EnvironmentObject private var repo: LibraryRepository
     @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
+    @AppStorage(Pref.secureScreen.name) private var secureScreen = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         let palette = theme.palette(pureBlack: pureBlack)
@@ -31,6 +33,7 @@ struct RootView: View {
         .onChange(of: mode, initial: true) { applyWindowStyle() }
         .onChange(of: theme) { applyWindowStyle() }
         .onChange(of: pureBlack) { applyWindowStyle() }
+        .onChange(of: scenePhase) { _, phase in PrivacyShield.setVisible(secureScreen && phase != .active) }
         .onReceive(NotificationCenter.default.publisher(for: .readerDidClose)) { _ in
             DispatchQueue.main.async { applyWindowStyle() }
         }

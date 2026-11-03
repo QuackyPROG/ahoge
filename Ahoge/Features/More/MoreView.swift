@@ -7,6 +7,7 @@ struct MoreView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
+    @AppStorage(Pref.secureScreen.name) private var secureScreen = false
     @State private var showRepos = false
     @State private var message: String?
 
@@ -55,6 +56,13 @@ struct MoreView: View {
                 Section("Browse") {
                     Toggle(isOn: $hideInLibrary) {
                         Label { Text("Hide titles in your library") } icon: { SettingsIcon(systemName: "eye.slash.fill", color: .indigo) }
+                    }
+                }
+                .themedRows()
+
+                Section("Privacy") {
+                    Toggle(isOn: $secureScreen) {
+                        Label { Text("Hide content in app switcher") } icon: { SettingsIcon(systemName: "lock.shield.fill", color: .green) }
                     }
                 }
                 .themedRows()
