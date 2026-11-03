@@ -16,6 +16,7 @@ struct MoreView: View {
     @AppStorage(Pref.hideMissingChapters.name) private var hideMissing = false
     @AppStorage(Pref.markDuplicateRead.name) private var markDuplicateRead = false
     @State private var showRepos = false
+    @State private var showGuide = false
     @ObservedObject private var updates = UpdateCenter.shared
     @AppStorage(Pref.checkUpdates.name) private var checkUpdates = Pref.checkUpdates.defaultValue
 
@@ -146,6 +147,13 @@ struct MoreView: View {
                 }
                 .themedRows()
 
+                Section("Help") {
+                    Button { showGuide = true } label: {
+                        Label { Text("Welcome guide").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "hand.wave.fill", color: .yellow) }
+                    }
+                }
+                .themedRows()
+
                 Section("About") {
                     Link(destination: URL(string: "https://github.com/QuackyPROG/ahoge")!) {
                         Label { Text("Source code").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "chevron.left.forwardslash.chevron.right", color: .gray) }
@@ -169,6 +177,7 @@ struct MoreView: View {
             .navigationTitle("More")
             .themedScreen()
             .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
+            .fullScreenCover(isPresented: $showGuide) { OnboardingView { showGuide = false } }
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
     }

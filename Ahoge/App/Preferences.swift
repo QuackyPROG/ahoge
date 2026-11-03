@@ -214,3 +214,9 @@ extension Pref {
     /// When the app last looked for a release (seconds since 1970).
     static let lastUpdateCheck = Key("app.lastUpdateCheck", 0.0)
 }
+
+extension Pref {
+    // MARK: Onboarding
+    /// The welcome guide was shown (or skipped). Device state, not backed up.
+    static let onboarded = Key("app.onboarded", false)
+}

@@ -17,6 +17,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var repoError: String?
     @ObservedObject private var updateCenter = UpdateCenter.shared
+    @State private var showOnboarding = false
 
     var body: some View {
         let palette = theme.palette(pureBlack: pureBlack)
@@ -68,6 +69,17 @@ struct RootView: View {
         .onAppear(perform: applyWindowStyle)
         .onAppear { BackgroundRefresh.schedule() }
         .onAppear { AppLock.shared.start() }
+        .onAppear {
+            // Someone updating from an older version already has a library: no welcome guide.
+            guard !Pref.onboarded.value() else { return }
+            if !repo.library.isEmpty || !extensions.repos.isEmpty { Pref.onboarded.set(true) } else { showOnboarding = true }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView {
+                Pref.onboarded.set(true)
+                showOnboarding = false
+            }
+        }
         .task { await updateCenter.checkIfDue() }
         .sheet(item: $updateCenter.available) { UpdateSheet(release: $0) }
         .alert("Check for updates", isPresented: Binding(get: { updateCenter.manualResult != nil }, set: { if !$0 { updateCenter.manualResult = nil } })) {
