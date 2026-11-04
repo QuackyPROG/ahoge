@@ -14,9 +14,12 @@ enum CoverStore {
     static func exists(_ name: String) -> Bool { FileManager.default.fileExists(atPath: url(for: name).path) }
 
     /// Saves image data as a JPEG named after its hash, so a changed cover is a new file (and a new
-    /// image cache key) and the same picture twice is one file. Returns the file name.
+    /// image cache key) and the same picture twice is one file. A JPEG keeps its bytes: encoding it
+    /// again would lose quality and change the hash, so a restored backup would get a different file.
+    /// Returns the file name.
     static func save(_ data: Data) -> String? {
-        guard let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.9) else { return nil }
+        guard let image = UIImage(data: data) else { return nil }
+        guard let jpeg = data.starts(with: [0xFF, 0xD8, 0xFF]) ? data : image.jpegData(compressionQuality: 0.9) else { return nil }
         let name = String(jpeg.sha256Hex.prefix(24)) + ".jpg"
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
