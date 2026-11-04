@@ -123,7 +123,6 @@ jobs:
           retention-days: 14
 
   # A pushed version tag (v0.5.0) attaches the IPA that the ipa job built to a GitHub release, once the tests passed.
-  # Ahoge's update checker reads that release.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [test, ipa]

@@ -18,8 +18,6 @@ struct MoreView: View {
     @State private var showRepos = false
     @State private var showGuide = false
     @State private var query = ""
-    @ObservedObject private var updates = UpdateCenter.shared
-    @AppStorage(Pref.checkUpdates.name) private var checkUpdates = Pref.checkUpdates.defaultValue
 
     var body: some View {
         NavigationStack {
@@ -167,15 +165,13 @@ struct MoreView: View {
                     NavigationLink { LicensesView() } label: {
                         Label { Text("Licenses") } icon: { SettingsIcon(systemName: "doc.text.fill", color: .gray) }
                     }
-                    NavigationLink { WhatsNewView() } label: {
-                        Label { Text("What's new") } icon: { SettingsIcon(systemName: "sparkles", color: .yellow) }
-                    }
-                    Button { Task { await updates.checkNow() } } label: {
-                        Label { Text(updates.checking ? "Checking…" : "Check for updates").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "arrow.down.app.fill", color: .blue) }
-                    }
-                    .disabled(updates.checking)
-                    Toggle(isOn: $checkUpdates) {
-                        Label { Text("Check for updates on launch") } icon: { SettingsIcon(systemName: "bell.badge.fill", color: .red) }
+                    if let expiry = SigningInfo.expiry {
+                        LabeledContent {
+                            Text(expiry.formatted(date: .abbreviated, time: .shortened))
+                                .foregroundStyle(SigningInfo.expiresSoon(expiry) ? .red : .secondary)
+                        } label: {
+                            Label { Text("Signed until") } icon: { SettingsIcon(systemName: "signature", color: .blue) }
+                        }
                     }
                 }
                 .themedRows()

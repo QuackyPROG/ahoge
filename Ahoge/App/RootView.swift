@@ -17,7 +17,6 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var repoError: String?
-    @ObservedObject private var updateCenter = UpdateCenter.shared
     @State private var showOnboarding = false
 
     var body: some View {
@@ -62,13 +61,6 @@ struct RootView: View {
                 Pref.onboarded.set(true)
                 showOnboarding = false
             }
-        }
-        .task { await updateCenter.checkIfDue() }
-        .sheet(item: $updateCenter.available) { UpdateSheet(release: $0) }
-        .alert("Check for updates", isPresented: Binding(get: { updateCenter.manualResult != nil }, set: { if !$0 { updateCenter.manualResult = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(updateCenter.manualResult ?? "")
         }
         .onChange(of: badge, initial: true) { UpdateNotifier.setBadge(badge) }
         .onChange(of: mode, initial: true) { applyWindowStyle() }

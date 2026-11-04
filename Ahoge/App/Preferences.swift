@@ -208,16 +208,6 @@ enum Pref {
 }
 
 extension Pref {
-    // MARK: App updates
-    /// Looks for a newer Ahoge release on GitHub when the app opens (at most once a day).
-    static let checkUpdates = Key("app.checkUpdates", true)
-    /// The release version the user chose to skip.
-    static let skippedVersion = Key("app.skippedVersion", "")
-    /// When the app last looked for a release (seconds since 1970).
-    static let lastUpdateCheck = Key("app.lastUpdateCheck", 0.0)
-}
-
-extension Pref {
     // MARK: Onboarding
     /// The welcome guide was shown (or skipped). Device state, not backed up.
     static let onboarded = Key("app.onboarded", false)

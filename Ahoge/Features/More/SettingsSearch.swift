@@ -4,7 +4,7 @@ import SwiftUI
 /// or inside the reader's own settings sheet.
 enum SettingsDestination: Hashable {
     case appearance, categories, libraryUpdates, migrate, downloadQueue, downloadSettings, dataStorage, clearDatabase, advanced
-    case statistics, whatsNew, licenses
+    case statistics, licenses
 
     @ViewBuilder var screen: some View {
         switch self {
@@ -18,7 +18,6 @@ enum SettingsDestination: Hashable {
         case .clearDatabase: ClearDatabaseView()
         case .advanced: AdvancedView()
         case .statistics: StatisticsView()
-        case .whatsNew: WhatsNewView()
         case .licenses: LicensesView()
         }
     }
@@ -50,10 +49,9 @@ enum SettingsIndex {
         SettingsEntry(title: "Hide content in app switcher", place: "More", destination: nil, keywords: ["privacy", "blur", "secure"]),
         SettingsEntry(title: "Require unlock", place: "More", destination: nil, keywords: ["app lock", "face id", "touch id", "passcode", "biometric"]),
         SettingsEntry(title: "Welcome guide", place: "More", destination: nil, keywords: ["onboarding", "help"]),
-        SettingsEntry(title: "Check for updates", place: "More", destination: nil, keywords: ["release", "version", "about"]),
+        SettingsEntry(title: "Signed until", place: "More", destination: nil, keywords: ["expires", "expiry", "certificate", "version", "build", "about"]),
         // Screens
         SettingsEntry(title: "Statistics", place: "More", destination: .statistics, keywords: ["time read", "chapters", "library size"]),
-        SettingsEntry(title: "What's new", place: "More", destination: .whatsNew, keywords: ["release notes", "changelog"]),
         SettingsEntry(title: "Licenses", place: "More", destination: .licenses, keywords: ["open source"]),
         SettingsEntry(title: "Categories", place: "Library", destination: .categories, keywords: ["tabs", "folders", "shelves"]),
         SettingsEntry(title: "Migrate", place: "Library", destination: .migrate, keywords: ["move", "switch source"]),

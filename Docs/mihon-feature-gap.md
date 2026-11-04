@@ -177,7 +177,7 @@ iOS note: `URLSession` background downloads keep going while the app is suspende
 | Tablet UI | Navigation rail, two-pane manga screen. | ★★ (iPad) |
 | Render images in descriptions | | ★ |
 | Onboarding | First-run setup: add repo, permissions, restore backup. | ★★ |
-| App update checker | Check GitHub releases and show "What's new". | ★★ (no App Store, so users don't know updates exist) |
+| App update checker | Dropped: an iOS app can't install itself. `Scripts/push-to-phone.sh` pushes builds from the PC, and More shows when the signature expires. | n/a |
 | Reset per-series reader settings | | ★ |
 | Update library titles to match source | | ★ |
 | DNS over HTTPS, custom user agent | Networking options for blocked sources. | ★ / ★★ (user agent helps with Cloudflare) |
@@ -196,6 +196,6 @@ iOS note: `URLSession` background downloads keep going while the app is suspende
 6. **Global search + migrate.**
 7. **Background updates + notifications + skip rules.**
 8. **Tracking** (AniList, MAL).
-9. **App lock, statistics, update checker, iPad dual page.**
+9. **App lock, statistics, iPad dual page.**
 
 Quick wins under a day each: Select all/inverse, Share entry, Update all extensions, Continue reading button, Pin sources, Hide in-library entries in Browse, app switcher blur, save page to Photos.
