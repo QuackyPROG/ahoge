@@ -3,10 +3,11 @@
 A free, open-source manga reader for iOS modeled on [Mihon](https://github.com/mihonapp/mihon).
 Sources are JavaScript extensions from [ahoge-extension](https://github.com/QuackyPROG/ahoge-extension).
 
-## Install (sideload)
+## Install
 
-1. Open the latest successful [iOS workflow run](https://github.com/QuackyPROG/ahoge/actions/workflows/ios.yml) and download the `Ahoge-ipa-*` artifact.
-2. Unzip it and install `Ahoge.ipa` with Sideloadly. A free Apple ID signs apps for 7 days.
+Ahoge has no App Store build. Build and install it with xtool, as below. A free Apple ID signs apps for 7 days, and More shows when yours runs out.
+
+CI also packages an unsigned IPA on every [iOS workflow run](https://github.com/QuackyPROG/ahoge/actions/workflows/ios.yml), for signing with your own tool.
 
 ## Develop
 
@@ -33,10 +34,21 @@ Then, in WSL, start the relay that hands Windows' Apple service to WSL, and leav
 
     bash Scripts/wsl-usbmux.sh
 
-In a second WSL shell, from the repo root (`ideviceinfo` checks the phone is reachable):
+In a second WSL shell, from the repo root (`xtool devices` checks the phone is reachable):
 
     xtool dev
 
 A free Apple ID allows three sideloaded apps per device; remove one if the install fails at `[Verifying]`.
+
+#### Updates over Wi-Fi
+
+An iOS app can't install itself, so updates come from the PC. Once the first `xtool dev` has worked:
+
+1. In the Apple Devices app, with the phone plugged in, tick the General option to show it when on Wi-Fi, then Apply.
+2. On the iPhone, turn off Private Wi-Fi Address for your network (Settings > Wi-Fi > (i)). Windows pairs by the real address, so it ignores the phone otherwise.
+3. Check the phone is listed with the cable out, with `bash Scripts/wsl-usbmux.sh` running: `xtool devices --network`.
+4. In PowerShell, from the repo root: `.\Scripts\install-push-task.ps1 -Branch main`
+
+Every 6 hours, `Scripts/push-to-phone.sh` builds new commits on that branch in its own clone (`~/.ahoge-push`), installs them, and re-signs after 3 days. It skips a run when the phone can't be reached. It won't install a branch that lacks the commit on the phone, because older builds can't read a newer library. Its log is `~/.ahoge-push/push.log`.
 
 The version and Info.plist keys live in both `project.yml` and `Info-xtool.plist`; keep them in sync.

@@ -6,6 +6,9 @@ struct ExtensionsView: View {
     @State private var showRepos = false
     @State private var busy: Set<String> = []
     @State private var actionError: String?
+    /// An installed source whose details to show.
+    @State private var details: String?
+    @AppStorage(Pref.browseContentFilter.name) private var content = ContentFilter.all.rawValue
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -32,20 +35,30 @@ struct ExtensionsView: View {
             }
             section("Updates", rows.filter { $0.state == .updateAvailable })
             section("Installed", rows.filter { $0.state == .installed })
-            section("Available", rows.filter { $0.state == .available })
-            section("Requires app update", rows.filter { $0.state == .requiresAppUpdate })
+            // The content filter hides sources not installed yet; installed ones always show here.
+            let filter = ContentFilter(rawValue: content) ?? .all
+            section("Available", rows.filter { $0.state == .available && filter.allows(nsfw: $0.source.nsfw) })
+            section("Requires app update", rows.filter { $0.state == .requiresAppUpdate && filter.allows(nsfw: $0.source.nsfw) })
         }
         .themedScreen()
         .overlay { if store.isRefreshing && rows.isEmpty { ProgressView() } }
         .refreshable { await store.refresh() }
         .task { if store.indexes.isEmpty && !store.repos.isEmpty { await store.refresh() } }
         .toolbar {
+            let updates = rows.filter { $0.state == .updateAvailable }
+            if !updates.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Update all") { Task { await updateAll(updates) } }
+                        .disabled(updates.contains { busy.contains($0.id) })
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showRepos = true } label: { Image(systemName: "tray.full") }
                     .accessibilityLabel("Repositories")
             }
         }
         .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
+        .navigationDestination(item: $details) { RouteView(route: .extensionDetails($0)) }
         .alert("Extension error", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -58,7 +71,12 @@ struct ExtensionsView: View {
         if !rows.isEmpty {
             Section(title) {
                 ForEach(rows) { row in
-                    ExtensionRowView(row: row, busy: busy.contains(row.id)) { await perform(row) }
+                    ExtensionRowView(
+                        row: row,
+                        busy: busy.contains(row.id),
+                        hasDetails: row.state == .installed || row.state == .updateAvailable,
+                        showDetails: { details = row.id }
+                    ) { await perform(row) }
                 }
             }
             .themedRows()
@@ -83,6 +101,11 @@ struct ExtensionsView: View {
         }
     }
 
+    /// One after another, so a failing script doesn't hide which ones installed; the first error is shown.
+    private func updateAll(_ rows: [ExtensionRow]) async {
+        for row in rows { await perform(row) }
+    }
+
     private func addDefault() async {
         do {
             try await store.addRepo(ExtensionStore.defaultRepoURL)
@@ -95,10 +118,27 @@ struct ExtensionsView: View {
 private struct ExtensionRowView: View {
     let row: ExtensionRow
     let busy: Bool
+    /// Installed sources open their details from the icon and name.
+    let hasDetails: Bool
+    let showDetails: () -> Void
     let action: () async -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
+        HStack(spacing: 12) {
+            if hasDetails {
+                Button(action: showDetails) { info.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows extension details")
+            } else {
+                info
+            }
+            Spacer()
+            trailing
+        }
+    }
+
+    private var info: some View {
         HStack(spacing: 12) {
             RemoteImage(url: row.iconURL ?? "")
                 .frame(width: 40, height: 40)
@@ -117,20 +157,23 @@ private struct ExtensionRowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
-            if busy {
-                ProgressView()
-            } else {
-                switch row.state {
-                case .available:
-                    Button("Install") { Task { await action() } }.buttonStyle(.bordered)
-                case .updateAvailable:
-                    Button("Update") { Task { await action() } }.buttonStyle(.borderedProminent).foregroundStyle(palette.onPrimary.color)
-                case .installed:
-                    Button("Uninstall", role: .destructive) { Task { await action() } }.buttonStyle(.bordered)
-                case .requiresAppUpdate:
-                    Text("Needs newer app").font(.caption).foregroundStyle(.secondary)
-                }
+        }
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        if busy {
+            ProgressView()
+        } else {
+            switch row.state {
+            case .available:
+                Button("Install") { Task { await action() } }.buttonStyle(.bordered)
+            case .updateAvailable:
+                Button("Update") { Task { await action() } }.buttonStyle(.borderedProminent).foregroundStyle(palette.onPrimary.color)
+            case .installed:
+                Button("Uninstall", role: .destructive) { Task { await action() } }.buttonStyle(.bordered)
+            case .requiresAppUpdate:
+                Text("Needs newer app").font(.caption).foregroundStyle(.secondary)
             }
         }
     }

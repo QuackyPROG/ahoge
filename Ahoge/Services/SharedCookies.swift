@@ -14,6 +14,11 @@ enum SharedCookies {
         for cookie in cookies { HTTPCookieStorage.shared.setCookie(cookie) }
     }
 
+    /// Forgets the cookies `cookies(forBaseURL:)` would hand a source (Extension details → Clear cookies).
+    static func remove(forBaseURL baseURL: String) {
+        for cookie in cookies(forBaseURL: baseURL) { HTTPCookieStorage.shared.deleteCookie(cookie) }
+    }
+
     static func removeAll() {
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
     }

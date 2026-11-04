@@ -40,6 +40,28 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryAddUsageDescription: Save manga pages you share from the reader to your photos.
+        NSFaceIDUsageDescription: Unlock Ahoge with Face ID.
+        UIBackgroundModes:
+          - fetch
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - app.ahoge.refresh
+          - app.ahoge.update
+          - app.ahoge.backup
+        CFBundleURLTypes:
+          - CFBundleURLName: com.quackyprog.ahoge
+            CFBundleURLSchemes:
+              - ahoge
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.quackyprog.ahoge.backup
+            UTTypeDescription: Ahoge Backup
+            UTTypeConformsTo:
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - ahbk
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:

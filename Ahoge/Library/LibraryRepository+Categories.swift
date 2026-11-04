@@ -2,14 +2,10 @@ import Foundation
 import GRDB
 import SwiftUI
 
-/// Library preferences, stored in UserDefaults.
+/// Values of `Pref.libraryDefaultCategory` besides a category id.
 enum LibraryPrefs {
-    /// Where new library titles go: a category id, `uncategorized` or `alwaysAsk`.
-    static let defaultCategory = "library.defaultCategory"
     static let alwaysAsk = -1
     static let uncategorized = 0
-    /// The Library tab last shown: a category id, or 0 for Default.
-    static let shelf = "library.shelf"
 }
 
 extension LibraryRepository {
@@ -45,8 +41,8 @@ extension LibraryRepository {
 
     /// Its titles stay in the library; those left in no category show under Default.
     func deleteCategory(_ id: Int64) {
-        if UserDefaults.standard.object(forKey: LibraryPrefs.defaultCategory) as? Int == Int(id) {
-            UserDefaults.standard.set(LibraryPrefs.alwaysAsk, forKey: LibraryPrefs.defaultCategory)
+        if UserDefaults.standard.object(forKey: Pref.libraryDefaultCategory.name) as? Int == Int(id) {
+            UserDefaults.standard.set(LibraryPrefs.alwaysAsk, forKey: Pref.libraryDefaultCategory.name)
         }
         objectWillChange.send()
         categories.removeAll { $0.id == id }
@@ -65,6 +61,24 @@ extension LibraryRepository {
         write { db in
             for category in ordered { try category.update(db) }
         }
+    }
+
+    /// Sets or clears a `flags` mask of a category (1: skip in updates, 2: skip auto-download).
+    func setCategoryFlag(_ id: Int64, mask: Int, on: Bool) {
+        guard let index = categories.firstIndex(where: { $0.id == id }) else { return }
+        objectWillChange.send()
+        if on { categories[index].flags |= mask } else { categories[index].flags &= ~mask }
+        let category = categories[index]
+        write { try category.update($0) }
+    }
+
+    /// Sets a category's own sort; nil makes it follow the global sort again.
+    func setCategorySort(_ id: Int64, _ sort: LibrarySort?) {
+        guard let index = categories.firstIndex(where: { $0.id == id }) else { return }
+        objectWillChange.send()
+        categories[index].sortMode = sort?.stored
+        let category = categories[index]
+        write { try category.update($0) }
     }
 
     func categoryIds(of manga: LibraryManga) -> Set<Int64> { categoryLinks[manga.key] ?? [] }

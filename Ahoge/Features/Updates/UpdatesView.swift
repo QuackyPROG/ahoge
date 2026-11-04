@@ -1,8 +1,6 @@
 import SwiftUI
 
 enum UpdatesPrefs {
-    /// When the Updates tab was last open (seconds since 1970); newer chapters count in its badge.
-    static let lastSeen = "updates.lastSeen"
     /// Mihon shows three months of updates.
     static var cutoff: Date { Date().addingTimeInterval(-90 * 86_400) }
 }
@@ -12,15 +10,36 @@ struct UpdatesView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var updater: LibraryUpdater
+    @EnvironmentObject private var downloads: DownloadManager
     @Environment(\.palette) private var palette
-    @AppStorage(UpdatesPrefs.lastSeen) private var lastSeen = 0.0
+    @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
     @State private var reading: UpdateEntry?
     @State private var visible = false
+    @State private var selecting = false
+    @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
+    @AppStorage(Pref.updatesBookmarked.name) private var bookmarkedFilter = Pref.updatesBookmarked.defaultValue
+    @AppStorage(Pref.updatesDownloaded.name) private var downloadedFilter = Pref.updatesDownloaded.defaultValue
+    @AppStorage(Pref.updatesUnread.name) private var unreadFilter = Pref.updatesUnread.defaultValue
+    @AppStorage(Pref.updatesStarted.name) private var startedFilter = Pref.updatesStarted.defaultValue
+    @State private var selection = Set<String>()
 
     var body: some View {
-        let entries = repo.updates(since: UpdatesPrefs.cutoff)
+        let all = repo.updates(since: UpdatesPrefs.cutoff)
+        let bookmarked = LibraryTriState(rawValue: bookmarkedFilter) ?? .off
+        let downloadedState = LibraryTriState(rawValue: downloadedFilter) ?? .off
+        let unreadState = LibraryTriState(rawValue: unreadFilter) ?? .off
+        let startedState = LibraryTriState(rawValue: startedFilter) ?? .off
+        let filtering = [bookmarked, downloadedState, unreadState, startedState].contains { $0 != .off }
+        let entries = all.filter { entry in
+            let isDownloaded = downloads.isDownloaded(entry.chapter.key)
+            return (!downloadedOnly || isDownloaded)
+                && bookmarked.matches(entry.chapter.bookmark)
+                && downloadedState.matches(isDownloaded)
+                && unreadState.matches(!entry.chapter.read)
+                && startedState.matches(entry.manga.hasStartedReading)
+        }
         NavigationStack {
-            List {
+            List(selection: $selection) {
                 Section {
                     Text(lastUpdatedText)
                         .font(.footnote)
@@ -30,19 +49,30 @@ struct UpdatesView: View {
                 ForEach(DateGrouping.group(entries, by: \.date), id: \.day) { group in
                     Section {
                         ForEach(group.items) { entry in
-                            UpdateRow(manga: entry.manga, chapter: entry.chapter, headers: referer(entry.manga)) { reading = entry }
-                                .swipeActions(edge: .leading) {
-                                    Button(entry.chapter.read ? "Unread" : "Read", systemImage: entry.chapter.read ? "eye.slash" : "eye") {
-                                        repo.setRead([entry.chapter], !entry.chapter.read)
-                                    }
-                                    // UIKit draws swipe labels white and dark-mode primaries are pastels, so use the light primary.
-                                    .tint(Color(uiColor: UIColor(rgb: palette.primary.light)))
+                            HStack(spacing: 4) {
+                                UpdateRow(manga: entry.manga, chapter: entry.chapter, headers: referer(entry.manga)) { reading = entry }
+                                    .allowsHitTesting(!selecting)
+                                if !selecting { ChapterDownloadButton(chapter: entry.chapter) }
+                            }
+                            .tag(entry.id)
+                            .chapterSwipes(entry.chapter)
+                            .contextMenu {
+                                Button("Select", systemImage: "checkmark.circle") {
+                                    selection = [entry.id]
+                                    withAnimation { selecting = true }
                                 }
-                                .contextMenu {
-                                    Button("Mark previous as read", systemImage: "arrow.down.to.line") {
-                                        repo.markPreviousRead(entry.chapter, in: entry.manga)
-                                    }
+                                Button(entry.chapter.bookmark ? "Remove bookmark" : "Bookmark", systemImage: entry.chapter.bookmark ? "bookmark.slash" : "bookmark") {
+                                    repo.setBookmark([entry.chapter], !entry.chapter.bookmark)
                                 }
+                                Button("Mark previous as read", systemImage: "arrow.down.to.line") {
+                                    repo.markPreviousRead(entry.chapter, in: entry.manga)
+                                }
+                                if downloads.isDownloaded(entry.chapter.key) {
+                                    Button("Delete download", systemImage: "trash", role: .destructive) { downloads.delete([entry.chapter]) }
+                                } else {
+                                    Button("Download", systemImage: "arrow.down.circle") { downloads.enqueue([entry.chapter]) }
+                                }
+                            }
                         }
                     } header: {
                         Text(group.title)
@@ -57,16 +87,59 @@ struct UpdatesView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .navigationTitle("Updates")
+            .environment(\.editMode, .constant(selecting ? .active : .inactive))
+            .navigationTitle(selecting ? "\(selection.count) selected" : "Updates")
             .refreshable { await updater.update(repo.library, repo: repo, sources: sources) }
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Update library", systemImage: "arrow.clockwise") {
-                        Task { await updater.update(repo.library, repo: repo, sources: sources) }
+                if selecting {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") { endSelection() }
                     }
-                    .disabled(updater.isRunning)
+                    ToolbarItem(placement: .topBarTrailing) {
+                        let all = Set(entries.map(\.id))
+                        Button(selection == all ? "Deselect all" : "Select all") { selection = selection == all ? [] : all }
+                    }
+                } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Picker("Downloaded", selection: $downloadedFilter) {
+                                Text("Downloaded: any").tag(LibraryTriState.off.rawValue)
+                                Text("Downloaded").tag(LibraryTriState.include.rawValue)
+                                Text("Not downloaded").tag(LibraryTriState.exclude.rawValue)
+                            }
+                            Picker("Unread", selection: $unreadFilter) {
+                                Text("Read state: any").tag(LibraryTriState.off.rawValue)
+                                Text("Unread").tag(LibraryTriState.include.rawValue)
+                                Text("Read").tag(LibraryTriState.exclude.rawValue)
+                            }
+                            Picker("Started", selection: $startedFilter) {
+                                Text("Title: any").tag(LibraryTriState.off.rawValue)
+                                Text("Started").tag(LibraryTriState.include.rawValue)
+                                Text("Not started").tag(LibraryTriState.exclude.rawValue)
+                            }
+                            Picker("Bookmarked", selection: $bookmarkedFilter) {
+                                Text("Bookmarks: any").tag(LibraryTriState.off.rawValue)
+                                Text("Bookmarked").tag(LibraryTriState.include.rawValue)
+                                Text("Not bookmarked").tag(LibraryTriState.exclude.rawValue)
+                            }
+                        } label: {
+                            Image(systemName: filtering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        }
+                        .accessibilityLabel("Filter updates")
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink { UpcomingView() } label: { Image(systemName: "calendar") }
+                            .accessibilityLabel("Upcoming updates")
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Update library", systemImage: "arrow.clockwise") {
+                            Task { await updater.update(repo.library, repo: repo, sources: sources) }
+                        }
+                        .disabled(updater.isRunning)
+                    }
                 }
             }
+            .safeAreaInset(edge: .bottom) { if selecting { selectionBar(entries) } }
             .overlay(alignment: .bottom) {
                 if updater.isRunning {
                     Label("Updating library… \(updater.done)/\(updater.total)", systemImage: "arrow.clockwise")
@@ -86,6 +159,47 @@ struct UpdatesView: View {
             .onDisappear { visible = false; lastSeen = Date().timeIntervalSince1970 }
             .onChange(of: updater.lastUpdated) { if visible { lastSeen = Date().timeIntervalSince1970 } }
         }
+    }
+
+    private func selectionBar(_ entries: [UpdateEntry]) -> some View {
+        let chosen = entries.filter { selection.contains($0.id) }.map(\.chapter)
+        return HStack {
+            Button("Download", systemImage: "arrow.down.circle") {
+                // Oldest first, the order they are read in.
+                downloads.enqueue(chosen.reversed())
+                endSelection()
+            }
+            Spacer()
+            Button("Delete", systemImage: "trash") {
+                downloads.delete(chosen)
+                endSelection()
+            }
+            Spacer()
+            Button(chosen.allSatisfy(\.bookmark) ? "Unmark" : "Bookmark", systemImage: chosen.allSatisfy(\.bookmark) ? "bookmark.slash" : "bookmark") {
+                repo.setBookmark(chosen, !chosen.allSatisfy(\.bookmark))
+                endSelection()
+            }
+            Spacer()
+            Button("Read", systemImage: "eye") {
+                repo.setRead(chosen, true)
+                endSelection()
+            }
+            Spacer()
+            Button("Unread", systemImage: "eye.slash") {
+                repo.setRead(chosen, false)
+                endSelection()
+            }
+        }
+        .labelStyle(SelectionBarLabelStyle())
+        .disabled(chosen.isEmpty)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    private func endSelection() {
+        selection = []
+        withAnimation { selecting = false }
     }
 
     private var lastUpdatedText: String {
@@ -108,7 +222,7 @@ private struct UpdateRow: View {
     var body: some View {
         HStack(spacing: 12) {
             NavigationLink(value: Route.manga(manga.ref)) {
-                RemoteImage(url: manga.coverUrl, headers: headers, maxPixelWidth: 150)
+                RemoteImage(url: manga.displayCover, headers: headers, maxPixelWidth: 150)
                     .frame(width: 44, height: 62)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
@@ -124,6 +238,9 @@ private struct UpdateRow: View {
                         }
                     }
                     Spacer(minLength: 0)
+                    if chapter.bookmark {
+                        Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(palette.primary.color)
+                    }
                     if !chapter.read {
                         Circle().fill(palette.primary.color).frame(width: 8, height: 8)
                     }
@@ -134,5 +251,14 @@ private struct UpdateRow: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, 2)
+    }
+}
+
+private struct SelectionBarLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 3) {
+            configuration.icon.font(.title3)
+            configuration.title.font(.caption2)
+        }
     }
 }

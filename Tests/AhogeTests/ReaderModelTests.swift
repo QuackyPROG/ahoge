@@ -8,7 +8,7 @@ final class ReaderModelTests: XCTestCase {
         let manga = repo.upsert(sourceId: "s", url: "/m", title: "M", cover: "")
         repo.applyChapters((1...3).reversed().map { SourceChapter(url: "/c/\($0)", name: "Ch \($0)", number: Double($0), date: nil, scanlator: nil) }, to: manga)
         let middle = try XCTUnwrap(manga.chapters.first { $0.url == "/c/2" })
-        let model = ReaderModel(sourceId: "s", manga: manga, start: middle)
+        let model = ReaderModel(sourceId: "s", manga: manga, start: middle, rules: SkipRules(), display: ChapterDisplay())
         XCTAssertEqual(model.chapter(after: middle)?.url, "/c/3")
         XCTAssertEqual(model.chapter(before: middle)?.url, "/c/1")
         XCTAssertNil(model.chapter(after: try XCTUnwrap(manga.chapters.first { $0.url == "/c/3" })))

@@ -4,27 +4,67 @@ struct MangaGrid: View {
     let items: [MangaRef]
     var badge: (MangaRef) -> String? = { _ in nil }
     var onItemAppear: (MangaRef) -> Void = { _ in }
+    /// Browse results already saved to the library, to fade.
+    var isInLibrary: (MangaRef) -> Bool = { _ in false }
     /// When set, taps toggle selection (by manga key) instead of opening the manga.
     var selection: Binding<Set<String>>? = nil
     /// In the Library: starts selection from a long-press, and offers "Edit categories".
     var librarySelect: ((MangaRef) -> Void)? = nil
+    /// In the Library: opens the title's next unread chapter. Nil (or false from `canContinue`) shows no play button.
+    var onContinue: ((MangaRef) -> Void)? = nil
+    var canContinue: (MangaRef) -> Bool = { _ in false }
+    /// Library display options; Browse keeps the compact auto grid.
+    var mode = LibraryDisplayMode.compact
+    /// Fixed grid columns; 0 fits as many as the width allows.
+    var columns = 0
+    var leadingBadges: (MangaRef) -> [CardBadge] = { _ in [] }
+    var trailingBadges: (MangaRef) -> [CardBadge] = { _ in [] }
     @EnvironmentObject private var sources: SourceManager
     @Environment(\.palette) private var palette
     @State private var choosingCategories: LibraryManga?
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12, alignment: .top)], spacing: 12) {
-            ForEach(items, id: \.self) { ref in
-                cell(ref).onAppear { onItemAppear(ref) }
+        Group {
+            if mode == .list {
+                LazyVStack(spacing: 4) {
+                    ForEach(items, id: \.self) { ref in
+                        cell(ref).onAppear { onItemAppear(ref) }
+                    }
+                }
+            } else {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
+                    ForEach(items, id: \.self) { ref in
+                        cell(ref).onAppear { onItemAppear(ref) }
+                    }
+                }
             }
         }
         .padding(.horizontal)
         .sheet(item: $choosingCategories) { SetCategoriesSheet(manga: [$0]) }
     }
 
+    private var gridColumns: [GridItem] {
+        columns > 0
+            ? Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: columns)
+            : [GridItem(.adaptive(minimum: 110), spacing: 12, alignment: .top)]
+    }
+
+    @ViewBuilder
+    private func cardContent(_ ref: MangaRef) -> some View {
+        if mode == .list {
+            MangaListRow(title: ref.title, cover: ref.cover, headers: referer(ref), badges: leadingBadges(ref) + trailingBadges(ref))
+        } else {
+            MangaCard(
+                title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref),
+                leadingBadges: leadingBadges(ref), trailingBadges: trailingBadges(ref),
+                style: mode, inLibrary: isInLibrary(ref)
+            )
+        }
+    }
+
     @ViewBuilder
     private func cell(_ ref: MangaRef) -> some View {
-        let card = MangaCard(title: ref.title, cover: ref.cover, headers: referer(ref), badge: badge(ref))
+        let card = cardContent(ref)
         if let selection {
             let key = LibraryManga.makeKey(sourceId: ref.sourceId, url: ref.url)
             let selected = selection.wrappedValue.contains(key)
@@ -53,6 +93,22 @@ struct MangaGrid: View {
         } else {
             NavigationLink(value: Route.manga(ref)) { card }
                 .buttonStyle(PressableCardStyle())
+                .overlay(alignment: .bottomTrailing) {
+                    if let onContinue, canContinue(ref) {
+                        Button { onContinue(ref) } label: {
+                            Image(systemName: "play.fill")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(palette.onPrimary.color)
+                                .frame(width: 30, height: 30)
+                                .background(palette.primary.color, in: Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+                                .padding(6)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Continue reading \(ref.title)")
+                    }
+                }
                 .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .contextMenu {
                     LibraryCardMenu(ref: ref, librarySelect: librarySelect) { target in

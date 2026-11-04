@@ -22,6 +22,54 @@
 	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save manga pages you share from the reader to your photos.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Unlock Ahoge with Face ID.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>app.ahoge.refresh</string>
+		<string>app.ahoge.update</string>
+		<string>app.ahoge.backup</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.quackyprog.ahoge</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ahoge</string>
+			</array>
+		</dict>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.quackyprog.ahoge.backup</string>
+			<key>UTTypeDescription</key>
+			<string>Ahoge Backup</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>ahbk</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

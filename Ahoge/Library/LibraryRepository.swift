@@ -16,6 +16,11 @@ final class LibraryRepository: ObservableObject {
     var categoryLinks: [String: Set<Int64>] = [:]
     /// Every Updates entry, newest first; cleared whenever chapters are fetched or library membership changes.
     var updatesCache: [UpdateEntry]?
+    /// Told when chapters are marked read by hand (not by finishing them in the reader), so
+    /// downloads can remove them ("Remove after marked as read").
+    var didMarkRead: (([ChapterRecord]) -> Void)?
+    /// Where settings that change what is saved (incognito) are read; tests swap in their own.
+    var preferences: UserDefaults = .standard
 
     /// Library titles and their chapters are loaded up front; other manga on first lookup.
     init(db: any DatabaseWriter) throws {
@@ -46,7 +51,8 @@ final class LibraryRepository: ObservableObject {
         try LibraryRepository(db: DatabaseQueue())
     }
 
-    private nonisolated static var migrator: DatabaseMigrator {
+    /// Internal so tests can migrate a database only part of the way (`migrate(_:upTo:)`).
+    nonisolated static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in
             try db.create(table: LibraryManga.databaseTableName) { t in
@@ -98,6 +104,39 @@ final class LibraryRepository: ObservableObject {
                 t.column("lastRead", .datetime).notNull().indexed()
             }
         }
+        migrator.registerMigration("v3") { db in
+            try db.alter(table: ChapterRecord.databaseTableName) { t in
+                t.add(column: "bookmark", .boolean).notNull().defaults(to: false)
+            }
+            try db.alter(table: LibraryManga.databaseTableName) { t in
+                t.add(column: "notes", .text).notNull().defaults(to: "")
+                t.add(column: "customCover", .text)
+                t.add(column: "updateInterval", .integer)
+                t.add(column: "nextUpdate", .datetime)
+                t.add(column: "chapterFlags", .integer).notNull().defaults(to: 0)
+            }
+            // `sort` is already the display order here, so the per-category sort is `sortMode`.
+            try db.alter(table: "category") { t in
+                t.add(column: "flags", .integer).notNull().defaults(to: 0)
+                t.add(column: "sortMode", .text)
+            }
+            try db.alter(table: "history") { t in
+                t.add(column: "timeRead", .integer).notNull().defaults(to: 0)
+            }
+            try db.create(table: "excludedScanlator") { t in
+                t.column("mangaKey", .text).notNull().references(LibraryManga.databaseTableName, onDelete: .cascade)
+                t.column("scanlator", .text).notNull()
+                t.primaryKey(["mangaKey", "scanlator"])
+            }
+            try db.create(table: "download") { t in
+                t.primaryKey("chapterKey", .text).references(ChapterRecord.databaseTableName, onDelete: .cascade)
+                t.column("mangaKey", .text).notNull().indexed()
+                t.column("state", .integer).notNull()
+                t.column("pageCount", .integer).notNull()
+                t.column("bytes", .integer).notNull()
+                t.column("dateAdded", .datetime).notNull()
+            }
+        }
         return migrator
     }
 
@@ -142,10 +181,10 @@ final class LibraryRepository: ObservableObject {
     }
 
     @discardableResult
-    func upsert(sourceId: String, url: String, details: MangaDetails) -> LibraryManga {
+    func upsert(sourceId: String, url: String, details: MangaDetails, keepTitle: Bool = false) -> LibraryManga {
         let manga = upsert(sourceId: sourceId, url: url, title: details.title, cover: details.cover)
         objectWillChange.send()
-        if !details.title.isEmpty { manga.title = details.title }
+        if !details.title.isEmpty, !keepTitle { manga.title = details.title }
         if !details.cover.isEmpty { manga.coverUrl = details.cover }
         manga.author = details.author
         manga.artist = details.artist
@@ -165,6 +204,8 @@ final class LibraryRepository: ObservableObject {
         let existing = manga.chapters
         let merged = ChapterMerge.merge(existing: existing.map(\.state), fetched: fetched)
         let byURL = Dictionary(existing.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
+        let markDuplicates = Pref.markDuplicateRead.value(in: preferences)
+        let readNumbers = Set(existing.filter(\.read).map(\.number))
         let keep = Set(merged.map(\.url))
         let removed = existing.filter { !keep.contains($0.url) }
         manga.chapters = merged.map { state in
@@ -173,9 +214,14 @@ final class LibraryRepository: ObservableObject {
                 record.apply(state)
                 return record
             }
-            return ChapterRecord(manga: manga, state: state)
+            let record = ChapterRecord(manga: manga, state: state)
+            // The same chapter from another group: already read once (Mihon's "mark duplicate chapters read").
+            if markDuplicates, record.number >= 0, readNumbers.contains(record.number) { record.read = true }
+            return record
         }
-        manga.lastChapterFetch = Date()
+        let now = Date()
+        manga.lastChapterFetch = now
+        manga.nextUpdate = ReleasePredictor.nextUpdate(for: manga, lastFetch: now)
         manga.refreshUnreadCount()
         write { db in
             for record in removed { try record.delete(db) }
@@ -208,6 +254,7 @@ final class LibraryRepository: ObservableObject {
         write { db in
             for chapter in chapters { try chapter.update(db) }
         }
+        if read { didMarkRead?(chapters) }
     }
 
     /// Marks this chapter and every older one (higher sourceOrder) as read.
@@ -216,6 +263,7 @@ final class LibraryRepository: ObservableObject {
     }
 
     func saveProgress(_ chapter: ChapterRecord, page: Int, pageCount: Int) {
+        guard !isIncognito(sourceId: chapter.sourceId) else { return }
         guard chapter.lastPageRead != page || (page >= pageCount - 1 && !chapter.read) else { return }
         chapter.objectWillChange.send()
         let wasRead = chapter.read
@@ -243,5 +291,39 @@ final class LibraryRepository: ObservableObject {
 
     func write(_ updates: (Database) throws -> Void) {
         _ = try? db.write(updates)
+    }
+}
+
+// MARK: Clear database (Mihon's "Clear database")
+extension LibraryRepository {
+    /// Titles that are only here because they were opened, not saved: source id and key. Titles with
+    /// downloads stay (their files are not tied to this table), and `keepRead` spares those with a read chapter.
+    private func clearable(keepRead: Bool) -> [(sourceId: String, key: String)] {
+        var sql = "SELECT sourceId, key FROM manga WHERE inLibrary = 0 AND key NOT IN (SELECT mangaKey FROM download)"
+        if keepRead { sql += " AND key NOT IN (SELECT mangaKey FROM chapter WHERE read = 1)" }
+        let rows = (try? db.read { try Row.fetchAll($0, sql: sql) }) ?? []
+        return rows.map { (sourceId: $0["sourceId"] as String, key: $0["key"] as String) }
+    }
+
+    /// How many titles `clearNonLibrary` would remove, per source id.
+    func nonLibraryCounts(keepRead: Bool) -> [String: Int] {
+        clearable(keepRead: keepRead).reduce(into: [:]) { $0[$1.sourceId, default: 0] += 1 }
+    }
+
+    /// Removes non-library titles of `sources` with their chapters and history; returns how many went.
+    @discardableResult
+    func clearNonLibrary(sources: Set<String>, keepRead: Bool) -> Int {
+        let keys = clearable(keepRead: keepRead).filter { sources.contains($0.sourceId) }.map(\.key)
+        guard !keys.isEmpty else { return 0 }
+        updatesCache = nil
+        objectWillChange.send()
+        write { db in
+            for key in keys { try db.execute(sql: "DELETE FROM manga WHERE key = ?", arguments: [key]) }
+        }
+        for key in keys {
+            loaded[key] = nil
+            absent.insert(key)
+        }
+        return keys.count
     }
 }

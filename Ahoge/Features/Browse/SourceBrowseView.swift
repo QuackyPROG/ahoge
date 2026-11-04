@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class SourceBrowseModel: ObservableObject {
@@ -105,21 +106,35 @@ final class SourceBrowseModel: ObservableObject {
 
 struct SourceBrowseView: View {
     @EnvironmentObject private var sources: SourceManager
+    @EnvironmentObject private var repo: LibraryRepository
+    @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
+    @AppStorage(Pref.browseDisplayMode.name) private var displayMode = LibraryDisplayMode.compact.rawValue
     @StateObject private var model: SourceBrowseModel
     @State private var webTarget: WebTarget?
     @State private var editing: FilterState?
+    @State private var importing = false
+    @State private var importError: String?
     @Environment(\.palette) private var palette
     private let genre: String?
+    /// Searched as soon as the screen opens.
+    private let initialQuery: String?
 
-    init(sourceId: String, genre: String? = nil) {
+    init(sourceId: String, genre: String? = nil, query: String? = nil) {
         self.genre = genre
+        initialQuery = query
         _model = StateObject(wrappedValue: SourceBrowseModel(sourceId: sourceId))
     }
 
     private var fetch: SourceBrowseModel.Fetch { SourceBrowseModel.fetch(from: sources, sourceId: model.sourceId) }
 
+    private func inLibrary(_ ref: MangaRef) -> Bool {
+        repo.manga(sourceId: ref.sourceId, url: ref.url)?.inLibrary == true
+    }
+
     var body: some View {
         let info = sources.installed(model.sourceId)
+        let refs = model.items.map { MangaRef(sourceId: model.sourceId, url: $0.url, title: $0.title, cover: $0.cover) }
+        let shown = hideInLibrary ? refs.filter { !inLibrary($0) } : refs
         ScrollView {
             chips
             if let error = model.error, model.items.isEmpty {
@@ -130,11 +145,19 @@ struct SourceBrowseView: View {
                     .padding(.top, 40)
             }
             MangaGrid(
-                items: model.items.map { MangaRef(sourceId: model.sourceId, url: $0.url, title: $0.title, cover: $0.cover) },
+                items: shown,
                 onItemAppear: { ref in
                     if model.shouldLoadMore(after: ref.url) { Task { await model.loadMore(fetch) } }
-                }
+                },
+                isInLibrary: inLibrary,
+                mode: LibraryDisplayMode(rawValue: displayMode) ?? .compact
             )
+            // A page that is all hidden has no cell to trigger the next load; the new id re-fires this per load.
+            if hideInLibrary, shown.count < refs.count {
+                Color.clear.frame(height: 1)
+                    .id(refs.count)
+                    .onAppear { Task { await model.loadMore(fetch) } }
+            }
             if model.isLoading { ProgressView().padding() }
         }
         .navigationTitle(genre ?? info?.name ?? "Source")
@@ -145,21 +168,53 @@ struct SourceBrowseView: View {
             if query.isEmpty, !old.isEmpty { Task { await model.reload(fetch) } }
         }
         .task {
+            Pref.lastUsedSource.set(model.sourceId)
             guard model.items.isEmpty else { return }
             await model.loadFilters { try await sources.source(model.sourceId).filters() }
             if let genre, model.query.isEmpty, model.feed != .filtered { model.applyGenre(genre) }
+            if let initialQuery, model.query.isEmpty { model.query = initialQuery }
             await model.reload(fetch)
         }
         .refreshable { await model.reload(fetch) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if let info {
+                Menu {
+                    Picker("Display", selection: $displayMode) {
+                        ForEach([LibraryDisplayMode.compact, .comfortable, .list]) { Text($0.label).tag($0.rawValue) }
+                    }
+                } label: {
+                    Image(systemName: displayMode == LibraryDisplayMode.list.rawValue ? "list.bullet" : "square.grid.2x2")
+                }
+                .accessibilityLabel("Display mode")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if model.sourceId == LocalSource.id {
+                    Button { importing = true } label: { Image(systemName: "square.and.arrow.down") }
+                        .accessibilityLabel("Import")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if let info, !info.baseUrl.isEmpty {
                     Button { webTarget = WebTarget(url: info.baseUrl) } label: { Image(systemName: "globe") }
                         .accessibilityLabel("Open in web view")
                 }
             }
         }
         .sheet(item: $webTarget) { WebViewSheet(target: $0) }
+        // Archives or folders copied into Documents/Local, which the Files app shows too.
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.zip, .folder, UTType(filenameExtension: "cbz") ?? .zip], allowsMultipleSelection: true) { result in
+            do {
+                try sources.local.importItems(try result.get())
+                Task { await model.reload(fetch) }
+            } catch {
+                importError = error.localizedDescription
+            }
+        }
+        .alert("Could not import", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importError ?? "")
+        }
         .sheet(isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
             FilterSheet(
                 state: Binding(get: { editing ?? model.filters }, set: { editing = $0 }),

@@ -1,3 +1,4 @@
+import GRDB
 import XCTest
 @testable import Ahoge
 
@@ -106,5 +107,41 @@ final class LibraryRepositoryTests: XCTestCase {
         XCTAssertEqual(manga.sortedChapters.map(\.url), ["/c/2", "/c/1"])
         XCTAssertEqual(manga.sortedChapters.map(\.read), [false, true])
         XCTAssertEqual(manga.unreadCount, 1)
+    }
+
+    func testV3MigrationKeepsExistingRowsWithDefaults() throws {
+        let queue = try DatabaseQueue()
+        try LibraryRepository.migrator.migrate(queue, upTo: "v2")
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO manga (key, sourceId, url, title, coverUrl, author, artist, summary, genres, status, inLibrary)
+                VALUES ('en.demo\n/m/1', 'en.demo', '/m/1', 'One', '', '', '', '', '[]', 'ongoing', 1)
+                """)
+            try db.execute(sql: """
+                INSERT INTO chapter (key, mangaKey, url, name, number, read, lastPageRead, sourceOrder)
+                VALUES ('en.demo\n/c/1', 'en.demo\n/m/1', '/c/1', 'Ch 1', 1, 0, 3, 0)
+                """)
+            try db.execute(sql: "INSERT INTO category (name, sort) VALUES ('Reading', 0)")
+            try db.execute(sql: "INSERT INTO history (chapterKey, mangaKey, lastRead) VALUES ('en.demo\n/c/1', 'en.demo\n/m/1', '2026-01-01 00:00:00')")
+        }
+
+        let repo = try LibraryRepository(db: queue)
+
+        let manga = try XCTUnwrap(repo.manga(key: "en.demo\n/m/1"))
+        XCTAssertEqual(manga.title, "One")
+        XCTAssertEqual(manga.notes, "")
+        XCTAssertNil(manga.customCover)
+        XCTAssertNil(manga.updateInterval)
+        XCTAssertNil(manga.nextUpdate)
+        XCTAssertEqual(manga.chapterFlags, 0)
+        let chapter = try XCTUnwrap(manga.chapters.first)
+        XCTAssertEqual(chapter.lastPageRead, 3)
+        XCTAssertFalse(chapter.bookmark)
+        XCTAssertEqual(repo.categories.map(\.name), ["Reading"])
+        XCTAssertEqual(repo.categories.first?.flags, 0)
+        XCTAssertNil(repo.categories.first?.sortMode)
+        XCTAssertEqual(try queue.read { try Int.fetchOne($0, sql: "SELECT timeRead FROM history") }, 0)
+        XCTAssertEqual(try queue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM download") }, 0)
+        XCTAssertEqual(try queue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM excludedScanlator") }, 0)
     }
 }

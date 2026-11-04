@@ -114,13 +114,6 @@ enum ThemeMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Appearance preferences, stored in UserDefaults.
-enum ThemePrefs {
-    static let theme = "ui.theme"
-    static let mode = "ui.themeMode"
-    static let pureBlack = "ui.pureBlack"
-}
-
 private struct PaletteKey: EnvironmentKey {
     static let defaultValue = AppTheme.standard.palette(pureBlack: false)
 }

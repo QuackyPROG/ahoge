@@ -7,6 +7,10 @@ struct MangaCategory: Identifiable, Hashable, Codable, FetchableRecord, Persista
     var id: Int64
     var name: String
     var sort: Int
+    /// Bit 0: excluded from library updates. Bit 1: excluded from auto-download.
+    var flags: Int = 0
+    /// This shelf's own library sort (key and direction); nil follows the global sort.
+    var sortMode: String?
 }
 
 /// A category's box in "Set categories" when several titles are edited at once.

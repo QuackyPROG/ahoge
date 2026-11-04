@@ -29,7 +29,7 @@ final class CategoryTests: XCTestCase {
     }
 
     func testRenameReorderDelete() throws {
-        let key = LibraryPrefs.defaultCategory
+        let key = Pref.libraryDefaultCategory.name
         let saved = UserDefaults.standard.object(forKey: key)
         defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
         let (repo, a, _) = try libraryWithTwo()
@@ -45,6 +45,17 @@ final class CategoryTests: XCTestCase {
         repo.deleteCategory(two.id)
         XCTAssertEqual(repo.categoryIds(of: a), [])
         XCTAssertEqual(repo.library(in: nil).count, 2)
+    }
+
+    func testCategorySortIsStoredPerCategory() throws {
+        let (repo, _, _) = try libraryWithTwo()
+        let one = try XCTUnwrap(repo.createCategory(named: "One"))
+        let two = try XCTUnwrap(repo.createCategory(named: "Two"))
+        repo.setCategorySort(one.id, LibrarySort(key: .unreadCount, ascending: false))
+        XCTAssertEqual(repo.categories.first { $0.id == one.id }?.sortMode, "unreadCount:desc")
+        XCTAssertNil(repo.categories.first { $0.id == two.id }?.sortMode)
+        repo.setCategorySort(one.id, nil)
+        XCTAssertNil(repo.categories.first { $0.id == one.id }?.sortMode)
     }
 
     func testCategoriesSurviveReopen() throws {
@@ -87,7 +98,7 @@ final class CategoryTests: XCTestCase {
     }
 
     func testDeletingTheDefaultCategoryResetsThePreference() throws {
-        let key = LibraryPrefs.defaultCategory
+        let key = Pref.libraryDefaultCategory.name
         let saved = UserDefaults.standard.object(forKey: key)
         defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
         let repo = try LibraryRepository.inMemory()

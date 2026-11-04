@@ -18,6 +18,7 @@ struct HistoryEntry: Identifiable {
 extension LibraryRepository {
     /// Notes that `chapter` is being read, for History and the "Last read" sort.
     func recordHistory(_ chapter: ChapterRecord, at date: Date = Date()) {
+        guard !isIncognito(sourceId: chapter.sourceId) else { return }
         let manga = chapter.manga
         manga?.lastReadAt = date
         write { db in
@@ -61,5 +62,13 @@ extension LibraryRepository {
     func clearHistory() {
         objectWillChange.send()
         write { try $0.execute(sql: "DELETE FROM history") }
+    }
+}
+
+extension LibraryRepository {
+    /// Adds active reading time to a chapter's history row (the row exists once the reader has opened it).
+    func addReadingTime(_ seconds: Int, to chapter: ChapterRecord) {
+        guard seconds > 0, !isIncognito(sourceId: chapter.sourceId) else { return }
+        write { try $0.execute(sql: "UPDATE history SET timeRead = timeRead + ? WHERE chapterKey = ?", arguments: [seconds, chapter.key]) }
     }
 }

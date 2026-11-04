@@ -2,9 +2,11 @@ import SwiftUI
 
 /// Mihon's Appearance settings: theme mode, app theme with previews, pure black.
 struct AppearanceView: View {
-    @AppStorage(ThemePrefs.theme) private var theme = AppTheme.standard
-    @AppStorage(ThemePrefs.mode) private var mode = ThemeMode.system
-    @AppStorage(ThemePrefs.pureBlack) private var pureBlack = false
+    @AppStorage(Pref.theme.name) private var theme = AppTheme.standard
+    @AppStorage(Pref.themeMode.name) private var mode = ThemeMode.system
+    @AppStorage(Pref.pureBlack.name) private var pureBlack = false
+    @AppStorage(Pref.dateFormat.name) private var dateFormat = Pref.dateFormat.defaultValue
+    @AppStorage(Pref.relativeTimestamps.name) private var relativeDates = Pref.relativeTimestamps.defaultValue
 
     var body: some View {
         List {
@@ -36,6 +38,18 @@ struct AppearanceView: View {
                 Toggle("Pure black dark mode", isOn: $pureBlack)
             } footer: {
                 Text("A black background in dark mode. Saves battery on OLED screens.")
+            }
+            .themedRows()
+            Section {
+                Picker("Date format", selection: $dateFormat) {
+                    Text("System").tag(DateFormatting.system)
+                    ForEach(DateFormatting.presets, id: \.pattern) { Text($0.title).tag($0.pattern) }
+                }
+                Toggle("Relative timestamps", isOn: $relativeDates)
+            } header: {
+                Text("Dates")
+            } footer: {
+                Text("Chapter dates in the last week read Today, Yesterday or 3 days ago.")
             }
             .themedRows()
         }

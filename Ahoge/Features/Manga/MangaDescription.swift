@@ -7,6 +7,7 @@ enum DescriptionFormatter {
     /// blank lines. Inline Markdown (bold, italics, links), which MangaDex uses, is kept for rendering.
     static func clean(_ text: String) -> String {
         var s = text.replacingOccurrences(of: "\r\n", with: "\n")
+        s = s.replacingOccurrences(of: "!\\[[^\\]]*\\]\\([^)]*\\)", with: "", options: .regularExpression)
         s = s.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: [.regularExpression, .caseInsensitive])
         s = s.replacingOccurrences(of: "</p>\\s*<p[^>]*>", with: "\n\n", options: [.regularExpression, .caseInsensitive])
         s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
@@ -24,6 +25,28 @@ enum DescriptionFormatter {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Addresses of the images a description holds (`<img src>` and Markdown `![](url)`), made absolute
+    /// against `baseURL` when they are relative. Order is kept and repeats dropped.
+    static func imageURLs(in text: String, baseURL: String? = nil) -> [String] {
+        let patterns = ["<img\\b[^>]*?\\bsrc\\s*=\\s*[\"']([^\"']+)[\"']", "!\\[[^\\]]*\\]\\(\\s*<?([^)\\s>]+)"]
+        var found: [String] = []
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+            let range = NSRange(text.startIndex..., in: text)
+            for match in regex.matches(in: text, range: range) {
+                guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: text) else { continue }
+                var link = String(text[r]).replacingOccurrences(of: "&amp;", with: "&")
+                if link.hasPrefix("//") { link = "https:" + link }
+                if !link.lowercased().hasPrefix("http") {
+                    guard let base = baseURL.flatMap(URL.init(string:)), let resolved = URL(string: link, relativeTo: base) else { continue }
+                    link = resolved.absoluteString
+                }
+                if !found.contains(link) { found.append(link) }
+            }
+        }
+        return found
+    }
+
     static func attributed(_ text: String) -> AttributedString {
         let cleaned = clean(text)
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
@@ -35,6 +58,9 @@ enum DescriptionFormatter {
 struct MangaDescription: View {
     let summary: String
     @Binding var expanded: Bool
+    /// For images with relative addresses, and the headers their server wants.
+    var baseURL: String?
+    var headers: [String: String] = [:]
 
     var body: some View {
         let text = DescriptionFormatter.attributed(summary)
@@ -52,6 +78,13 @@ struct MangaDescription: View {
                         LinearGradient(stops: [.init(color: .black, location: 0.55), .init(color: .black.opacity(0.15), location: 1)], startPoint: .top, endPoint: .bottom)
                     }
                 }
+            if expanded {
+                ForEach(DescriptionFormatter.imageURLs(in: summary, baseURL: baseURL), id: \.self) { url in
+                    RemoteImage(url: url, headers: headers, contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 420)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
             } label: {

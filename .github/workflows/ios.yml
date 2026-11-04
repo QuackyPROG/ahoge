@@ -2,6 +2,8 @@ name: iOS
 on:
   push:
     branches: [main]
+    # A version tag publishes a GitHub release with the IPA (the `release` job).
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 concurrency:
@@ -119,3 +121,25 @@ jobs:
           name: Ahoge-ipa-${{ github.run_number }}
           path: sideload-artifacts/
           retention-days: 14
+
+  # A pushed version tag (v0.5.0) attaches the IPA that the ipa job built to a GitHub release, once the tests passed.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, ipa]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: Ahoge-ipa-${{ github.run_number }}
+          path: release-assets
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/Ahoge.ipa
+            release-assets/Ahoge.ipa.sha256
+          generate_release_notes: true

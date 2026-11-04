@@ -1,0 +1,57 @@
+import Foundation
+
+extension Pref {
+    /// The settings a backup carries. A new `Pref` key that should survive a restore goes here.
+    /// Left out on purpose: the default category (an id that differs per device) and timestamps.
+    static let backupNames: [String] = [
+        libraryShelf.name, librarySort.name, libraryContinueButton.name,
+        libraryFilters.name, perCategorySort.name, libraryDefaultShelfSort.name, libraryDisplayMode.name,
+        libraryColumnsPortrait.name, libraryColumnsLandscape.name, libraryBadgeUnread.name, libraryBadgeDownloaded.name,
+        libraryBadgeLanguage.name, libraryBadgeLocal.name, libraryShowCategoryTabs.name, libraryShowItemCount.name,
+        browseHideInLibrary.name, pinnedSources.name, disabledSources.name, disabledLanguages.name, browseContentFilter.name,
+        browseDisplayMode.name, globalSearchPinnedOnly.name,
+        readerMode.name, readerBackground.name, readerShowPageNumber.name, readerKeepScreenOn.name, readerBrightness.name,
+        readerTapLayout.name, readerInvertTaps.name, readerShowTapZones.name, readerShowModeToast.name, readerDrawUnderCutout.name,
+        readerWebtoonPadding.name, readerWebtoonGap.name, readerHideMenuOnScroll.name, readerCropBordersPaged.name,
+        readerCropBordersWebtoon.name, readerScaleType.name, readerZoomStart.name, readerWidePages.name, readerInvertSplit.name,
+        readerDualPage.name, readerOrientation.name, readerDoubleTapZoom.name, readerDisableZoomOut.name, readerDoubleTapSpeed.name,
+        readerColorFilter.name, readerColorFilterColor.name, readerColorFilterMode.name, readerGrayscale.name, readerInvertColors.name,
+        readerSkipRead.name, readerSkipFiltered.name, readerSkipDuplicates.name, readerAlwaysShowTransition.name,
+        readerPreloadOnlyOnWiFi.name, incognito.name, incognitoSources.name,
+        theme.name, themeMode.name, pureBlack.name,
+        dateFormat.name, relativeTimestamps.name, customUserAgent.name, secureScreen.name, requireUnlock.name, lockAfter.name, autoBackupInterval.name, autoBackupKeep.name,
+        downloadConcurrentSources.name, downloadConcurrentPages.name, downloadOnlyOnWiFi.name, saveAsCBZ.name,
+        removeAfterMarkedRead.name, removeAfterReading.name, removeBookmarkedToo.name, downloadAhead.name,
+        downloadNewChapters.name, downloadedOnly.name, clearChapterCacheOnLaunch.name,
+        swipeRight.name, swipeLeft.name, hideMissingChapters.name, markDuplicateRead.name, chapterDisplayDefault.name,
+        updatesBookmarked.name, updatesDownloaded.name, updatesUnread.name, updatesStarted.name, updatesBadge.name,
+        autoUpdateInterval.name, autoUpdateOnlyCharging.name, updateSkipUnread.name, updateSkipUnstarted.name,
+        updateSkipCompleted.name, updateSmart.name, updateRefreshMetadata.name, updateMatchTitles.name, updateNotify.name,
+        updateHideNotificationContent.name,
+    ]
+}
+
+extension PreferenceValue {
+    /// A stored value of a type backups can hold; nil for anything else.
+    init?(stored object: Any?) {
+        switch object {
+        case let number as NSNumber:
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { self = .bool(number.boolValue) }
+            else if CFNumberIsFloatType(number) { self = .double(number.doubleValue) }
+            else { self = .int(number.intValue) }
+        case let string as String: self = .string(string)
+        case let strings as [String]: self = .strings(strings)
+        default: return nil
+        }
+    }
+
+    var stored: Any {
+        switch self {
+        case .bool(let value): return value
+        case .int(let value): return value
+        case .double(let value): return value
+        case .string(let value): return value
+        case .strings(let value): return value
+        }
+    }
+}

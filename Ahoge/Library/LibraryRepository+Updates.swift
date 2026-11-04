@@ -10,16 +10,19 @@ struct UpdateEntry: Identifiable {
 
 extension LibraryRepository {
     /// Library chapters first seen after their manga was added and after `cutoff`, newest first.
-    /// The full feed is cached; applyChapters and setInLibrary clear it.
+    /// Chapters of scanlators excluded for their manga are left out. The full feed is cached; applyChapters, setInLibrary and setExcludedScanlators clear it.
     func updates(since cutoff: Date) -> [UpdateEntry] {
         let all: [UpdateEntry]
         if let cached = updatesCache {
             all = cached
         } else {
+            let excluded = excludedScanlatorsByManga()
             all = library.flatMap { manga -> [UpdateEntry] in
                 guard let added = manga.dateAdded else { return [] }
+                let hidden = Set(excluded[manga.key] ?? [])
                 return manga.chapters.compactMap { chapter in
                     guard let fetched = chapter.dateFetch, fetched > added else { return nil }
+                    if let scanlator = chapter.scanlator, hidden.contains(scanlator) { return nil }
                     return UpdateEntry(manga: manga, chapter: chapter, date: fetched)
                 }
             }
@@ -28,5 +31,13 @@ extension LibraryRepository {
             updatesCache = all
         }
         return cutoff == .distantPast ? all : all.filter { $0.date > cutoff }
+    }
+
+    /// Sets a title's own check interval in days (0 never); nil goes back to the prediction.
+    func setUpdateInterval(_ days: Int?, for manga: LibraryManga) {
+        objectWillChange.send()
+        manga.updateInterval = days
+        manga.nextUpdate = manga.lastChapterFetch.flatMap { ReleasePredictor.nextUpdate(for: manga, lastFetch: $0) }
+        write { try manga.update($0) }
     }
 }
