@@ -43,6 +43,10 @@ final class DownloadManagerTests: XCTestCase {
         try repo.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM download WHERE state = ?", arguments: [state]) ?? 0 }
     }
 
+    private func downloadRows(_ repo: LibraryRepository) throws -> [Row] {
+        try repo.db.read { try Row.fetchAll($0, sql: "SELECT chapterKey, pageCount FROM download") }
+    }
+
     /// The chapter URL of each page request, with repeats collapsed: the order chapters downloaded in.
     private func chapterOrder(_ stub: StubTransport) -> [String] {
         var order: [String] = []
@@ -161,7 +165,7 @@ final class DownloadManagerTests: XCTestCase {
 
         XCTAssertTrue(downloads.isDownloaded(chapter.key))
         XCTAssertEqual(filesOnDisk(), ["001.png", "002.jpg"])
-        XCTAssertEqual(try repo.db.read { try Int.fetchOne($0, sql: "SELECT pageCount FROM download") }, 2)
+        XCTAssertEqual(try downloadRows(repo).map { $0["pageCount"] as Int }, [2])
     }
 
     func testCancelWhileZippingLeavesNothing() async throws {
@@ -295,7 +299,7 @@ final class DownloadManagerTests: XCTestCase {
         let mangaFolder = root.appendingPathComponent(SourceFixture.sourceId).appendingPathComponent(DownloadStore.hash(manga.key))
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: mangaFolder.path), [DownloadStore.hash(newKey)])
         XCTAssertFalse(downloads.isDownloaded(two.key))
-        XCTAssertEqual(try repo.db.read { try String.fetchAll($0, sql: "SELECT chapterKey FROM download") }, [newKey])
+        XCTAssertEqual(try downloadRows(repo).map { $0["chapterKey"] as String }, [newKey])
     }
 
     func testDownloadOfADeletedChapterIsNotMarkedDownloaded() async throws {
