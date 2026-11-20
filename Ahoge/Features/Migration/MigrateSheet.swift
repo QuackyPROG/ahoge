@@ -117,7 +117,7 @@ struct MigrateSourcesView: View {
             }
             Section {
                 ForEach(ids, id: \.self) { id in
-                    NavigationLink { MigrateTitlesView(sourceId: id) } label: {
+                    NavigationLink(value: Route.migrateTitles(id)) {
                         HStack(spacing: 12) {
                             RemoteImage(url: sources.installed(id)?.iconURL ?? "")
                                 .frame(width: 32, height: 32)
@@ -144,7 +144,7 @@ struct MigrateSourcesView: View {
     private func name(_ id: String) -> String { sources.installed(id)?.name ?? id }
 }
 
-private struct MigrateTitlesView: View {
+struct MigrateTitlesView: View {
     let sourceId: String
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var sources: SourceManager

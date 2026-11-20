@@ -43,6 +43,14 @@ final class AppNavigatorTests: XCTestCase {
         navigator.push(.sourceSearch("en.demo", query: "One"))
         XCTAssertEqual(navigator.path(for: .library), [.manga(one), .migrate(one), .sourceSearch("en.demo", query: "One")])
     }
+    func testMoreMigrateASourceThenATitleStacksTheMigrateSearchOnTop() {
+        let navigator = AppNavigator()
+        navigator.tab = .more
+        navigator.push(.migrateSources)
+        navigator.push(.migrateTitles("s"))
+        navigator.push(.migrate(one))
+        XCTAssertEqual(navigator.path(for: .more), [.migrateSources, .migrateTitles("s"), .migrate(one)])
+    }
     func testOpeningAMangaSelectsLibraryAndQueuesTheRoute() {
         let navigator = AppNavigator()
         navigator.tab = .more

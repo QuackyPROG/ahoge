@@ -139,7 +139,10 @@ struct SettingsSearchResults: View {
                 Text("No settings match \"\(query)\".").foregroundStyle(.secondary).themedRows()
             }
             ForEach(results) { entry in
-                if let destination = entry.destination {
+                if entry.destination == .migrate {
+                    // Its screens push value links, so it must be on the path too.
+                    NavigationLink(value: Route.migrateSources) { row(entry) }
+                } else if let destination = entry.destination {
                     NavigationLink { destination.screen } label: { row(entry) }
                 } else {
                     row(entry)
