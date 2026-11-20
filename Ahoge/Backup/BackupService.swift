@@ -19,6 +19,7 @@ enum BackupService {
 
         let manga = repo.mangaForBackup().map { manga -> BackupManga in
             let ids = repo.categoryIds(of: manga)
+            let own = PerSeriesReaderSettings.values(for: manga.key, in: defaults)
             return BackupManga(
                 sourceId: manga.sourceId,
                 url: manga.url,
@@ -50,7 +51,10 @@ enum BackupService {
                         lastRead: history[chapter.key]?.lastRead,
                         timeRead: history[chapter.key]?.timeRead ?? 0
                     )
-                }
+                },
+                readerMode: own.mode?.rawValue,
+                readerOrientation: own.orientation?.rawValue,
+                chapterDisplay: own.chapterDisplay
             )
         }
 
@@ -100,6 +104,13 @@ enum BackupService {
         }
         for item in backup.manga {
             repo.restoreManga(item)
+            // Per-title settings are library data, so they come back either way, but never replace this device's.
+            let key = LibraryManga.makeKey(sourceId: item.sourceId, url: item.url)
+            var own = PerSeriesReaderSettings.values(for: key, in: defaults)
+            own.mode = own.mode ?? item.readerMode.flatMap(ReadingMode.init)
+            own.orientation = own.orientation ?? item.readerOrientation.flatMap(ReaderOrientation.init)
+            own.chapterDisplay = own.chapterDisplay ?? item.chapterDisplay
+            PerSeriesReaderSettings.set(own, for: key, in: defaults)
             report.restoredManga += 1
         }
 

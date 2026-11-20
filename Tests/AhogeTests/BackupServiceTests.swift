@@ -234,4 +234,28 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertNil(target.manga(sourceId: "en.demo", url: "/m/1")?.updateInterval, "Smart stays Smart")
         XCTAssertEqual(target.manga(sourceId: "en.demo", url: "/m/2")?.updateInterval, 7, "new to the device")
     }
+
+    func testPerSeriesSettingsRoundTripThroughABackup() async throws {
+        let source = try LibraryRepository.inMemory()
+        let one = source.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        source.setInLibrary(one, true)
+        let sourceDefaults = defaults()
+        var display = ChapterDisplay()
+        display.sort = .number
+        display.ascending = true
+        ReadingMode.rightToLeft.save(for: one.key, to: sourceDefaults)
+        ReaderOrientation.portrait.save(for: one.key, to: sourceDefaults)
+        display.save(for: one.key, to: sourceDefaults)
+
+        let data = try BackupCodec.encode(BackupService.snapshot(of: source, store: store(), defaults: sourceDefaults))
+        let target = try LibraryRepository.inMemory()
+        let targetDefaults = defaults()
+        _ = await BackupService.restore(try BackupCodec.decode(data), into: target, store: store(), defaults: targetDefaults, includingSettings: false)
+
+        XCTAssertEqual(
+            PerSeriesReaderSettings.values(for: one.key, in: targetDefaults),
+            PerSeriesReaderSettings.Values(mode: .rightToLeft, orientation: .portrait, chapterDisplay: display)
+        )
+        XCTAssertEqual(ChapterDisplay.load(for: one.key, from: targetDefaults), display)
+    }
 }

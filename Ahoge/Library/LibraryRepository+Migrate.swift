@@ -66,6 +66,8 @@ extension LibraryRepository {
         if options.categories, !oldCategories.isEmpty {
             setCategories(categoryIds(of: new).union(oldCategories), for: new)
         }
+        // Mihon copies the reader and chapter flags on every migration, whatever the options.
+        PerSeriesReaderSettings.copy(from: old.key, to: new.key, in: preferences)
     }
 
     /// Mihon's rule: a chapter with an old chapter of the same number takes its read state, bookmark

@@ -169,4 +169,24 @@ final class MigrateTests: XCTestCase {
         XCTAssertEqual(new3.lastPageRead, 0)
         XCTAssertNil(try history(repo, new3))
     }
+
+    func testPerSeriesSettingsReplaceTheNewEntrysAndStayOnTheOld() throws {
+        let repo = try LibraryRepository.inMemory()
+        let suite = UserDefaults(suiteName: "migrate-tests-\(UUID().uuidString)")!
+        repo.preferences = suite
+        let (old, new) = pair(repo)
+        ReadingMode.rightToLeft.save(for: old.key, to: suite)
+        ReaderOrientation.portrait.save(for: old.key, to: suite)
+        ReadingMode.vertical.save(for: new.key, to: suite)
+        var display = ChapterDisplay()
+        display.filter = .unread
+        display.save(for: new.key, to: suite)
+        let options = MigrateOptions(chapters: false, categories: false, notes: false, customCover: false, deleteDownloads: false, removeOld: true)
+
+        repo.migrate(old, to: new, options: options)
+
+        let moved = PerSeriesReaderSettings.Values(mode: .rightToLeft, orientation: .portrait, chapterDisplay: nil)
+        XCTAssertEqual(PerSeriesReaderSettings.values(for: new.key, in: suite), moved)
+        XCTAssertEqual(PerSeriesReaderSettings.values(for: old.key, in: suite), moved)
+    }
 }

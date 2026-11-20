@@ -27,7 +27,7 @@ enum ReadingMode: String, CaseIterable, Identifiable {
     var isPaged: Bool { self != .webtoon }
 
     private static let defaultKey = Pref.readerMode.name
-    private static func key(_ mangaKey: String) -> String { "reader.mode\n" + mangaKey }
+    static func key(_ mangaKey: String) -> String { "reader.mode\n" + mangaKey }
 
     static var preferred: ReadingMode {
         get { UserDefaults.standard.string(forKey: defaultKey).flatMap(ReadingMode.init) ?? .webtoon }
@@ -36,10 +36,14 @@ enum ReadingMode: String, CaseIterable, Identifiable {
 
     /// The manga's own mode, or the default when it has none.
     static func load(for mangaKey: String) -> ReadingMode {
-        UserDefaults.standard.string(forKey: key(mangaKey)).flatMap(ReadingMode.init) ?? preferred
+        stored(for: mangaKey) ?? preferred
+    }
+    /// The manga's own mode; nil when it follows the default.
+    static func stored(for mangaKey: String, from defaults: UserDefaults = .standard) -> ReadingMode? {
+        defaults.string(forKey: key(mangaKey)).flatMap(ReadingMode.init)
     }
 
-    func save(for mangaKey: String) { UserDefaults.standard.set(rawValue, forKey: Self.key(mangaKey)) }
+    func save(for mangaKey: String, to defaults: UserDefaults = .standard) { defaults.set(rawValue, forKey: Self.key(mangaKey)) }
 }
 
 enum ReaderBackground: String, CaseIterable, Identifiable {
@@ -252,5 +256,48 @@ enum PerSeriesReaderSettings {
         let keys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("reader.mode\n") || $0.hasPrefix("reader.orientation\n") }
         for key in keys { defaults.removeObject(forKey: key) }
         return keys.count
+    }
+
+    /// A series' own reading mode, orientation and chapter display; nil follows the default.
+    struct Values: Equatable {
+        var mode: ReadingMode?
+        var orientation: ReaderOrientation?
+        var chapterDisplay: ChapterDisplay?
+    }
+
+    static func values(for mangaKey: String, in defaults: UserDefaults = .standard) -> Values {
+        Values(
+            mode: ReadingMode.stored(for: mangaKey, from: defaults),
+            orientation: ReaderOrientation.stored(for: mangaKey, from: defaults),
+            chapterDisplay: ChapterDisplay.stored(for: mangaKey, from: defaults)
+        )
+    }
+
+    /// Saves `values` as the series' own; a nil value is removed.
+    static func set(_ values: Values, for mangaKey: String, in defaults: UserDefaults = .standard) {
+        if let mode = values.mode {
+            mode.save(for: mangaKey, to: defaults)
+        } else {
+            defaults.removeObject(forKey: ReadingMode.key(mangaKey))
+        }
+        if let orientation = values.orientation {
+            orientation.save(for: mangaKey, to: defaults)
+        } else {
+            defaults.removeObject(forKey: ReaderOrientation.key(mangaKey))
+        }
+        if let display = values.chapterDisplay {
+            display.save(for: mangaKey, to: defaults)
+        } else {
+            defaults.removeObject(forKey: ChapterDisplay.defaultsKey(mangaKey))
+        }
+    }
+
+    /// Gives `newKey` exactly the settings `oldKey` has; `oldKey` keeps them.
+    static func copy(from oldKey: String, to newKey: String, in defaults: UserDefaults = .standard) {
+        set(values(for: oldKey, in: defaults), for: newKey, in: defaults)
+    }
+
+    static func remove(for mangaKey: String, in defaults: UserDefaults = .standard) {
+        set(Values(), for: mangaKey, in: defaults)
     }
 }

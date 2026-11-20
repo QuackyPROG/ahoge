@@ -71,7 +71,7 @@ struct ChapterDisplay: Codable, Equatable {
         return "Chapter \(chapter.number.formatted())"
     }
 
-    private static func defaultsKey(_ mangaKey: String) -> String { "chapterDisplay." + mangaKey }
+    static func defaultsKey(_ mangaKey: String) -> String { "chapterDisplay." + mangaKey }
 
     /// The display a manga without its own uses: the one saved with "Set as default", else the built-in.
     static func globalDefault(from defaults: UserDefaults = .standard) -> ChapterDisplay {
@@ -90,9 +90,11 @@ struct ChapterDisplay: Codable, Equatable {
     }
 
     static func load(for mangaKey: String, from defaults: UserDefaults = .standard) -> ChapterDisplay {
-        guard let data = defaults.data(forKey: defaultsKey(mangaKey)),
-              let value = try? JSONDecoder().decode(ChapterDisplay.self, from: data) else { return globalDefault(from: defaults) }
-        return value
+        stored(for: mangaKey, from: defaults) ?? globalDefault(from: defaults)
+    }
+    /// The manga's own display; nil when it follows the default.
+    static func stored(for mangaKey: String, from defaults: UserDefaults = .standard) -> ChapterDisplay? {
+        defaults.data(forKey: defaultsKey(mangaKey)).flatMap { try? JSONDecoder().decode(ChapterDisplay.self, from: $0) }
     }
 
     func save(for mangaKey: String, to defaults: UserDefaults = .standard) {

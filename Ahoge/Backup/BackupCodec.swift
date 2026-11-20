@@ -69,6 +69,11 @@ struct BackupManga: Codable, Equatable {
     /// A custom cover, base64. Absent in older backups and when the title uses the source's cover.
     var customCoverData: String?
     var chapters: [BackupChapter] = []
+    /// The title's own reader settings (`ReadingMode` and `ReaderOrientation` raw values) and chapter
+    /// display. Absent in older backups and when the title follows the defaults.
+    var readerMode: String?
+    var readerOrientation: String?
+    var chapterDisplay: ChapterDisplay?
 }
 
 struct BackupChapter: Codable, Equatable {

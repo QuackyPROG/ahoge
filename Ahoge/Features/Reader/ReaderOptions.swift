@@ -113,7 +113,7 @@ enum ReaderOrientation: String, CaseIterable, Identifiable {
         }
     }
 
-    private static func key(_ mangaKey: String) -> String { "reader.orientation\n" + mangaKey }
+    static func key(_ mangaKey: String) -> String { "reader.orientation\n" + mangaKey }
 
     static var preferred: ReaderOrientation {
         get { ReaderOrientation(rawValue: Pref.readerOrientation.value()) ?? .free }
@@ -121,10 +121,14 @@ enum ReaderOrientation: String, CaseIterable, Identifiable {
     }
 
     static func load(for mangaKey: String) -> ReaderOrientation {
-        UserDefaults.standard.string(forKey: key(mangaKey)).flatMap(ReaderOrientation.init) ?? preferred
+        stored(for: mangaKey) ?? preferred
+    }
+    /// The series' own orientation; nil when it follows the default.
+    static func stored(for mangaKey: String, from defaults: UserDefaults = .standard) -> ReaderOrientation? {
+        defaults.string(forKey: key(mangaKey)).flatMap(ReaderOrientation.init)
     }
 
-    func save(for mangaKey: String) { UserDefaults.standard.set(rawValue, forKey: Self.key(mangaKey)) }
+    func save(for mangaKey: String, to defaults: UserDefaults = .standard) { defaults.set(rawValue, forKey: Self.key(mangaKey)) }
 
     /// The orientations allowed while reading; `current` is how the screen is turned now.
     func mask(current: UIInterfaceOrientation) -> UIInterfaceOrientationMask {
