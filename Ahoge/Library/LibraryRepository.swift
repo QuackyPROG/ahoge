@@ -297,23 +297,27 @@ final class LibraryRepository: ObservableObject {
 // MARK: Clear database (Mihon's "Clear database")
 extension LibraryRepository {
     /// Titles that are only here because they were opened, not saved: source id and key. Titles with
-    /// downloads stay (their files are not tied to this table), and `keepRead` spares those with a read chapter.
-    private func clearable(keepRead: Bool) -> [(sourceId: String, key: String)] {
+    /// downloads stay (their files are not tied to this table), and `keepStarted` spares those with a read,
+    /// partly read or bookmarked chapter or with history.
+    private func clearable(keepStarted: Bool) -> [(sourceId: String, key: String)] {
         var sql = "SELECT sourceId, key FROM manga WHERE inLibrary = 0 AND key NOT IN (SELECT mangaKey FROM download)"
-        if keepRead { sql += " AND key NOT IN (SELECT mangaKey FROM chapter WHERE read = 1)" }
+        if keepStarted {
+            sql += " AND key NOT IN (SELECT mangaKey FROM chapter WHERE read = 1 OR lastPageRead > 0 OR bookmark = 1)"
+            sql += " AND key NOT IN (SELECT mangaKey FROM history)"
+        }
         let rows = (try? db.read { try Row.fetchAll($0, sql: sql) }) ?? []
         return rows.map { (sourceId: $0["sourceId"] as String, key: $0["key"] as String) }
     }
 
     /// How many titles `clearNonLibrary` would remove, per source id.
-    func nonLibraryCounts(keepRead: Bool) -> [String: Int] {
-        clearable(keepRead: keepRead).reduce(into: [:]) { $0[$1.sourceId, default: 0] += 1 }
+    func nonLibraryCounts(keepStarted: Bool) -> [String: Int] {
+        clearable(keepStarted: keepStarted).reduce(into: [:]) { $0[$1.sourceId, default: 0] += 1 }
     }
 
     /// Removes non-library titles of `sources` with their chapters and history; returns how many went.
     @discardableResult
-    func clearNonLibrary(sources: Set<String>, keepRead: Bool) -> Int {
-        let keys = clearable(keepRead: keepRead).filter { sources.contains($0.sourceId) }.map(\.key)
+    func clearNonLibrary(sources: Set<String>, keepStarted: Bool) -> Int {
+        let keys = clearable(keepStarted: keepStarted).filter { sources.contains($0.sourceId) }.map(\.key)
         guard !keys.isEmpty else { return 0 }
         updatesCache = nil
         objectWillChange.send()
