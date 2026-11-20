@@ -75,8 +75,21 @@ final class UpdatePolicyTests: XCTestCase {
         let manga = try title()
         manga.updateInterval = 0
         manga.lastChapterFetch = now.addingTimeInterval(-365 * day)
-        XCTAssertEqual(decide(manga), .notDue)
+        XCTAssertEqual(decide(manga), .never)
         XCTAssertNil(UpdatePolicy.dueDate(manga, rules: UpdateRules()))
+    }
+    func testManualUpdateTakesNotDueTitlesButNeverNeverOnes() throws {
+        let repo = try LibraryRepository.inMemory()
+        let never = SourceFixture.manga(in: repo, chapters: 3)
+        never.updateInterval = 0
+        let weekly = repo.upsert(sourceId: SourceFixture.sourceId, url: "/n", title: "Weekly", cover: "")
+        repo.setInLibrary(weekly, true)
+        weekly.updateInterval = 7
+        weekly.lastChapterFetch = now.addingTimeInterval(-2 * day)
+        XCTAssertEqual(decide(weekly), .notDue)
+        let manual = LibraryUpdater.queue([never, weekly], repo: repo, rules: UpdateRules(), trigger: .manual, now: now)
+        XCTAssertEqual(manual.map(\.url), ["/n"])
+        XCTAssertTrue(LibraryUpdater.queue([never, weekly], repo: repo, rules: UpdateRules(), trigger: .automatic, now: now).isEmpty)
     }
 
     func testWeeklySeriesPredictsAboutSevenDays() {

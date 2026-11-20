@@ -36,10 +36,7 @@ final class LibraryUpdater: ObservableObject {
         }
         let rules = UpdateRules.current(categories: repo.categories)
         let started = Date()
-        var queue = manga.filter { title in
-            let reason = UpdatePolicy.decide(title, categories: repo.categoryIds(of: title), rules: rules, now: started)
-            return reason == nil || (trigger == .manual && reason == .notDue)
-        }
+        var queue = Self.queue(manga, repo: repo, rules: rules, trigger: trigger, now: started)
         // Background runs can be cut short, so the titles checked longest ago go first.
         if trigger == .automatic { queue.sort { ($0.lastChapterFetch ?? .distantPast) < ($1.lastChapterFetch ?? .distantPast) } }
         guard !isRunning, !queue.isEmpty else { return }
@@ -89,5 +86,13 @@ final class LibraryUpdater: ObservableObject {
         }
         running = task
         await task.value
+    }
+
+    /// The titles an update fetches. A manual run also takes titles not due yet, but never "Never" ones.
+    static func queue(_ manga: [LibraryManga], repo: LibraryRepository, rules: UpdateRules, trigger: Trigger, now: Date) -> [LibraryManga] {
+        manga.filter { title in
+            let reason = UpdatePolicy.decide(title, categories: repo.categoryIds(of: title), rules: rules, now: now)
+            return reason == nil || (trigger == .manual && reason == .notDue)
+        }
     }
 }
