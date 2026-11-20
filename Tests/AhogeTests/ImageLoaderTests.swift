@@ -34,6 +34,18 @@ final class ImageLoaderTests: XCTestCase {
         XCTAssertEqual(ImageLoader.cacheKey("https://x/p.jpg", maxPixelWidth: 360), "https://x/p.jpg#w360")
     }
 
+    func testDecodedCacheHoldsAtMost96MiB() {
+        XCTAssertEqual(ImageMemoryCache.shared.costLimit, 96 << 20)
+    }
+
+    func testMemoryWarningEmptiesTheDecodedCache() throws {
+        let key = "test://memory-warning/\(UUID().uuidString)"
+        ImageMemoryCache.shared.insert(try XCTUnwrap(UIImage(data: png(width: 10, height: 10))), for: key)
+        XCTAssertNotNil(ImageMemoryCache.shared[key])
+        NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        XCTAssertNil(ImageMemoryCache.shared[key])
+    }
+
     func testGarbageIsNil() {
         XCTAssertNil(ImageLoader.decode(Data("not an image".utf8), maxPixelWidth: 600))
     }

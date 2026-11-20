@@ -8,7 +8,15 @@ final class ImageMemoryCache: @unchecked Sendable {
 
     private let cache = NSCache<NSString, UIImage>()
 
-    private init() { cache.totalCostLimit = 200 << 20 }
+    private init() {
+        cache.totalCostLimit = 96 << 20
+        // Decoded pages can be decoded again from the disk cache, so they go first when iOS needs memory.
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { [cache] _ in
+            cache.removeAllObjects()
+        }
+    }
+
+    var costLimit: Int { cache.totalCostLimit }
 
     subscript(url: String) -> UIImage? { cache.object(forKey: url as NSString) }
 
@@ -33,11 +41,19 @@ actor ImageLoader {
 
     init() {
         let config = URLSessionConfiguration.default
-        config.urlCache = URLCache(memoryCapacity: 50 << 20, diskCapacity: 500 << 20)
+        let urlCache = URLCache(memoryCapacity: Self.urlCacheMemory, diskCapacity: 500 << 20)
+        config.urlCache = urlCache
         config.requestCachePolicy = .returnCacheDataElseLoad
         config.httpCookieStorage = .shared
         session = URLSession(configuration: config)
+        // Empties the memory copy only; the disk cache stays.
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { _ in
+            urlCache.memoryCapacity = 0
+            urlCache.memoryCapacity = Self.urlCacheMemory
+        }
     }
+
+    private nonisolated static let urlCacheMemory = 8 << 20
 
     /// The memory-cache key: the URL for full-size pages (so the reader can read hits by URL),
     /// the URL plus the width for smaller decodes such as covers, plus the reader's transform if any.
