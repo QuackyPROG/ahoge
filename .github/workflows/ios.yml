@@ -4,7 +4,10 @@ on:
     branches: [main]
     # A version tag publishes a GitHub release with the IPA (the `release` job).
     tags: ['v*']
+    # Docs-only changes do not need a build. Tag pushes ignore path filters, so releases still run.
+    paths-ignore: ['Docs/**', '**/*.md']
   pull_request:
+    paths-ignore: ['Docs/**', '**/*.md']
   workflow_dispatch:
 concurrency:
   group: ios-${{ github.ref }}
