@@ -5,56 +5,56 @@ feature: Fix the bugs from the 2026 code audit, GitHub issues #2-#14
 ## Tickets
 - [x] 01: Push script installs only inside a quiet window
 - [x] 02: Every tab owns a Route path in AppNavigator
-- [ ] 03: Browse pushes Global search, Open link and Extension details as routes
-- [ ] 04: Manga page pushes "Search all sources" and Migrate as routes
-- [ ] 05: More > Migrate screens become routes
-- [ ] 06: Updates > Upcoming is a route
-- [ ] 07: A finished migration replaces the old page and the migrate search
-- [ ] 08: The reader is presented from one place
-- [ ] 09: Restore the tab, manga page and reader on a cold launch
-- [ ] 10: Lower image cache limits and purge on memory warning
-- [ ] 11: Keep one decoded copy per page when a transform is on
-- [ ] 12: At most two prefetch decodes at once
-- [ ] 13: Reader pages stop holding images they no longer show
-- [ ] 14: Drop stale "load next chapter" results after a chapter jump
-- [ ] 15: Keep only the previous, current and next chapter loaded
-- [ ] 16: Cap decoded pages at 4096 px and slice tall webtoon strips
-- [ ] 17: Stop the reading clock when another chapter opens
-- [ ] 18: Choose split view or tabs by device, not size class
-- [ ] 19: iPad sidebar keeps every tab's screens alive
-- [ ] 20: Notification taps and deep links dismiss covers, then push on Library
-- [ ] 21: Auto-backup encodes and writes off the main thread under a background task
-- [ ] 22: Rotation deletes only automatic backups
-- [ ] 23: Show an error screen instead of crashing when the database cannot open
-- [ ] 24: Log and show failed database writes
-- [ ] 25: ExtensionStore never overwrites an unreadable state file
-- [ ] 26: Carry chapter state when a chapter's URL changes
-- [ ] 27: Re-link or delete downloads of re-keyed and removed chapters
-- [ ] 28: Reindex deletes download folders that match no chapter
-- [ ] 29: Restore asks first and leaves settings alone by default
-- [ ] 30: Clear database keeps titles with any progress, bookmark or history
-- [ ] 31: Confirm Clear cookies; name what Clear database deletes
-- [ ] 32: Restored chapters get unique source order
-- [ ] 33: Restore matches category names trimmed
-- [ ] 34: Restore keeps an existing title's Smart update interval
-- [ ] 35: Migration carries last page read and history
-- [ ] 36: Per-series reader settings go into backups and migrations
-- [ ] 37: Clear database removes cleared titles' covers and settings
-- [ ] 38: The migrate sheet is never blank
-- [ ] 39: Global search shows each result once
-- [ ] 40: Source browse de-duplicates within one page
-- [ ] 41: Repeating genre tags and options get unique ForEach ids
-- [ ] 42: Browse picker fits narrow phones and large text
-- [ ] 43: Manga page details pane is not a fixed 400 pt
-- [ ] 44: Sources' search field resets after a search
-- [ ] 45: "Pinned only" re-runs only the screen it is toggled on
-- [ ] 46: Opening a CBZ download unpacks it off the main thread
-- [ ] 47: A resumed download keeps only pages saved for the same page list
-- [ ] 48: Cancelling while a chapter is zipped leaves nothing behind
-- [ ] 49: Background transport races, only if a test can show them
-- [ ] 50: Manual library updates skip "Never" titles
-- [ ] 51: Metadata refresh keeps fields the source returns empty
-- [ ] 52: Mihon import picks the source language from the source id
+- [x] 03: Browse pushes Global search, Open link and Extension details as routes
+- [x] 04: Manga page pushes "Search all sources" and Migrate as routes
+- [x] 05: More > Migrate screens become routes
+- [x] 06: Updates > Upcoming is a route
+- [x] 07: A finished migration replaces the old page and the migrate search
+- [x] 08: The reader is presented from one place
+- [x] 09: Restore the tab, manga page and reader on a cold launch
+- [x] 10: Lower image cache limits and purge on memory warning
+- [x] 11: Keep one decoded copy per page when a transform is on
+- [x] 12: At most two prefetch decodes at once
+- [x] 13: Reader pages stop holding images they no longer show
+- [x] 14: Drop stale "load next chapter" results after a chapter jump
+- [x] 15: Keep only the previous, current and next chapter loaded
+- [x] 16: Cap decoded pages at 4096 px and slice tall webtoon strips
+- [x] 17: Stop the reading clock when another chapter opens
+- [x] 18: Choose split view or tabs by device, not size class
+- [x] 19: iPad sidebar keeps every tab's screens alive
+- [x] 20: Notification taps and deep links dismiss covers, then push on Library
+- [x] 21: Auto-backup encodes and writes off the main thread under a background task
+- [x] 22: Rotation deletes only automatic backups
+- [x] 23: Show an error screen instead of crashing when the database cannot open
+- [x] 24: Log and show failed database writes
+- [x] 25: ExtensionStore never overwrites an unreadable state file
+- [x] 26: Carry chapter state when a chapter's URL changes
+- [x] 27: Re-link or delete downloads of re-keyed and removed chapters
+- [x] 28: Reindex deletes download folders that match no chapter
+- [x] 29: Restore asks first and leaves settings alone by default
+- [x] 30: Clear database keeps titles with any progress, bookmark or history
+- [x] 31: Confirm Clear cookies; name what Clear database deletes
+- [x] 32: Restored chapters get unique source order
+- [x] 33: Restore matches category names trimmed
+- [x] 34: Restore keeps an existing title's Smart update interval
+- [x] 35: Migration carries last page read and history
+- [x] 36: Per-series reader settings go into backups and migrations
+- [x] 37: Clear database removes cleared titles' covers and settings
+- [x] 38: The migrate sheet is never blank
+- [x] 39: Global search shows each result once
+- [x] 40: Source browse de-duplicates within one page
+- [x] 41: Repeating genre tags and options get unique ForEach ids
+- [x] 42: Browse picker fits narrow phones and large text
+- [x] 43: Manga page details pane is not a fixed 400 pt
+- [x] 44: Sources' search field resets after a search
+- [x] 45: "Pinned only" re-runs only the screen it is toggled on
+- [x] 46: Opening a CBZ download unpacks it off the main thread
+- [x] 47: A resumed download keeps only pages saved for the same page list
+- [x] 48: Cancelling while a chapter is zipped leaves nothing behind
+- [x] 49: Background transport races, only if a test can show them
+- [x] 50: Manual library updates skip "Never" titles
+- [x] 51: Metadata refresh keeps fields the source returns empty
+- [x] 52: Mihon import picks the source language from the source id
 
 ## Log
 - 2026-11-20 15:29: started; audit filed as issues #2-#14 (QuackyPROG/ahoge)
@@ -65,3 +65,7 @@ feature: Fix the bugs from the 2026 code audit, GitHub issues #2-#14
 - 2026-11-20 16:31: 01 shipped (3267823, a196ca4), CI green; review Ship + 1 should-fix applied
 - 2026-11-20 16:43: 02 shipped (02b259e), CI green; review Ship
 - 2026-11-20 16:49: correction: built tickets one at a time with sequential CI → user wants multiple agents in parallel, merge conflicts fixed afterwards. 03 committed (489ecad) by the cancelled run, CI pending
+- 2026-11-20 19:20: all 8 lanes built, CI green per lane; merged into fix/audit (conflicts: PageProvider, reader-ui x7), integrated CI green 1e7a228 (351 tests)
+- 2026-11-20 19:20: reviews: lane nav = Fix (38), lane reader-ui = Fix (20, 19, 09 test); fixes e39a1bc 01cbe1d 9c9493a 15bbf33, CI green 15bbf33 (355 tests, run 44724888030)
+- 2026-11-20 19:20: reviews NOT done (cancelled by user): lanes memory, persist, downloads, data, ui-minor, design, and the integration merges
+- 2026-11-20 19:20: correction: full CI run per ticket/lane → user wants agents to review or run only related tests. Fact: tests take ~21 s of an ~11 min job; compile + XcodeGen install dominate
