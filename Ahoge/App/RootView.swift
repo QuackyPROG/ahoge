@@ -101,6 +101,12 @@ struct RootView: View {
         } message: {
             Text(updater.failures.joined(separator: "\n"))
         }
+        // One alert however many writes fail while it is up: a new failure only replaces the message.
+        .alert("Could not save changes", isPresented: Binding(get: { repo.lastWriteError != nil }, set: { if !$0 { repo.lastWriteError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(repo.lastWriteError ?? "")
+        }
     }
 
     /// Tabs on a phone; on a wide screen (iPad) a sidebar with the screen beside it.

@@ -21,6 +21,8 @@ final class LibraryRepository: ObservableObject {
     var didMarkRead: (([ChapterRecord]) -> Void)?
     /// Where settings that change what is saved (incognito) are read; tests swap in their own.
     var preferences: UserDefaults = .standard
+    /// The last write that failed, shown once by `RootView`; it clears it.
+    @Published var lastWriteError: String?
 
     /// Library titles and their chapters are loaded up front; other manga on first lookup.
     init(db: any DatabaseWriter) throws {
@@ -289,8 +291,14 @@ final class LibraryRepository: ObservableObject {
         }
     }
 
+    /// Never throws, so call sites stay simple; a failure is logged and kept in `lastWriteError` for the alert.
     func write(_ updates: (Database) throws -> Void) {
-        _ = try? db.write(updates)
+        do {
+            try db.write(updates)
+        } catch {
+            AppLog.logger.error("Database write failed: \(error.localizedDescription, privacy: .public)")
+            lastWriteError = error.localizedDescription
+        }
     }
 }
 

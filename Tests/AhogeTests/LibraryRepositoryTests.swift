@@ -144,4 +144,16 @@ final class LibraryRepositoryTests: XCTestCase {
         XCTAssertEqual(try queue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM download") }, 0)
         XCTAssertEqual(try queue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM excludedScanlator") }, 0)
     }
+
+    func testFailedWriteIsReportedAndASuccessfulOneIsNot() throws {
+        let repo = try repository()
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        repo.applyChapters([chapter("/c/2", 2), chapter("/c/1", 1)], to: manga)
+        let first = try XCTUnwrap(manga.sortedChapters.first)
+        repo.saveProgress(first, page: 2, pageCount: 10)
+        XCTAssertNil(repo.lastWriteError)
+        try repo.db.write { try $0.execute(sql: "DELETE FROM manga WHERE key = ?", arguments: [manga.key]) }
+        repo.saveProgress(try XCTUnwrap(manga.sortedChapters.last), page: 3, pageCount: 10)
+        XCTAssertNotNil(repo.lastWriteError)
+    }
 }
