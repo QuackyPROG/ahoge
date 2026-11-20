@@ -111,6 +111,7 @@ final class ReaderModel: ObservableObject {
         ready = false
         error = nil
         sections = []
+        prefetchesCancelled = []
         position = nil
         currentChapter = chapter
         currentPage = 0
@@ -193,7 +194,7 @@ final class ReaderModel: ObservableObject {
             }
             // Mihon starts on the next chapter a few pages before the end, so it is there when reached.
             if count - page <= 3 { loadNext(after: item.chapter, provider: provider) }
-            trimSections()
+            cancelPrefetchesBehind()
         case .end:
             if let count = sections.first(where: { $0.id == item.chapter.url })?.pages.count, count > 0 {
                 let wasRead = item.chapter.read
@@ -254,7 +255,7 @@ final class ReaderModel: ObservableObject {
                 guard generation == self.generation else { return }
                 if !sections.contains(where: { $0.id == next.url }) {
                     sections.append(Section(chapter: next, pages: pages))
-                    trimSections()
+                    cancelPrefetchesBehind()
                 }
                 let ahead = Pref.readerPreloadOnlyOnWiFi.value() && provider.downloads.isOnExpensiveNetwork ? 1 : 3
                 for (index, page) in pages.prefix(ahead).enumerated() {
@@ -266,17 +267,19 @@ final class ReaderModel: ObservableObject {
         }
     }
 
-    /// Keeps only the chapters before, at and after the current one loaded, so a long run of
-    /// chapters does not keep every page; prefetches still waiting for the others are dropped.
-    private func trimSections() {
-        guard let current = sections.firstIndex(where: { $0.id == currentChapter.url }) else { return }
-        let kept = max(current - 1, 0)...min(current + 1, sections.count - 1)
-        guard kept.count < sections.count else { return }
-        let removed = sections.indices.filter { !kept.contains($0) }.flatMap { sections[$0].pages }
+    /// Chapters whose waiting prefetches were already dropped.
+    private var prefetchesCancelled: Set<String> = []
+
+    /// Drops the waiting prefetches of chapters more than one before the current one. Their sections
+    /// stay: removing content above the screen moves the strip by a whole chapter mid-scroll, which
+    /// skipped the reader past the next chapter. Their decoded pages are freed once off screen anyway.
+    private func cancelPrefetchesBehind() {
+        guard let current = sections.firstIndex(where: { $0.id == currentChapter.url }), current >= 2 else { return }
+        let behind = sections[..<(current - 1)].filter { prefetchesCancelled.insert($0.id).inserted }
+        guard !behind.isEmpty else { return }
         let transform = transform
-        let keys = Set(removed.map { ImageLoader.cacheKey($0.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform) })
+        let keys = Set(behind.flatMap(\.pages).map { ImageLoader.cacheKey($0.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform) })
         Task { await PrefetchLimiter.shared.cancel(keys) }
-        sections = Array(sections[kept])
     }
 
     /// Loads a page below the one on screen, as it will be shown, and notes its untransformed size.

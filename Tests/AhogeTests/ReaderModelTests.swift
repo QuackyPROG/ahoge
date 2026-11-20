@@ -157,7 +157,9 @@ final class ReaderModelTests: XCTestCase {
         XCTAssertEqual(pageItems(model, index: 0).count, 3)
     }
 
-    func testOnlyThePreviousCurrentAndNextChapterStayLoaded() async throws {
+    /// Removing a chapter above the screen moves the strip by that chapter's height mid-scroll,
+    /// which skipped the reader past the next chapter and marked it read.
+    func testChaptersAboveStayLoadedWhileReadingOn() async throws {
         let reader = try reader(chapters: 5, pageCount: 3, start: 1)
         let model = reader.model
         await model.open(reader.manga.chapter(1), provider: reader.provider, repo: reader.repo)
@@ -165,10 +167,9 @@ final class ReaderModelTests: XCTestCase {
             model.position = ReaderModel.pageID("/c/\(number)", 2)
             model.positionChanged(repo: reader.repo, provider: reader.provider)
             try await waitUntil { !model.isLoadingNext && model.sections.contains { $0.id == "/c/\(number + 1)" } }
-            XCTAssertLessThanOrEqual(model.sections.count, 3)
         }
         XCTAssertEqual(model.currentChapter.url, "/c/3")
-        XCTAssertEqual(model.sections.map(\.id), ["/c/2", "/c/3", "/c/4"])
+        XCTAssertEqual(model.sections.map(\.id), ["/c/1", "/c/2", "/c/3", "/c/4"])
         let position = try XCTUnwrap(model.position)
         XCTAssertTrue(model.items.contains { $0.id == position })
     }
