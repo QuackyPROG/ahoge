@@ -24,7 +24,7 @@ struct MigrateSheet: View {
                 }
                 .themedRows()
                 Section("Carry over") {
-                    Toggle("Chapters (read and bookmarks)", isOn: $options.chapters)
+                    Toggle("Chapters (read, progress, bookmarks, history)", isOn: $options.chapters)
                     Toggle("Categories", isOn: $options.categories)
                     Toggle("Notes", isOn: $options.notes)
                     Toggle("Custom cover", isOn: $options.customCover)
