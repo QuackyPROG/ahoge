@@ -123,9 +123,11 @@ final class ImageLoaderTests: XCTestCase {
         XCTAssertEqual(first.cgImage?.width, 400)
         XCTAssertLessThanOrEqual(first.cgImage?.height ?? .max, 4096)
         XCTAssertEqual(ImageMemoryCache.shared.size(of: url), CGSize(width: 800, height: 20000))
-        for index in 1..<5 {
+        // At 400 wide the strip is 400 × 10000: three slices (4096, 4096, 1808).
+        for index in 1..<3 {
             XCTAssertNotNil(ImageMemoryCache.shared[ImageLoader.sliceKey(url, index, maxPixelWidth: 400)])
         }
+        XCTAssertNil(ImageMemoryCache.shared[ImageLoader.sliceKey(url, 3, maxPixelWidth: 400)])
     }
 
     func testShortPageIsOneSlice() async throws {
