@@ -490,7 +490,10 @@ struct ReaderView: View {
 
     private var currentImage: UIImage? {
         guard let pages = model.currentSection?.pages, pages.indices.contains(model.currentPage) else { return nil }
-        return ImageMemoryCache.shared[pages[model.currentPage].url]
+        // With a transform on, only the transformed copy is cached.
+        let url = pages[model.currentPage].url
+        return ImageMemoryCache.shared[ImageLoader.cacheKey(url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: pageTransform(paged: mode.isPaged))]
+            ?? ImageMemoryCache.shared[url]
     }
 
     /// The chapter on the source's website.

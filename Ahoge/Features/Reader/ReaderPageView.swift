@@ -80,13 +80,13 @@ struct ReaderPageView: View {
         }
         .task(id: "\(cacheKey)#\(attempt)") {
             let key = cacheKey
-            if let plain = ImageMemoryCache.shared[page.url] { onSize(plain.size) }
+            if let size = ImageMemoryCache.shared.size(of: page.url) { onSize(size) }
             guard image == nil || loadedKey != key else { return }
             failed = false
             do {
                 let loaded = try await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform)
                 if loaded.size.height > 0 { PageAspect.known[key] = loaded.size.width / loaded.size.height }
-                if let plain = ImageMemoryCache.shared[page.url] { onSize(plain.size) }
+                if let size = ImageMemoryCache.shared.size(of: page.url) { onSize(size) }
                 image = loaded
                 loadedKey = key
             } catch {

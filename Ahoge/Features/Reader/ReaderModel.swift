@@ -253,14 +253,15 @@ final class ReaderModel: ObservableObject {
         }
     }
 
-    /// Loads a page below the one on screen and notes its size; the transformed copy follows.
+    /// Loads a page below the one on screen, as it will be shown, and notes its untransformed size.
     private func prefetch(_ page: SourcePage, id: String) {
         let transform = transform
+        let key = ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
         Task {
-            await PrefetchLimiter.shared.enqueue(page.url) { [weak self] in
-                guard let image = try? await ImageLoader.shared.image(page.url, headers: page.headers, priority: .utility) else { return }
-                await self?.learnSize(image.size, of: id)
-                if !transform.isIdentity { await ImageLoader.shared.prefetch(page.url, headers: page.headers, transform: transform) }
+            await PrefetchLimiter.shared.enqueue(key) { [weak self] in
+                guard (try? await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform, priority: .utility)) != nil,
+                      let size = ImageMemoryCache.shared.size(of: page.url) else { return }
+                await self?.learnSize(size, of: id)
             }
         }
     }

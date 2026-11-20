@@ -25,7 +25,26 @@ final class ImageMemoryCache: @unchecked Sendable {
         cache.setObject(image, forKey: url as NSString, cost: cost)
     }
 
+    func remove(_ url: String) { cache.removeObject(forKey: url as NSString) }
+
     func removeAll() { cache.removeAllObjects() }
+
+    /// Untransformed sizes by plain cache key, kept after the image itself is gone (a transformed
+    /// page does not keep its plain copy), so wide pages are still recognised.
+    private var sizes: [String: CGSize] = [:]
+    private let sizesLock = NSLock()
+
+    func size(of url: String) -> CGSize? {
+        sizesLock.lock()
+        defer { sizesLock.unlock() }
+        return sizes[url]
+    }
+
+    func recordSize(_ size: CGSize, for url: String) {
+        sizesLock.lock()
+        defer { sizesLock.unlock() }
+        sizes[url] = size
+    }
 }
 
 /// Loads images with per-request headers (Referer), memory and disk cached, de-duplicated.
@@ -67,11 +86,15 @@ actor ImageLoader {
         // Awaiting a running low-priority prefetch raises its priority to ours.
         if let running = inFlight[key] { return try await running.value }
         guard transform.isIdentity else {
-            // The plain page is fetched and cached once; each transform of it is made off the actor.
+            // The plain page is fetched once (callers asking at the same time share it); each transform
+            // of it is made off the actor. Only the transformed copy stays in memory.
+            let plainKey = Self.cacheKey(url, maxPixelWidth: maxPixelWidth)
             let base = try await image(url, headers: headers, maxPixelWidth: maxPixelWidth, priority: priority)
             if let hit = ImageMemoryCache.shared[key] { return hit }
             if let running = inFlight[key] { return try await running.value }
-            return try await run(Task.detached(priority: priority) { () throws -> UIImage in transform.apply(to: base) }, key: key)
+            let made = try await run(Task.detached(priority: priority) { () throws -> UIImage in transform.apply(to: base) }, key: key)
+            ImageMemoryCache.shared.remove(plainKey)
+            return made
         }
         let session = session
         let task = Task.detached(priority: priority) { () throws -> UIImage in
@@ -91,7 +114,9 @@ actor ImageLoader {
             guard let image = Self.decode(data, maxPixelWidth: maxPixelWidth) else { throw URLError(.cannotDecodeContentData) }
             return image
         }
-        return try await run(task, key: key)
+        let image = try await run(task, key: key)
+        ImageMemoryCache.shared.recordSize(image.size, for: key)
+        return image
     }
 
     /// Shares `task` with other callers of `key` while it runs, then caches what it made.
@@ -101,14 +126,6 @@ actor ImageLoader {
         let image = try await task.value
         ImageMemoryCache.shared.insert(image, for: key)
         return image
-    }
-
-    /// Reader prefetches run below the page on screen, so they never slow it down, two at a time.
-    func prefetch(_ url: String, headers: [String: String], transform: ImageTransform = .plain) async {
-        let key = Self.cacheKey(url, maxPixelWidth: Self.maxPixelWidth, transform: transform)
-        await PrefetchLimiter.shared.enqueue(key) { [self] in
-            _ = try? await image(url, headers: headers, transform: transform, priority: .utility)
-        }
     }
 
     /// Bytes the image cache holds on disk.

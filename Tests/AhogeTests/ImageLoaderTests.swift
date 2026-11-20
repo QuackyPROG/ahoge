@@ -46,6 +46,18 @@ final class ImageLoaderTests: XCTestCase {
         XCTAssertNil(ImageMemoryCache.shared[key])
     }
 
+    func testTransformedPageKeepsOnlyTheTransformedCopyAndTheSize() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).png")
+        try png(width: 300, height: 450).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let url = file.absoluteString
+        let transform = ImageTransform(grayscale: true)
+        _ = try await ImageLoader.shared.image(url, transform: transform)
+        XCTAssertNotNil(ImageMemoryCache.shared[ImageLoader.cacheKey(url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)])
+        XCTAssertNil(ImageMemoryCache.shared[url])
+        XCTAssertEqual(ImageMemoryCache.shared.size(of: url), CGSize(width: 300, height: 450))
+    }
+
     func testGarbageIsNil() {
         XCTAssertNil(ImageLoader.decode(Data("not an image".utf8), maxPixelWidth: 600))
     }
