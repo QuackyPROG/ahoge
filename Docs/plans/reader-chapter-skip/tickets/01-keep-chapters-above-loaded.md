@@ -1,6 +1,6 @@
 # 01 — Keep the chapters above loaded so reading on never skips a chapter
 
-- **Status:** in-progress
+- **Status:** done
 - **Blocked by:** none
 - **Change type:** logic
 - **Model:** sonnet  <!-- the cause is a SwiftUI scroll behaviour, not visible in the diff -->
