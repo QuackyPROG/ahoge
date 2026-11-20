@@ -24,7 +24,9 @@ private struct GlobalSearchScreen: View {
     @Environment(\.palette) private var palette
     private let migrating: MangaRef?
     /// The result picked to migrate to.
-    @State private var target: MangaRef?
+    @State private var pick: MigrationPick?
+    /// A result was picked but the entry being migrated has left the database.
+    @State private var oldGone = false
 
     init(initialQuery: String, migrating: MangaRef?, makeSearch: @autoclosure @escaping () -> GlobalSearch) {
         self.migrating = migrating
@@ -54,10 +56,11 @@ private struct GlobalSearchScreen: View {
         .onSubmit(of: .search) { start() }
         .onChange(of: pinnedOnly) { start() }
         .task { if searched.isEmpty { start() } }
-        .sheet(isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } })) {
-            if let target, let migrating, let old = repo.manga(sourceId: migrating.sourceId, url: migrating.url) {
-                MigrateSheet(old: old, target: target) { navigator.finishMigration(from: migrating, to: $0) }
-            }
+        .sheet(item: $pick) { pick in
+            MigrateSheet(old: pick.old, target: pick.target) { navigator.finishMigration(from: pick.old.ref, to: $0) }
+        }
+        .alert("This title is no longer in your library.", isPresented: $oldGone) {
+            Button("OK", role: .cancel) {}
         }
     }
 
@@ -144,7 +147,7 @@ private struct GlobalSearchScreen: View {
                     let card = MangaCard(title: stub.title, cover: stub.cover, headers: headers, inLibrary: inLibrary(ref))
                         .frame(width: 110)
                     if migrating != nil {
-                        Button { target = ref } label: { card }
+                        Button { choose(ref) } label: { card }
                             .buttonStyle(PressableCardStyle())
                     } else {
                         NavigationLink(value: Route.manga(ref)) { card }
@@ -154,6 +157,12 @@ private struct GlobalSearchScreen: View {
             }
             .padding(.horizontal)
         }
+    }
+
+    private func choose(_ target: MangaRef) {
+        guard let migrating else { return }
+        pick = MigrationPick.make(migrating: migrating, target: target, repo: repo)
+        oldGone = pick == nil
     }
 
     private func inLibrary(_ ref: MangaRef) -> Bool {

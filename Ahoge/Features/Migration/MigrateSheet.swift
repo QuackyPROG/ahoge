@@ -103,6 +103,18 @@ struct MigrateSheet: View {
     }
 }
 
+/// A migrate search result picked: the old entry as found at tap time, and the copy to move it to.
+struct MigrationPick: Identifiable {
+    let old: LibraryManga
+    let target: MangaRef
+    var id: String { target.sourceId + "\n" + target.url }
+
+    /// nil when the old entry is gone (for example after Clear database), so no empty sheet opens.
+    @MainActor static func make(migrating: MangaRef, target: MangaRef, repo: LibraryRepository) -> MigrationPick? {
+        repo.manga(sourceId: migrating.sourceId, url: migrating.url).map { MigrationPick(old: $0, target: target) }
+    }
+}
+
 /// More → Migrate: sources with titles in the library, then their titles (Mihon's source migration).
 struct MigrateSourcesView: View {
     @EnvironmentObject private var repo: LibraryRepository
