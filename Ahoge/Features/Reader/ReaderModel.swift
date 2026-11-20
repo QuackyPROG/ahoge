@@ -72,6 +72,8 @@ final class ReaderModel: ObservableObject {
     private var navigator: ChapterNavigator!
     /// Sizes of pages decoded so far, by page id.
     private var pageSizes: [String: CGSize] = [:]
+    /// Bumped by each `open`, so a next chapter still loading for the chapter before is dropped.
+    private var generation = 0
 
     init(sourceId: String, manga: LibraryManga, start: ChapterRecord, rules: SkipRules = .current(), display: ChapterDisplay? = nil) {
         self.sourceId = sourceId
@@ -97,6 +99,7 @@ final class ReaderModel: ObservableObject {
 
     /// Shows only `chapter`, replacing what was loaded, at `page` (its saved page when nil).
     func open(_ chapter: ChapterRecord, page: Int? = nil, provider: PageProvider) async {
+        generation += 1
         ready = false
         error = nil
         sections = []
@@ -231,10 +234,12 @@ final class ReaderModel: ObservableObject {
     private func loadNext(after chapter: ChapterRecord, provider: PageProvider) {
         guard chapter.url == sections.last?.id, !isLoadingNext, error == nil, let next = self.chapter(after: chapter) else { return }
         isLoadingNext = true
+        let generation = generation
         Task {
             defer { isLoadingNext = false }
             do {
                 let pages = try await provider.pages(for: next).map(\.sourcePage)
+                guard generation == self.generation else { return }
                 if !sections.contains(where: { $0.id == next.url }) {
                     sections.append(Section(chapter: next, pages: pages))
                 }
@@ -243,7 +248,7 @@ final class ReaderModel: ObservableObject {
                     prefetch(page, id: Self.pageID(next.url, index))
                 }
             } catch {
-                self.error = error
+                if generation == self.generation { self.error = error }
             }
         }
     }

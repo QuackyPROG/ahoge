@@ -20,9 +20,17 @@ enum ReaderPage: Equatable {
 struct PageProvider {
     let sources: SourceManager
     let downloads: DownloadManager
+    /// A chapter's pages from its source; tests replace it to decide when a lookup finishes.
+    let remotePages: (ChapterRecord) async throws -> [SourcePage]
+
+    init(sources: SourceManager, downloads: DownloadManager, remotePages: ((ChapterRecord) async throws -> [SourcePage])? = nil) {
+        self.sources = sources
+        self.downloads = downloads
+        self.remotePages = remotePages ?? { chapter in try await sources.source(chapter.sourceId).pages(url: chapter.url) }
+    }
 
     func pages(for chapter: ChapterRecord) async throws -> [ReaderPage] {
         if let files = downloads.localPages(chapter.key) { return files.map(ReaderPage.local) }
-        return try await sources.source(chapter.sourceId).pages(url: chapter.url).map(ReaderPage.remote)
+        return try await remotePages(chapter).map(ReaderPage.remote)
     }
 }
