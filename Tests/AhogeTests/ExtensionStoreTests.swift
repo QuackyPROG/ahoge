@@ -122,4 +122,31 @@ final class ExtensionStoreTests: XCTestCase {
         XCTAssertTrue(reloaded.repos.isEmpty)
         XCTAssertTrue(reloaded.installed.isEmpty)
     }
+
+    func testUnreadableStateIsSetAsideAndNeverOverwritten() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let state = directory.appendingPathComponent("state.json")
+        let garbage = Data("{not json".utf8)
+        try garbage.write(to: state)
+        let store = ExtensionStore(directory: directory, client: RepoClient(transport: stub(index: { self.index() }, script: { self.script })))
+        XCTAssertTrue(store.repos.isEmpty)
+        XCTAssertNotNil(store.lastError)
+        let copies = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasPrefix("state.json.unreadable-") }
+        XCTAssertEqual(copies.count, 1)
+        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent(try XCTUnwrap(copies.first))), garbage)
+        try await store.addRepo(indexURL)
+        store.removeRepo(indexURL)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: state.path))
+        XCTAssertNotNil(store.lastError)
+    }
+
+    func testNoStateFileIsAFreshStartThatSaves() async throws {
+        let store = ExtensionStore(directory: directory, client: RepoClient(transport: stub(index: { self.index() }, script: { self.script })))
+        XCTAssertTrue(store.repos.isEmpty)
+        XCTAssertNil(store.lastError)
+        try await store.addRepo(indexURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("state.json").path))
+        let reloaded = ExtensionStore(directory: directory, client: RepoClient(transport: StubTransport.text("", status: 500)))
+        XCTAssertEqual(reloaded.repos.map(\.url), [indexURL])
+    }
 }

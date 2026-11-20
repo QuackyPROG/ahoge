@@ -70,7 +70,7 @@ struct RootView: View {
             PrivacyShield.setVisible((secureScreen || Pref.requireUnlock.value()) && phase != .active)
             AppLock.shared.phaseChanged(to: phase)
             if phase == .background {
-                AutoBackup.runIfDue(repo: repo, store: extensions)
+                AutoBackup.runInBackground(repo: repo, store: extensions)
                 BackgroundRefresh.schedule()
             }
             downloads.setBackground(phase == .background)
@@ -100,6 +100,12 @@ struct RootView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(updater.failures.joined(separator: "\n"))
+        }
+        // One alert however many writes fail while it is up: a new failure only replaces the message.
+        .alert("Could not save changes", isPresented: Binding(get: { repo.lastWriteError != nil }, set: { if !$0 { repo.lastWriteError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(repo.lastWriteError ?? "")
         }
     }
 

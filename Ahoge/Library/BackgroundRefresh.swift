@@ -85,7 +85,9 @@ enum BackgroundRefresh {
             task.setTaskCompleted(success: false)
             return
         }
-        AutoBackup.runIfDue(repo: context.repo, store: context.extensions)
-        task.setTaskCompleted(success: true)
+        let work = Task { @MainActor in await AutoBackup.runIfDue(repo: context.repo, store: context.extensions) }
+        // Cancelling stops the write before it starts; runIfDue then returns false.
+        task.expirationHandler = { work.cancel() }
+        Task { @MainActor in task.setTaskCompleted(success: await work.value) }
     }
 }
