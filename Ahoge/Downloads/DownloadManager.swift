@@ -417,14 +417,22 @@ final class DownloadManager: ObservableObject {
             let zip = Pref.saveAsCBZ.value(in: defaults)
             let store = self.store
             let count = pages.count
-            let result = try await Task.detached(priority: .utility) { try store.finish(location, pages: count, zip: zip) }.value
-            guard isCurrent(key, worker) else { return }
+            // Cancelling the worker cancels the zipping too (a detached task does not inherit it).
+            let finishing = Task.detached(priority: .utility) { try store.finish(location, pages: count, zip: zip, isCancelled: { Task.isCancelled }) }
+            let result = try await withTaskCancellationHandler { try await finishing.value } onCancel: { finishing.cancel() }
+            guard isCurrent(key, worker) else { return removeIfCancelled(key, location) }
             completed(item, pages: result.pages, bytes: result.bytes)
         } catch {
-            guard isCurrent(key, worker), let index = queue.firstIndex(where: { $0.chapterKey == key }) else { return }
+            guard isCurrent(key, worker) else { return removeIfCancelled(key, location) }
+            guard let index = queue.firstIndex(where: { $0.chapterKey == key }) else { return }
             queue[index].state = .error(error.localizedDescription)
             AppLog.logger.error("Download failed (\(key, privacy: .public)): \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// A chapter cancelled while zipping can get its archive moved into place after `cancel` removed its files.
+    private func removeIfCancelled(_ key: String, _ location: DownloadStore.Location) {
+        if !queue.contains(where: { $0.chapterKey == key }) { store.remove(location) }
     }
 
     /// One page: three tries, waiting longer after each failure.

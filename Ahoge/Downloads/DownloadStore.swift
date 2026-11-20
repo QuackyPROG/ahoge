@@ -22,6 +22,8 @@ struct DownloadStore: Sendable {
     static let manifest = ".pages"
     /// Test probe: whether the last CBZ unpack ran on the main thread.
     nonisolated(unsafe) static var lastUnpackOnMainThread: Bool?
+    /// Test hook: runs once a chapter is zipped, before the archive is moved into place.
+    nonisolated(unsafe) static var willPlaceArchive: (() -> Void)?
 
     /// Keys hold URLs, which are no good as file names; a short hash is.
     static func hash(_ key: String) -> String { String(Data(key.utf8).sha256Hex.prefix(24)) }
@@ -94,7 +96,8 @@ struct DownloadStore: Sendable {
 
     /// Keeps one file per page of a `count`-page list and clears the partial mark, then, when asked,
     /// zips the folder into a .cbz and removes it. Returns the page count and the bytes on disk.
-    func finish(_ location: Location, pages count: Int, zip: Bool) throws -> (pages: Int, bytes: Int64) {
+    /// Cancelled while zipping, it leaves neither the folder nor an archive and throws `CancellationError`.
+    func finish(_ location: Location, pages count: Int, zip: Bool, isCancelled: () -> Bool) throws -> (pages: Int, bytes: Int64) {
         let fm = FileManager.default
         let directory = chapterDirectory(location)
         Self.prune(directory, pages: count)
@@ -109,6 +112,12 @@ struct DownloadStore: Sendable {
         let names = try fm.contentsOfDirectory(atPath: directory.path).filter { !$0.hasPrefix(".") }.sorted()
         let files = try names.map { (name: $0, data: try Data(contentsOf: directory.appendingPathComponent($0), options: .alwaysMapped)) }
         try ZipArchive.write(files: files, to: temporary)
+        Self.willPlaceArchive?()
+        guard !isCancelled() else {
+            try? fm.removeItem(at: temporary)
+            try? fm.removeItem(at: directory)
+            throw CancellationError()
+        }
         try? fm.removeItem(at: target)
         try fm.moveItem(at: temporary, to: target)
         try fm.removeItem(at: directory)
@@ -151,6 +160,7 @@ struct DownloadStore: Sendable {
         let fm = FileManager.default
         try? fm.removeItem(at: chapterDirectory(location))
         try? fm.removeItem(at: archive(location))
+        try? fm.removeItem(at: archive(location).appendingPathExtension("tmp"))
         try? fm.removeItem(at: unpacked(location))
         // Drop the manga folder once it holds nothing.
         let manga = mangaDirectory(location)

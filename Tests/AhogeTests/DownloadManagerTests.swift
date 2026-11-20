@@ -164,6 +164,40 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertEqual(try repo.db.read { try Int.fetchOne($0, sql: "SELECT pageCount FROM download") }, 2)
     }
 
+    func testCancelWhileZippingLeavesNothing() async throws {
+        Pref.saveAsCBZ.set(true, in: defaults)
+        let repo = try LibraryRepository.inMemory()
+        let manga = SourceFixture.manga(in: repo, chapters: 1)
+        let downloads = manager(repo, SourceManager(extensions: try SourceFixture.extensions()), transport())
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        DownloadStore.willPlaceArchive = {
+            entered.signal()
+            release.wait()
+        }
+        defer { DownloadStore.willPlaceArchive = nil }
+
+        downloads.enqueue([manga.chapter(1)])
+        var waited = 0
+        while entered.wait(timeout: .now()) == .timedOut, waited < 1000 {
+            waited += 1
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertLessThan(waited, 1000, "the download never reached zipping")
+        downloads.cancel([manga.chapter(1).key])
+        release.signal()
+        await downloads.waitUntilIdle()
+        // The zipping task outlives the cancelled worker; give it time to finish.
+        var tries = 0
+        while !filesOnDisk().isEmpty, tries < 200 {
+            tries += 1
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(filesOnDisk(), [])
+        downloads.reindex()
+        XCTAssertFalse(downloads.isDownloaded(manga.chapter(1).key))
+    }
+
     func testReindexRestoresRowsFromDiskAndIgnoresPartialChapters() async throws {
         let repo = try LibraryRepository.inMemory()
         let manga = SourceFixture.manga(in: repo, chapters: 2)
