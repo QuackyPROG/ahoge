@@ -15,17 +15,19 @@ struct GlobalSearchView: View {
 private struct GlobalSearchScreen: View {
     @EnvironmentObject private var store: ExtensionStore
     @EnvironmentObject private var repo: LibraryRepository
+    @EnvironmentObject private var navigator: AppNavigator
     @StateObject private var search: GlobalSearch
     @State private var query: String
     @State private var searched = ""
-    @AppStorage(Pref.globalSearchPinnedOnly.name) private var pinnedOnly = false
+    /// Per screen, so toggling re-runs only this search; new screens start from the last choice.
+    @State private var pinnedOnly = Pref.globalSearchPinnedOnly.value()
     @State private var onlyWithResults = false
     @Environment(\.palette) private var palette
     private let migrating: MangaRef?
     /// The result picked to migrate to.
-    @State private var target: MangaRef?
-    /// The new entry after a migration, opened in place of the search.
-    @State private var migrated: MangaRef?
+    @State private var pick: MigrationPick?
+    /// A result was picked but the entry being migrated has left the database.
+    @State private var oldGone = false
 
     init(initialQuery: String, migrating: MangaRef?, makeSearch: @autoclosure @escaping () -> GlobalSearch) {
         self.migrating = migrating
@@ -53,14 +55,17 @@ private struct GlobalSearchScreen: View {
         .themedScreen()
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search all sources")
         .onSubmit(of: .search) { start() }
-        .onChange(of: pinnedOnly) { start() }
-        .task { if searched.isEmpty { start() } }
-        .sheet(isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } })) {
-            if let target, let migrating, let old = repo.manga(sourceId: migrating.sourceId, url: migrating.url) {
-                MigrateSheet(old: old, target: target) { migrated = $0 }
-            }
+        .onChange(of: pinnedOnly) { _, on in
+            Pref.globalSearchPinnedOnly.set(on)
+            start()
         }
-        .navigationDestination(item: $migrated) { MangaDetailView(ref: $0) }
+        .task { if searched.isEmpty { start() } }
+        .sheet(item: $pick) { pick in
+            MigrateSheet(old: pick.old, target: pick.target) { navigator.finishMigration(from: pick.old.ref, to: $0) }
+        }
+        .alert("This title is no longer in your library.", isPresented: $oldGone) {
+            Button("OK", role: .cancel) {}
+        }
     }
 
     private func start() {
@@ -146,7 +151,7 @@ private struct GlobalSearchScreen: View {
                     let card = MangaCard(title: stub.title, cover: stub.cover, headers: headers, inLibrary: inLibrary(ref))
                         .frame(width: 110)
                     if migrating != nil {
-                        Button { target = ref } label: { card }
+                        Button { choose(ref) } label: { card }
                             .buttonStyle(PressableCardStyle())
                     } else {
                         NavigationLink(value: Route.manga(ref)) { card }
@@ -156,6 +161,12 @@ private struct GlobalSearchScreen: View {
             }
             .padding(.horizontal)
         }
+    }
+
+    private func choose(_ target: MangaRef) {
+        guard let migrating else { return }
+        pick = MigrationPick.make(migrating: migrating, target: target, repo: repo)
+        oldGone = pick == nil
     }
 
     private func inLibrary(_ ref: MangaRef) -> Bool {

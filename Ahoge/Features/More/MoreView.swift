@@ -64,7 +64,7 @@ struct MoreView: View {
                     NavigationLink { UpdateSettingsView() } label: {
                         Label { Text("Library updates") } icon: { SettingsIcon(systemName: "arrow.triangle.2.circlepath", color: .orange) }
                     }
-                    NavigationLink { MigrateSourcesView() } label: {
+                    NavigationLink(value: Route.migrateSources) {
                         Label { Text("Migrate") } icon: { SettingsIcon(systemName: "arrow.left.arrow.right", color: .green) }
                     }
                     Picker(selection: $defaultCategory) {

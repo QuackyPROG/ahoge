@@ -13,6 +13,11 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(SettingsIndex.search("face id").map(\.title).contains("Require unlock"))
     }
 
+    func testMigrateOpensTheMigrateSources() {
+        let entry = SettingsIndex.search("migrate").first { $0.title == "Migrate" }
+        XCTAssertEqual(entry?.destination, .migrate)
+    }
+
     func testBlankQueryFindsNothing() {
         XCTAssertTrue(SettingsIndex.search("   ").isEmpty)
     }

@@ -7,6 +7,7 @@ struct SourcesView: View {
     @State private var incognito = Pref.incognitoSources.value()
     @State private var visibility = SourceVisibility.current()
     @State private var globalQuery = ""
+    @State private var searching = false
     @State private var openingLink = false
     @State private var linkText = ""
     @State private var linkFailed = false
@@ -57,10 +58,14 @@ struct SourcesView: View {
             }
         }
         .themedScreen()
-        .searchable(text: $globalQuery, prompt: "Search all sources")
+        .searchable(text: $globalQuery, isPresented: $searching, prompt: "Search all sources")
         .onSubmit(of: .search) {
             let query = globalQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !query.isEmpty { navigator.push(.globalSearch(query)) }
+            guard !query.isEmpty else { return }
+            navigator.push(.globalSearch(query))
+            // Back on Sources shows the list again, not the old query.
+            globalQuery = ""
+            searching = false
         }
         .alert("Open link", isPresented: $openingLink) {
             TextField("https://…", text: $linkText)

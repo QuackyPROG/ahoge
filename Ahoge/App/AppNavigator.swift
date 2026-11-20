@@ -50,6 +50,11 @@ final class AppNavigator: ObservableObject {
         paths[tab, default: []].append(route)
     }
 
+    /// After migrating `old` to `new` on the selected tab: Back never returns to a search for the old entry.
+    func finishMigration(from old: MangaRef, to new: MangaRef) {
+        paths[tab] = .finishingMigration(path(for: tab), from: old, to: new)
+    }
+
     /// Shows `route` on top of the Library tab.
     func open(_ route: Route) {
         tab = .library
@@ -70,5 +75,22 @@ final class AppNavigator: ObservableObject {
         case .search(let query): open(.globalSearch(query))
         case .addRepo(let url): pendingRepo = url
         }
+    }
+}
+
+extension [Route] {
+    /// Mihon's rule: the new entry's page replaces the old page and its migrate search. Started from
+    /// More > Migrate, the migrate search and everything above it close, back to the titles list.
+    static func finishingMigration(_ path: [Route], from old: MangaRef, to new: MangaRef) -> [Route] {
+        // By source and url: a page opened from a link has no title or cover yet.
+        func isOld(_ ref: MangaRef) -> Bool { ref.sourceId == old.sourceId && ref.url == old.url }
+        guard let index = path.lastIndex(where: {
+            guard case .migrate(let ref) = $0 else { return false }
+            return isOld(ref)
+        }) else { return path }
+        if index > 0, case .manga(let ref) = path[index - 1], isOld(ref) {
+            return Array(path[..<(index - 1)]) + [.manga(new)]
+        }
+        return Array(path[..<index])
     }
 }

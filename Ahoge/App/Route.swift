@@ -13,6 +13,12 @@ enum Route: Hashable {
     case extensionDetails(String)
     /// Global search for a library entry's title, other sources only; a result opens the migration options.
     case migrate(MangaRef)
+    /// More > Migrate: sources with titles in the library.
+    case migrateSources
+    /// One source's library titles to pick for migration.
+    case migrateTitles(String)
+    /// Updates > Upcoming: when the next library update checks each title.
+    case upcoming
 }
 
 struct RouteView: View {
@@ -27,6 +33,9 @@ struct RouteView: View {
         case .globalSearch(let query): GlobalSearchView(query: query)
         case .extensionDetails(let id): ExtensionDetailsView(sourceId: id)
         case .migrate(let ref): GlobalSearchView(query: ref.title, migrating: ref)
+        case .migrateSources: MigrateSourcesView()
+        case .migrateTitles(let id): MigrateTitlesView(sourceId: id)
+        case .upcoming: UpcomingView()
         }
     }
 }
