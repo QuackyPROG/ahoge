@@ -9,7 +9,6 @@ struct HistoryView: View {
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @State private var entries: [HistoryEntry] = []
     @State private var search = ""
-    @State private var reading: ChapterRecord?
     @State private var target: HistoryEntry?
     @State private var confirmRemove = false
     @State private var confirmClear = false
@@ -69,9 +68,7 @@ struct HistoryView: View {
             }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
-            .fullScreenCover(item: $reading, onDismiss: reload) { chapter in
-                if let manga = chapter.manga { ReaderView(sourceId: manga.sourceId, manga: manga, chapter: chapter) }
-            }
+            .onChange(of: navigator.reader?.id) { _, open in if open == nil { reload() } }
             // Reading from another tab changes history; reload whenever this tab shows.
             .onAppear(perform: reload)
         }
@@ -81,7 +78,7 @@ struct HistoryView: View {
 
     /// The same chapter until it is finished, then the next; the last chapter again when none is newer.
     private func resume(_ entry: HistoryEntry) {
-        reading = entry.resumeChapter ?? entry.chapter
+        navigator.read(entry.resumeChapter ?? entry.chapter, in: entry.manga)
     }
 
     private func referer(_ manga: LibraryManga) -> [String: String] {

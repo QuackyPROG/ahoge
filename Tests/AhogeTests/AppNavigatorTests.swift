@@ -42,4 +42,27 @@ final class AppNavigatorTests: XCTestCase {
         XCTAssertEqual(navigator.tab, .library)
         XCTAssertEqual(navigator.pendingRoute, .manga(one))
     }
+    func testReadOpensTheReaderAndCloseReaderClearsIt() {
+        let navigator = AppNavigator()
+        let manga = LibraryManga(sourceId: "en.demo", url: "/series/one", title: "One", coverUrl: "")
+        let chapter = ChapterRecord(manga: manga, state: ChapterState(url: "/c/1", name: "Ch 1", number: 1, read: false, lastPageRead: 0, sourceOrder: 0))
+        navigator.read(chapter, in: manga)
+        XCTAssertTrue(navigator.reader?.manga === manga)
+        XCTAssertTrue(navigator.reader?.chapter === chapter)
+        XCTAssertEqual(navigator.reader?.sourceId, "en.demo")
+        navigator.closeReader()
+        XCTAssertNil(navigator.reader)
+    }
+    func testTheReaderHoldsItsMangaWhenNothingElseDoes() {
+        let navigator = AppNavigator()
+        weak var held: LibraryManga?
+        do {
+            let manga = LibraryManga(sourceId: "en.demo", url: "/series/one", title: "One", coverUrl: "")
+            let chapter = ChapterRecord(manga: manga, state: ChapterState(url: "/c/1", name: "Ch 1", number: 1, read: false, lastPageRead: 0, sourceOrder: 0))
+            held = manga
+            navigator.read(chapter, in: manga)
+        }
+        XCTAssertNotNil(held)
+        XCTAssertEqual(navigator.reader?.manga.title, "One")
+    }
 }

@@ -22,7 +22,6 @@ struct LibraryView: View {
     @AppStorage(Pref.libraryContinueButton.name) private var continueButton = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @EnvironmentObject private var navigator: AppNavigator
-    @State private var reading: (manga: LibraryManga, chapter: ChapterRecord)?
     @State private var search = ""
     @State private var selecting = false
     @State private var selection = Set<String>()
@@ -143,9 +142,6 @@ struct LibraryView: View {
             } message: {
                 Text("These titles are no longer in your library.")
             }
-            .fullScreenCover(isPresented: Binding(get: { reading != nil }, set: { if !$0 { reading = nil } })) {
-                if let reading { ReaderView(sourceId: reading.manga.sourceId, manga: reading.manga, chapter: reading.chapter) }
-            }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
             // A notification tap (or deep link) asked to show a screen.
@@ -161,7 +157,7 @@ struct LibraryView: View {
         let unread = Dictionary(items.map { ($0.key, $0.unreadCount) }, uniquingKeysWith: { first, _ in first })
         let onContinue: ((MangaRef) -> Void)? = continueButton ? { ref in
             if let manga = repo.manga(sourceId: ref.sourceId, url: ref.url), let chapter = manga.nextUnreadChapter {
-                reading = (manga, chapter)
+                navigator.read(chapter, in: manga)
             }
         } : nil
         let mode = LibraryDisplayMode(rawValue: displayMode) ?? .compact

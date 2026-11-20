@@ -24,6 +24,12 @@ enum AppTab: Hashable, CaseIterable {
     }
 }
 
+struct OpenReader: Identifiable {
+    let sourceId: String
+    let manga: LibraryManga
+    let chapter: ChapterRecord
+    var id: String { chapter.key }
+}
 /// Asks the interface to go somewhere from outside a view: a notification tap, and later deep links.
 /// RootView follows `tab`; the Library tab consumes `pendingRoute` and pushes it.
 @MainActor
@@ -50,6 +56,12 @@ final class AppNavigator: ObservableObject {
         paths[tab, default: []].append(route)
     }
 
+    /// The chapter open in the reader, presented by RootView. Holds the manga strongly: `ChapterRecord.manga` is weak.
+    @Published var reader: OpenReader?
+    func read(_ chapter: ChapterRecord, in manga: LibraryManga) {
+        reader = OpenReader(sourceId: manga.sourceId, manga: manga, chapter: chapter)
+    }
+    func closeReader() { reader = nil }
     /// Shows `route` on top of the Library tab.
     func open(_ route: Route) {
         tab = .library
