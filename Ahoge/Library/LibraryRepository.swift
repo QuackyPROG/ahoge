@@ -19,6 +19,9 @@ final class LibraryRepository: ObservableObject {
     /// Told when chapters are marked read by hand (not by finishing them in the reader), so
     /// downloads can remove them ("Remove after marked as read").
     var didMarkRead: (([ChapterRecord]) -> Void)?
+    /// Told after a chapter fetch which chapters changed URL (old record, new record) and which
+    /// left the source, so downloads can move or delete their files.
+    var didReplaceChapters: ((_ carried: [(old: ChapterRecord, new: ChapterRecord)], _ removed: [ChapterRecord]) -> Void)?
     /// Where settings that change what is saved (incognito) are read; tests swap in their own.
     var preferences: UserDefaults = .standard
 
@@ -213,7 +216,7 @@ final class LibraryRepository: ObservableObject {
         let carriedFrom = Dictionary(ChapterMerge.carries(existing: existing.map(\.state), fetched: fetched).compactMap { old, new in
             byURL[old].map { (new, $0) }
         }, uniquingKeysWith: { first, _ in first })
-        var carried: [String: String] = [:]
+        var carried: [(old: ChapterRecord, new: ChapterRecord)] = []
         manga.chapters = merged.map { state in
             if let record = byURL[state.url] {
                 record.objectWillChange.send()
@@ -223,7 +226,7 @@ final class LibraryRepository: ObservableObject {
             let record = ChapterRecord(manga: manga, state: state)
             if let old = carriedFrom[state.url] {
                 record.bookmark = old.bookmark
-                carried[old.key] = record.key
+                carried.append((old, record))
             } else if markDuplicates, record.number >= 0, readNumbers.contains(record.number) {
                 // The same chapter from another group: already read once (Mihon's "mark duplicate chapters read").
                 record.read = true
@@ -238,11 +241,17 @@ final class LibraryRepository: ObservableObject {
             // upsert: a chapter key already stored under another manga moves here, as SwiftData's unique key did.
             for record in manga.chapters { try record.upsert(db) }
             // Before the old rows go, or their history cascades with them.
-            for (old, new) in carried { try db.execute(sql: "UPDATE history SET chapterKey = ? WHERE chapterKey = ?", arguments: [new, old]) }
+            for (old, new) in carried {
+                try db.execute(sql: "UPDATE history SET chapterKey = ? WHERE chapterKey = ?", arguments: [new.key, old.key])
+                try db.execute(sql: "UPDATE download SET chapterKey = ? WHERE chapterKey = ?", arguments: [new.key, old.key])
+            }
             for record in removed { try record.delete(db) }
             try manga.update(db)
         }
-        return carried
+        let carriedKeys = Set(carried.map(\.old.key))
+        let gone = removed.filter { !carriedKeys.contains($0.key) }
+        if !carried.isEmpty || !gone.isEmpty { didReplaceChapters?(carried, gone) }
+        return Dictionary(carried.map { ($0.old.key, $0.new.key) }, uniquingKeysWith: { first, _ in first })
     }
 
     func setInLibrary(_ manga: LibraryManga, _ value: Bool) {

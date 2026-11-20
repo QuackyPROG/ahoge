@@ -193,6 +193,42 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertEqual(relaunched.queue.map(\.mangaTitle), ["Manga", "Manga", "Manga"])
     }
 
+    func testChangedChapterURLKeepsItsDownloadAndRemovedChapterLosesIt() async throws {
+        let repo = try LibraryRepository.inMemory()
+        let manga = SourceFixture.manga(in: repo, chapters: 2)
+        let downloads = manager(repo, SourceManager(extensions: try SourceFixture.extensions()), transport())
+        let one = manga.chapter(1), two = manga.chapter(2)
+        downloads.enqueue([one, two])
+        await downloads.waitUntilIdle()
+        XCTAssertTrue(downloads.isDownloaded(two.key))
+
+        repo.applyChapters([SourceChapter(url: "/n/1", name: "Ch 1", number: 1, date: nil, scanlator: nil)], to: manga)
+
+        let newKey = LibraryManga.makeKey(sourceId: SourceFixture.sourceId, url: "/n/1")
+        XCTAssertTrue(downloads.isDownloaded(newKey))
+        XCTAssertFalse(downloads.isDownloaded(one.key))
+        XCTAssertEqual(downloads.localPages(newKey)?.map(\.lastPathComponent), ["001.jpg", "002.jpg", "003.jpg"])
+        let mangaFolder = root.appendingPathComponent(SourceFixture.sourceId).appendingPathComponent(DownloadStore.hash(manga.key))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: mangaFolder.path), [DownloadStore.hash(newKey)])
+        XCTAssertFalse(downloads.isDownloaded(two.key))
+        XCTAssertEqual(try repo.db.read { try String.fetchAll($0, sql: "SELECT chapterKey FROM download") }, [newKey])
+    }
+
+    func testDownloadOfADeletedChapterIsNotMarkedDownloaded() async throws {
+        let repo = try LibraryRepository.inMemory()
+        let manga = SourceFixture.manga(in: repo, chapters: 1)
+        let downloads = manager(repo, SourceManager(extensions: try SourceFixture.extensions()), transport())
+        downloads.pause()
+        downloads.enqueue([manga.chapter(1)])
+        repo.write { try $0.execute(sql: "DELETE FROM chapter") }
+
+        downloads.resume()
+        await downloads.waitUntilIdle()
+
+        XCTAssertFalse(downloads.isDownloaded(manga.chapter(1).key))
+        XCTAssertEqual(filesOnDisk(), [])
+    }
+
     func testCBZChapterIsOneArchiveAndReadsBackItsPages() async throws {
         Pref.saveAsCBZ.set(true, in: defaults)
         let repo = try LibraryRepository.inMemory()

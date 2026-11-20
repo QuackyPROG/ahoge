@@ -98,6 +98,17 @@ struct DownloadStore: Sendable {
         return (pageCount, Self.size(of: target))
     }
 
+    /// Moves a chapter's folder or archive to another key's place (its URL changed); the unpacked copy goes.
+    func move(_ from: Location, to: Location) {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: mangaDirectory(to), withIntermediateDirectories: true)
+        for (source, target) in [(chapterDirectory(from), chapterDirectory(to)), (archive(from), archive(to))] where fm.fileExists(atPath: source.path) {
+            try? fm.removeItem(at: target)
+            try? fm.moveItem(at: source, to: target)
+        }
+        remove(from)
+    }
+
     /// Removes every trace of a chapter: folder, archive and unpacked copy.
     func remove(_ location: Location) {
         let fm = FileManager.default

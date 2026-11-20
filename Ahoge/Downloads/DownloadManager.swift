@@ -103,6 +103,7 @@ final class DownloadManager: ObservableObject {
         isPaused = Pref.downloadPaused.value(in: defaults)
         load()
         repo.didMarkRead = { [weak self] chapters in self?.chaptersMarkedRead(chapters) }
+        repo.didReplaceChapters = { [weak self] carried, removed in self?.chaptersReplaced(carried, removed: removed) }
         network.onChange = { [weak self] in self?.networkPolicyChanged() }
         network.start()
         schedule()
@@ -194,6 +195,23 @@ final class DownloadManager: ObservableObject {
         let keys = chapters.map(\.key)
         repo.write { db in
             for key in keys { try db.execute(sql: "DELETE FROM download WHERE chapterKey = ?", arguments: [key]) }
+        }
+    }
+
+    /// A chapter whose URL changed keeps its files under its new key (a queued one is queued again
+    /// under it); a chapter gone from the source loses them. Their rows were moved or deleted with the chapters.
+    private func chaptersReplaced(_ carried: [(old: ChapterRecord, new: ChapterRecord)], removed: [ChapterRecord]) {
+        let queued = Set(queue.map(\.chapterKey))
+        cancel(carried.map(\.old.key) + removed.map(\.key))
+        enqueue(carried.filter { queued.contains($0.old.key) }.map(\.new))
+        for (old, new) in carried where downloaded[old.key] != nil {
+            store.move(location(old), to: location(new))
+            downloaded[old.key] = nil
+            downloaded[new.key] = new.mangaKey
+        }
+        for chapter in removed {
+            store.remove(location(chapter))
+            if downloaded[chapter.key] != nil { downloaded[chapter.key] = nil }
         }
     }
 
@@ -422,13 +440,19 @@ final class DownloadManager: ObservableObject {
 
     private func completed(_ item: DownloadItem, pages: Int, bytes: Int64) {
         queue.removeAll { $0.chapterKey == item.chapterKey }
-        downloaded[item.chapterKey] = item.mangaKey
         let now = Date()
-        repo.write { db in
-            try db.execute(
-                sql: "INSERT OR REPLACE INTO download (chapterKey, mangaKey, state, pageCount, bytes, dateAdded) VALUES (?, ?, ?, ?, ?, ?)",
-                arguments: [item.chapterKey, item.mangaKey, RowState.downloaded.rawValue, pages, bytes, now]
-            )
+        do {
+            try repo.db.write { db in
+                try db.execute(
+                    sql: "INSERT OR REPLACE INTO download (chapterKey, mangaKey, state, pageCount, bytes, dateAdded) VALUES (?, ?, ?, ?, ?, ?)",
+                    arguments: [item.chapterKey, item.mangaKey, RowState.downloaded.rawValue, pages, bytes, now]
+                )
+            }
+            downloaded[item.chapterKey] = item.mangaKey
+        } catch {
+            // Most likely the chapter row is gone (its foreign key failed): files nothing tracks.
+            store.remove(location(item))
+            AppLog.logger.error("Download not saved (\(item.chapterKey, privacy: .public)): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -490,6 +514,10 @@ final class DownloadManager: ObservableObject {
 
     private func location(_ item: DownloadItem) -> DownloadStore.Location {
         DownloadStore.Location(sourceId: item.sourceId, mangaKey: item.mangaKey, chapterKey: item.chapterKey)
+    }
+
+    private func location(_ chapter: ChapterRecord) -> DownloadStore.Location {
+        DownloadStore.Location(sourceId: chapter.sourceId, mangaKey: chapter.mangaKey, chapterKey: chapter.key)
     }
 }
 
