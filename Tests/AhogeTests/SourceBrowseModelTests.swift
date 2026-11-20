@@ -25,6 +25,17 @@ final class SourceBrowseModelTests: XCTestCase {
         XCTAssertFalse(model.foundNothing)
     }
 
+    func testDeduplicatesWithinOnePage() async throws {
+        let model = SourceBrowseModel(sourceId: "en.demo")
+        let fetch: SourceBrowseModel.Fetch = { _, _, page, _ in
+            let items = page == 1 ? ["/a", "/b", "/a"] : ["/b", "/c"]
+            return MangaListPage(manga: items.map { MangaStub(url: $0, title: $0, cover: "") }, hasNextPage: page < 2)
+        }
+        await model.reload(fetch)
+        await model.loadMore(fetch)
+        XCTAssertEqual(model.items.map(\.url), ["/a", "/b", "/c"])
+    }
+
     func testApplyingFiltersSwitchesToFilteredFeed() async throws {
         let model = SourceBrowseModel(sourceId: "en.demo")
         await model.loadFilters { self.filters }
