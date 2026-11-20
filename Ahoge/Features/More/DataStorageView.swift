@@ -21,6 +21,7 @@ struct DataStorageView: View {
     @State private var report: RestoreReport?
     @State private var message: String?
     @State private var confirmResetReader = false
+    @State private var confirmClearCookies = false
 
     var body: some View {
         List {
@@ -110,14 +111,7 @@ struct DataStorageView: View {
                 } label: {
                     Label { Text("Reindex downloads").foregroundStyle(.primary) } icon: { SettingsIcon(systemName: "arrow.triangle.2.circlepath", color: .indigo) }
                 }
-                Button(role: .destructive) {
-                    Task {
-                        SharedCookies.removeAll()
-                        await WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
-                        sources.resetSessions()
-                        message = "Cookies and website data cleared."
-                    }
-                } label: {
+                Button(role: .destructive) { confirmClearCookies = true } label: {
                     Label { Text("Clear cookies and website data") } icon: { SettingsIcon(systemName: "trash.fill", color: .red) }
                 }
             }
@@ -163,6 +157,18 @@ struct DataStorageView: View {
             }
         } message: {
             Text("Every series goes back to the default reading mode and orientation.")
+        }
+        .confirmationDialog("Clear cookies and website data?", isPresented: $confirmClearCookies, titleVisibility: .visible) {
+            Button("Clear", role: .destructive) {
+                Task {
+                    SharedCookies.removeAll()
+                    await WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+                    sources.resetSessions()
+                    message = "Cookies and website data cleared."
+                }
+            }
+        } message: {
+            Text("You will be signed out of every source and website.")
         }
         .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}

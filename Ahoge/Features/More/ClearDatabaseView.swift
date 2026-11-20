@@ -56,7 +56,7 @@ struct ClearDatabaseView: View {
                 reload()
             }
         } message: {
-            Text("Their chapters and history go too. This cannot be undone.")
+            Text(keepStarted ? "Their chapters and history go too. This cannot be undone." : "Their chapters, read progress, bookmarks and history go too. This cannot be undone.")
         }
         .alert("Cleared \(cleared ?? 0) title\(cleared == 1 ? "" : "s")", isPresented: Binding(get: { cleared != nil }, set: { if !$0 { cleared = nil } })) {
             Button("OK", role: .cancel) {}
