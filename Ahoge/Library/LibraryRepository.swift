@@ -321,13 +321,19 @@ extension LibraryRepository {
         guard !keys.isEmpty else { return 0 }
         updatesCache = nil
         objectWillChange.send()
+        var covers: Set<String> = []
         write { db in
-            for key in keys { try db.execute(sql: "DELETE FROM manga WHERE key = ?", arguments: [key]) }
+            for key in keys {
+                if let cover = try String.fetchOne(db, sql: "SELECT customCover FROM manga WHERE key = ?", arguments: [key]) { covers.insert(cover) }
+                try db.execute(sql: "DELETE FROM manga WHERE key = ?", arguments: [key])
+            }
         }
         for key in keys {
             loaded[key] = nil
             absent.insert(key)
+            PerSeriesReaderSettings.remove(for: key, in: preferences)
         }
+        for cover in covers { deleteCoverFileIfUnused(cover) }
         return keys.count
     }
 }

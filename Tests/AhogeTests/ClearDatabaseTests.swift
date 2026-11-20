@@ -1,4 +1,5 @@
 import GRDB
+import UIKit
 import XCTest
 @testable import Ahoge
 
@@ -78,5 +79,39 @@ final class ClearDatabaseTests: XCTestCase {
         let all = try LibraryRepository.inMemory()
         try started(all)
         XCTAssertEqual(all.clearNonLibrary(sources: ["en.a"], keepStarted: false), 5)
+    }
+
+    private func image(width: CGFloat, color: UIColor) throws -> Data {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: width, height: width + 2)).image { context in
+            color.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: width + 2))
+        }
+        return try XCTUnwrap(image.pngData())
+    }
+
+    func testClearingRemovesCoversAndSettingsOnlyTheClearedTitlesUsed() throws {
+        let repo = try LibraryRepository.inMemory()
+        let suite = UserDefaults(suiteName: "clear-tests-\(UUID().uuidString)")!
+        repo.preferences = suite
+        add(repo, source: "en.a", url: "/opened")
+        add(repo, source: "en.a", url: "/sharing")
+        add(repo, source: "en.a", url: "/saved", inLibrary: true)
+        let opened = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/opened"))
+        let sharing = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/sharing"))
+        let saved = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/saved"))
+        XCTAssertTrue(repo.setCustomCover(try image(width: 3, color: .green), for: opened))
+        XCTAssertTrue(repo.setCustomCover(try image(width: 5, color: .blue), for: sharing))
+        XCTAssertTrue(repo.setCustomCover(try image(width: 5, color: .blue), for: saved))
+        let own = try XCTUnwrap(opened.customCover)
+        let shared = try XCTUnwrap(saved.customCover)
+        XCTAssertEqual(sharing.customCover, shared, "equal pictures share one file")
+        addTeardownBlock { CoverStore.delete(own); CoverStore.delete(shared) }
+        ReadingMode.rightToLeft.save(for: opened.key, to: suite)
+
+        XCTAssertEqual(repo.clearNonLibrary(sources: ["en.a"], keepStarted: false), 2)
+
+        XCTAssertFalse(CoverStore.exists(own))
+        XCTAssertTrue(CoverStore.exists(shared), "still used by a library title")
+        XCTAssertNil(ReadingMode.stored(for: opened.key, from: suite))
     }
 }
