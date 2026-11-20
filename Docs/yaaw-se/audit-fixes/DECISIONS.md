@@ -60,3 +60,6 @@ Source: GitHub issues #2-#14 on QuackyPROG/ahoge (bodies are the bug reports; re
 - Push script: the scheduled task does not wake the PC; the script logs that it is waiting for the window; `-QuietHours` moves the window.
 - CI: one ticket per CI run, sequential; push and wait for green before starting the next ticket (the workflow cancels in-progress runs on a newer push).
 - Planner choices approved: restore state in UserDefaults; reader presented from one place in RootView; automatic backups named `ahoge_auto_…`; image cache 96 MiB, URLCache memory 8 MiB, decoded bitmap max 2048 × 4096 px.
+
+## Round 3 (user, 2026-11-20): parallel build
+- Replaces "one ticket per CI run, sequential". Tickets are grouped into lanes; each lane runs in its own git worktree on branch `fix/audit-<lane>` off `fix/audit`, one agent per lane, one commit per ticket. CI per lane via `gh workflow run ios.yml --ref fix/audit-<lane>` (workflow_dispatch; concurrency group is per ref, so lanes don't cancel each other). The orchestrator merges lanes into `fix/audit` and resolves conflicts afterwards, then CI runs on PR #15.

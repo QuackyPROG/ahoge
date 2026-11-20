@@ -64,3 +64,4 @@ feature: Fix the bugs from the 2026 code audit, GitHub issues #2-#14
 - 2026-11-20 16:50: spec has no open questions; user approved 52 tickets; stage build
 - 2026-11-20 16:31: 01 shipped (3267823, a196ca4), CI green; review Ship + 1 should-fix applied
 - 2026-11-20 16:43: 02 shipped (02b259e), CI green; review Ship
+- 2026-11-20 16:49: correction: built tickets one at a time with sequential CI → user wants multiple agents in parallel, merge conflicts fixed afterwards. 03 committed (489ecad) by the cancelled run, CI pending
