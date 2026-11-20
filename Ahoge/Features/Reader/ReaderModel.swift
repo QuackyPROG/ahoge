@@ -251,11 +251,18 @@ final class ReaderModel: ObservableObject {
     /// Loads a page below the one on screen and notes its size; the transformed copy follows.
     private func prefetch(_ page: SourcePage, id: String) {
         let transform = transform
-        Task { [weak self] in
-            guard let image = try? await ImageLoader.shared.image(page.url, headers: page.headers, priority: .utility) else { return }
-            self?.learnSize(image.size, of: id)
-            if !transform.isIdentity { await ImageLoader.shared.prefetch(page.url, headers: page.headers, transform: transform) }
+        Task {
+            await PrefetchLimiter.shared.enqueue(page.url) { [weak self] in
+                guard let image = try? await ImageLoader.shared.image(page.url, headers: page.headers, priority: .utility) else { return }
+                await self?.learnSize(image.size, of: id)
+                if !transform.isIdentity { await ImageLoader.shared.prefetch(page.url, headers: page.headers, transform: transform) }
+            }
         }
+    }
+
+    /// The reader closed: its pages still waiting to prefetch are not needed.
+    deinit {
+        Task { await PrefetchLimiter.shared.cancelAll() }
     }
 
     /// The pages an item shows, with their page ids.

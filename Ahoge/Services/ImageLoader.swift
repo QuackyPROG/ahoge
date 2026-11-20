@@ -103,9 +103,12 @@ actor ImageLoader {
         return image
     }
 
-    /// Reader prefetches run below the page on screen, so they never slow it down.
-    func prefetch(_ url: String, headers: [String: String], transform: ImageTransform = .plain) {
-        Task(priority: .utility) { _ = try? await image(url, headers: headers, transform: transform, priority: .utility) }
+    /// Reader prefetches run below the page on screen, so they never slow it down, two at a time.
+    func prefetch(_ url: String, headers: [String: String], transform: ImageTransform = .plain) async {
+        let key = Self.cacheKey(url, maxPixelWidth: Self.maxPixelWidth, transform: transform)
+        await PrefetchLimiter.shared.enqueue(key) { [self] in
+            _ = try? await image(url, headers: headers, transform: transform, priority: .utility)
+        }
     }
 
     /// Bytes the image cache holds on disk.
