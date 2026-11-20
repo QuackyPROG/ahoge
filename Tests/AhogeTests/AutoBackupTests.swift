@@ -41,4 +41,24 @@ final class AutoBackupTests: XCTestCase {
         XCTAssertFalse(again)
         XCTAssertEqual(try files(in: folder).count, 1)
     }
+
+    func testRotationDeletesOnlyTheOldestAutomaticBackups() async throws {
+        let defaults = makeDefaults()
+        Pref.autoBackupKeep.set(3, in: defaults)
+        let folder = try makeFolder()
+        let manual = ["ahoge_2026-11-01_10-00.ahbk", "ahoge_2026-11-02_10-00.ahbk"]
+        let automatic = (1...5).map { "ahoge_auto_2026-11-0\($0)_10-00.ahbk" }
+        for (index, name) in (manual + automatic).enumerated() {
+            let url = folder.appendingPathComponent(name)
+            try Data("old".utf8).write(to: url)
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: Double(index) * 1000)], ofItemAtPath: url.path)
+        }
+        let repo = try LibraryRepository.inMemory()
+        let wrote = await AutoBackup.runIfDue(repo: repo, store: makeStore(), defaults: defaults, folder: folder, now: now)
+        XCTAssertTrue(wrote)
+        let remaining = try files(in: folder)
+        XCTAssertEqual(remaining.filter { manual.contains($0) }, manual)
+        XCTAssertEqual(remaining.filter { automatic.contains($0) }, ["ahoge_auto_2026-11-04_10-00.ahbk", "ahoge_auto_2026-11-05_10-00.ahbk"])
+        XCTAssertEqual(remaining.filter { $0.hasPrefix("ahoge_auto_") }.count, 3)
+    }
 }

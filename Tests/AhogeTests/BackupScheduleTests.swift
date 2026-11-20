@@ -35,4 +35,18 @@ final class BackupScheduleTests: XCTestCase {
         let files = [(name: "a.ahbk", date: Date(timeIntervalSince1970: 100)), (name: "b.ahbk", date: Date(timeIntervalSince1970: 200))]
         XCTAssertEqual(BackupSchedule.rotate(files: files, keep: 0), ["a.ahbk"])
     }
+
+    func testAutomaticNamesAreToldApart() {
+        XCTAssertTrue(BackupFile.isAutomatic("ahoge_auto_2026-11-20_10-00.ahbk"))
+        XCTAssertFalse(BackupFile.isAutomatic("ahoge_2026-11-20_10-00.ahbk"))
+        XCTAssertFalse(BackupFile.isAutomatic("notes.ahbk"))
+    }
+
+    func testAutomaticNameCarriesThePrefix() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let date = Date(timeIntervalSince1970: 1_795_168_800) // 2026-11-20 10:00 UTC
+        XCTAssertEqual(BackupFile.name(at: date, calendar: calendar, automatic: true), "ahoge_auto_2026-11-20_10-00.ahbk")
+        XCTAssertEqual(BackupFile.name(at: date, calendar: calendar), "ahoge_2026-11-20_10-00.ahbk")
+    }
 }

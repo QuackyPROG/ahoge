@@ -44,7 +44,7 @@ enum AutoBackup {
         do {
             let directory = try folder ?? Self.folder()
             let backup = BackupService.snapshot(of: repo, store: store, defaults: defaults, now: now)
-            let file = directory.appendingPathComponent(BackupFile.name(at: now))
+            let file = directory.appendingPathComponent(BackupFile.name(at: now, automatic: true))
             let write = Task.detached(priority: .utility) {
                 let data = try BackupCodec.encode(backup)
                 try Task.checkCancellation()
@@ -84,7 +84,7 @@ enum AutoBackup {
 
     private static func rotate(in folder: URL, keep: Int) {
         let urls = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        let files = urls.filter { $0.pathExtension == BackupFile.fileExtension }.map { url in
+        let files = urls.filter { BackupFile.isAutomatic($0.lastPathComponent) }.map { url in
             (name: url.lastPathComponent, date: (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
         }
         for name in BackupSchedule.rotate(files: files, keep: keep) {
