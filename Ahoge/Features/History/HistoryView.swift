@@ -21,7 +21,7 @@ struct HistoryView: View {
                 ForEach(DateGrouping.group(shown, by: \.lastRead), id: \.day) { group in
                     Section {
                         ForEach(group.items) { entry in
-                            HistoryRow(entry: entry, headers: referer(entry.manga), resume: { resume(entry) }) {
+                            HistoryRow(entry: entry, headers: referer(entry.manga), open: { navigator.push(.manga(entry.manga.ref)) }, resume: { resume(entry) }) {
                                 target = entry
                                 confirmRemove = true
                             }
@@ -90,13 +90,15 @@ struct HistoryView: View {
 private struct HistoryRow: View {
     let entry: HistoryEntry
     let headers: [String: String]
+    let open: () -> Void
     let resume: () -> Void
     let remove: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 12) {
-            NavigationLink(value: Route.manga(entry.manga.ref)) {
+            // A NavigationLink in a List row stretches across the row and adds a chevron.
+            Button(action: open) {
                 RemoteImage(url: entry.manga.displayCover, headers: headers, maxPixelWidth: 150)
                     .frame(width: 48, height: 68)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
