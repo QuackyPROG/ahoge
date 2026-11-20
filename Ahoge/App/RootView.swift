@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Split view or tabs, fixed per device: following size class rebuilt every screen on a resize or rotation.
+enum RootLayout {
+    case split, tabs
+    static func forIdiom(_ idiom: UIUserInterfaceIdiom) -> RootLayout { idiom == .pad ? .split : .tabs }
+}
+
 struct RootView: View {
     @AppStorage(Pref.theme.name) private var theme = AppTheme.standard
     @AppStorage(Pref.themeMode.name) private var mode = ThemeMode.system
@@ -15,7 +21,7 @@ struct RootView: View {
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.incognito.name) private var incognito = false
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    private let layout = RootLayout.forIdiom(UIDevice.current.userInterfaceIdiom)
     @State private var repoError: String?
     @State private var showOnboarding = false
 
@@ -104,9 +110,9 @@ struct RootView: View {
         }
     }
 
-    /// Tabs on a phone; on a wide screen (iPad) a sidebar with the screen beside it.
+    /// Tabs on a phone; on an iPad a sidebar with the screen beside it.
     @ViewBuilder private func tabs(badge: Int) -> some View {
-        if sizeClass == .regular {
+        if layout == .split {
             NavigationSplitView {
                 List(selection: sidebarSelection) {
                     ForEach(AppTab.allCases, id: \.self) { tab in
