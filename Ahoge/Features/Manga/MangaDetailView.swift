@@ -61,10 +61,13 @@ struct MangaDetailView: View {
         ScrollViewReader { proxy in
             // iPad: details on the left, chapters on the right.
             if sizeClass == .regular {
-                HStack(spacing: 0) {
-                    list(.details, chapters: chapters, proxy: proxy).frame(width: 400)
-                    Divider()
-                    list(.chapters, chapters: chapters, proxy: proxy)
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        list(.details, chapters: chapters, proxy: proxy)
+                            .frame(width: DetailPaneWidth.width(available: geometry.size.width))
+                        Divider()
+                        list(.chapters, chapters: chapters, proxy: proxy)
+                    }
                 }
             } else {
                 list(.all, chapters: chapters, proxy: proxy)
