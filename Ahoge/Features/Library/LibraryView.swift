@@ -144,11 +144,9 @@ struct LibraryView: View {
             }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
-            // A notification tap (or deep link) asked to show a screen.
-            .onChange(of: navigator.pendingRoute, initial: true) { _, route in
-                guard let route else { return }
-                navigator.pendingRoute = nil
-                navigator.paths[.library] = [route]
+            .dismissOnRoute {
+                settingCategories = false
+                showingSheet = false
             }
         }
     }

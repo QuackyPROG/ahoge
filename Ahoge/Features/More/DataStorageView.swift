@@ -143,6 +143,10 @@ struct DataStorageView: View {
         .sheet(item: Binding(get: { report.map(ReportItem.init) }, set: { if $0 == nil { report = nil } })) { item in
             NavigationStack { RestoreReportView(report: item.report) }
         }
+        .dismissOnRoute {
+            importing = false
+            report = nil
+        }
         .confirmationDialog("Reset per-series reader settings?", isPresented: $confirmResetReader, titleVisibility: .visible) {
             Button("Reset", role: .destructive) {
                 let count = PerSeriesReaderSettings.reset()

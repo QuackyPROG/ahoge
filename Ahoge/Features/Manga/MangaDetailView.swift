@@ -131,6 +131,18 @@ struct MangaDetailView: View {
         } message: {
             Text("The title is no longer in your library.")
         }
+        .dismissOnRoute {
+            webTarget = nil
+            showCover = false
+            filteringScanlators = false
+            editingNotes = false
+            // The duplicates sheet's onDismiss would open these next.
+            pendingMigration = nil
+            pendingAdd = false
+            duplicates = []
+            migratingFrom = nil
+            choosingCategories = false
+        }
     }
 
     /// What a list shows: everything on a phone, one half on a tablet.

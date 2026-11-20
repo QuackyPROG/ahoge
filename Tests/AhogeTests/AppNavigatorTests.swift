@@ -35,12 +35,27 @@ final class AppNavigatorTests: XCTestCase {
         XCTAssertEqual(navigator.path(for: .browse), [.globalSearch("q"), .manga(one)])
     }
 
-    func testOpeningAMangaSelectsLibraryAndQueuesTheRoute() {
+    func testOpeningARouteClosesTheReaderAndCoversThenPushesOnLibrary() {
         let navigator = AppNavigator()
-        navigator.tab = .more
-        navigator.open(.manga(one))
+        navigator.paths[.library] = [.manga(one)]
+        let manga = LibraryManga(sourceId: "en.demo", url: "/series/one", title: "One", coverUrl: "")
+        navigator.read(ChapterRecord(manga: manga, state: ChapterState(url: "/c/1", name: "Ch 1", number: 1, read: false, lastPageRead: 0, sourceOrder: 0)), in: manga)
+        navigator.tab = .browse
+        let request = navigator.dismissRequest
+        navigator.open(.manga(two))
         XCTAssertEqual(navigator.tab, .library)
-        XCTAssertEqual(navigator.pendingRoute, .manga(one))
+        XCTAssertEqual(navigator.path(for: .library), [.manga(one), .manga(two)])
+        XCTAssertNil(navigator.reader)
+        XCTAssertNotEqual(navigator.dismissRequest, request)
+    }
+    func testADeepLinkSearchAppendsToLibraryToo() throws {
+        let navigator = AppNavigator()
+        navigator.paths[.library] = [.manga(one)]
+        let request = navigator.dismissRequest
+        navigator.open(try XCTUnwrap(URL(string: "ahoge://search?q=q")), sources: [])
+        XCTAssertEqual(navigator.tab, .library)
+        XCTAssertEqual(navigator.path(for: .library), [.manga(one), .globalSearch("q")])
+        XCTAssertNotEqual(navigator.dismissRequest, request)
     }
     func testReadOpensTheReaderAndCloseReaderClearsIt() {
         let navigator = AppNavigator()

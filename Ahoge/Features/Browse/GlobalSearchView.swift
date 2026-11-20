@@ -60,6 +60,7 @@ private struct GlobalSearchScreen: View {
                 MigrateSheet(old: old, target: target) { migrated = $0 }
             }
         }
+        .dismissOnRoute { target = nil }
         .navigationDestination(item: $migrated) { MangaDetailView(ref: $0) }
     }
 

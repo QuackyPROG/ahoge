@@ -43,14 +43,15 @@ struct NavigationSnapshot: Codable {
     var readerPage: Int?
 }
 /// Asks the interface to go somewhere from outside a view: a notification tap, and later deep links.
-/// RootView follows `tab`; the Library tab consumes `pendingRoute` and pushes it.
+/// RootView follows `tab`; each tab's stack follows its path.
 @MainActor
 final class AppNavigator: ObservableObject {
     /// A singleton because system callbacks (notification taps) have no view to reach it from.
     static let shared = AppNavigator()
 
     @Published var tab: AppTab = .library { didSet { save() } }
-    @Published var pendingRoute: Route?
+    /// Changes when every tab-screen sheet and cover should close (`dismissOnRoute`).
+    @Published private(set) var dismissRequest = 0
     /// A repository link waiting for the person to confirm adding it.
     @Published var pendingRepo: URL?
     /// Each tab's navigation stack, so any view can push onto the visible tab.
@@ -132,10 +133,12 @@ final class AppNavigator: ObservableObject {
         if let data = try? JSONEncoder().encode(snapshot) { Pref.navigationSnapshot.set(data, in: defaults) }
     }
 
-    /// Shows `route` on top of the Library tab.
+    /// Shows `route` on top of the Library tab, closing the reader and every sheet first so nothing covers it.
     func open(_ route: Route) {
+        closeReader()
+        dismissRequest += 1
         tab = .library
-        pendingRoute = route
+        paths[.library, default: []].append(route)
     }
 
     /// Follows a link opened from outside: `ahoge://` or a source's web address. Returns whether it meant anything.
@@ -152,5 +155,19 @@ final class AppNavigator: ObservableObject {
         case .search(let query): open(.globalSearch(query))
         case .addRepo(let url): pendingRepo = url
         }
+    }
+}
+extension View {
+    /// Clears a screen's sheets and covers when a notification tap or deep link opens a route over everything.
+    func dismissOnRoute(_ clear: @escaping () -> Void) -> some View {
+        modifier(DismissOnRoute(clear: clear))
+    }
+}
+
+private struct DismissOnRoute: ViewModifier {
+    @EnvironmentObject private var navigator: AppNavigator
+    let clear: () -> Void
+    func body(content: Content) -> some View {
+        content.onChange(of: navigator.dismissRequest) { clear() }
     }
 }
