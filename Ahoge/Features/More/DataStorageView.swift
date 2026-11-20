@@ -151,6 +151,7 @@ struct DataStorageView: View {
             Text("The backup is merged into your library. \"Restore library and settings\" also replaces your settings, including incognito, app lock, download and backup settings, with the backup's.")
         }
         .dismissOnRoute {
+            exporting = nil
             importing = false
             report = nil
             pickedBackup = nil
@@ -295,6 +296,7 @@ private struct LibraryExportRow: View {
             contentType: .commaSeparatedText,
             defaultFilename: "ahoge-library"
         ) { _ in }
+        .dismissOnRoute { document = nil }
     }
 
     private func export() {

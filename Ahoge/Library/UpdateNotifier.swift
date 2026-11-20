@@ -78,7 +78,7 @@ enum UpdateNotifier {
             guard let sourceId = info[Key.sourceId], let url = info[Key.url] else { return }
             navigator.open(.manga(MangaRef(sourceId: sourceId, url: url, title: info[Key.title] ?? "", cover: info[Key.cover] ?? "")))
         case "failures":
-            navigator.tab = .updates
+            navigator.show(.updates)
         default:
             break
         }

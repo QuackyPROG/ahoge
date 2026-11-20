@@ -138,11 +138,16 @@ final class AppNavigator: ObservableObject {
         if let data = try? JSONEncoder().encode(snapshot) { Pref.navigationSnapshot.set(data, in: defaults) }
     }
 
-    /// Shows `route` on top of the Library tab, closing the reader and every sheet first so nothing covers it.
-    func open(_ route: Route) {
+    /// Selects `tab`, closing the reader and every sheet first so nothing covers it.
+    func show(_ tab: AppTab) {
         closeReader()
         dismissRequest += 1
-        tab = .library
+        self.tab = tab
+    }
+
+    /// Shows `route` on top of the Library tab, closing the reader and every sheet first so nothing covers it.
+    func open(_ route: Route) {
+        show(.library)
         paths[.library, default: []].append(route)
     }
 

@@ -119,6 +119,27 @@ final class AppNavigatorTests: XCTestCase {
         XCTAssertNil(navigator.reader)
         XCTAssertNotEqual(navigator.dismissRequest, request)
     }
+    func testShowingATabClosesTheReaderAndCoversAndKeepsItsPath() {
+        let navigator = AppNavigator()
+        navigator.paths[.updates] = [.upcoming]
+        let manga = LibraryManga(sourceId: "en.demo", url: "/series/one", title: "One", coverUrl: "")
+        navigator.read(ChapterRecord(manga: manga, state: ChapterState(url: "/c/1", name: "Ch 1", number: 1, read: false, lastPageRead: 0, sourceOrder: 0)), in: manga)
+        navigator.tab = .browse
+        let request = navigator.dismissRequest
+        navigator.show(.updates)
+        XCTAssertEqual(navigator.tab, .updates)
+        XCTAssertEqual(navigator.path(for: .updates), [.upcoming])
+        XCTAssertNil(navigator.reader)
+        XCTAssertNotEqual(navigator.dismissRequest, request)
+    }
+    func testAFailuresNotificationTapShowsUpdatesOverTheReader() {
+        let navigator = AppNavigator()
+        let manga = LibraryManga(sourceId: "en.demo", url: "/series/one", title: "One", coverUrl: "")
+        navigator.read(ChapterRecord(manga: manga, state: ChapterState(url: "/c/1", name: "Ch 1", number: 1, read: false, lastPageRead: 0, sourceOrder: 0)), in: manga)
+        UpdateNotifier.handleTap(["kind": "failures"], navigator: navigator)
+        XCTAssertEqual(navigator.tab, .updates)
+        XCTAssertNil(navigator.reader)
+    }
     func testADeepLinkSearchAppendsToLibraryToo() throws {
         let navigator = AppNavigator()
         navigator.paths[.library] = [.manga(one)]
