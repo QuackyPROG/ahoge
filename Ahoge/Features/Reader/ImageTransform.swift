@@ -2,7 +2,7 @@ import CoreImage
 import UIKit
 
 /// What the reader changes about a page after decoding it. Part of `ImageLoader`'s cache key, so a
-/// cropped or grayscale page is decoded once and the plain one stays cached beside it.
+/// cropped or grayscale page is decoded once; only the transformed copy stays in memory.
 struct ImageTransform: Hashable, Sendable {
     /// One side of a split spread, in reading order.
     enum Half: String, Hashable, Sendable { case first, second }
