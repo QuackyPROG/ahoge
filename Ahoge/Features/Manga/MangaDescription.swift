@@ -79,7 +79,7 @@ struct MangaDescription: View {
                     }
                 }
             if expanded {
-                ForEach(DescriptionFormatter.imageURLs(in: summary, baseURL: baseURL), id: \.self) { url in
+                ForEach(DescriptionFormatter.imageURLs(in: summary, baseURL: baseURL).uniqued(), id: \.self) { url in
                     RemoteImage(url: url, headers: headers, contentMode: .fit)
                         .frame(maxWidth: .infinity, maxHeight: 420)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
