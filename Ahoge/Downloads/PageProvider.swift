@@ -30,7 +30,7 @@ struct PageProvider {
     }
 
     func pages(for chapter: ChapterRecord) async throws -> [ReaderPage] {
-        if let files = downloads.localPages(chapter.key) { return files.map(ReaderPage.local) }
+        if let files = await downloads.localPages(chapter.key) { return files.map(ReaderPage.local) }
         return try await remotePages(chapter).map(ReaderPage.remote)
     }
 }

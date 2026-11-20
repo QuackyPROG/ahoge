@@ -103,6 +103,7 @@ final class DownloadManager: ObservableObject {
         isPaused = Pref.downloadPaused.value(in: defaults)
         load()
         repo.didMarkRead = { [weak self] chapters in self?.chaptersMarkedRead(chapters) }
+        repo.didReplaceChapters = { [weak self] carried, removed in self?.chaptersReplaced(carried, removed: removed) }
         network.onChange = { [weak self] in self?.networkPolicyChanged() }
         network.start()
         schedule()
@@ -197,6 +198,23 @@ final class DownloadManager: ObservableObject {
         }
     }
 
+    /// A chapter whose URL changed keeps its files under its new key (a queued one is queued again
+    /// under it); a chapter gone from the source loses them. Their rows were moved or deleted with the chapters.
+    private func chaptersReplaced(_ carried: [(old: ChapterRecord, new: ChapterRecord)], removed: [ChapterRecord]) {
+        let queued = Set(queue.map(\.chapterKey))
+        cancel(carried.map(\.old.key) + removed.map(\.key))
+        enqueue(carried.filter { queued.contains($0.old.key) }.map(\.new))
+        for (old, new) in carried where downloaded[old.key] != nil {
+            store.move(location(old), to: location(new))
+            downloaded[old.key] = nil
+            downloaded[new.key] = new.mangaKey
+        }
+        for chapter in removed {
+            store.remove(location(chapter))
+            if downloaded[chapter.key] != nil { downloaded[chapter.key] = nil }
+        }
+    }
+
     // MARK: Index
 
     func isDownloaded(_ chapterKey: String) -> Bool { downloaded[chapterKey] != nil }
@@ -204,20 +222,29 @@ final class DownloadManager: ObservableObject {
     /// How many chapters of a manga are downloaded.
     func downloadedCount(mangaKey: String) -> Int { countsByManga[mangaKey] ?? 0 }
 
-    /// The page files of a downloaded chapter in order, or nil when it is not downloaded.
-    func localPages(_ chapterKey: String) -> [URL]? {
+    /// The page files of a downloaded chapter in order, or nil when it is not downloaded. A CBZ is
+    /// unpacked off the main thread; that can take seconds.
+    func localPages(_ chapterKey: String) async -> [URL]? {
         guard let mangaKey = downloaded[chapterKey] else { return nil }
-        return store.localPages(DownloadStore.Location(sourceId: ChapterRecord.sourceId(ofKey: chapterKey), mangaKey: mangaKey, chapterKey: chapterKey))
+        let location = DownloadStore.Location(sourceId: ChapterRecord.sourceId(ofKey: chapterKey), mangaKey: mangaKey, chapterKey: chapterKey)
+        let store = self.store
+        return await Task.detached(priority: .userInitiated) { store.localPages(location) }.value
     }
 
-    /// Rebuilds the downloaded rows from what is on disk (Mihon's "Reindex downloads"). Chapters
-    /// still being written (`.partial`) do not count.
+    /// Rebuilds the downloaded rows from what is on disk (Mihon's "Reindex downloads"), and deletes
+    /// chapter folders and archives that match no chapter. Chapters still being written (`.partial`) do not count.
     func reindex() {
-        let candidates = (try? repo.db.read { db in
+        let rows = try? repo.db.read { db in
             try Row.fetchAll(db, sql: "SELECT chapter.key AS chapterKey, chapter.mangaKey AS mangaKey, manga.sourceId AS sourceId FROM chapter JOIN manga ON manga.key = chapter.mangaKey")
-        }) ?? []
+        }
+        let candidates = rows ?? []
         let folders = store.mangaFolders()
         let queued = Set(queue.map(\.chapterKey))
+        // Without the chapter rows every file would look orphaned, so nothing is swept then.
+        if rows != nil {
+            let chapters = candidates.map { DownloadStore.Location(sourceId: $0["sourceId"], mangaKey: $0["mangaKey"], chapterKey: $0["chapterKey"]) }
+            sweep(folders, keeping: chapters + queue.map { location($0) })
+        }
         var found: [(location: DownloadStore.Location, pages: Int, bytes: Int64)] = []
         for row in candidates {
             let location = DownloadStore.Location(sourceId: row["sourceId"], mangaKey: row["mangaKey"], chapterKey: row["chapterKey"])
@@ -236,6 +263,18 @@ final class DownloadManager: ObservableObject {
             }
         }
         downloaded = Dictionary(found.map { ($0.location.chapterKey, $0.location.mangaKey) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Deletes chapter folders and archives in `folders` that belong to none of `locations`, then empty manga folders.
+    private func sweep(_ folders: Set<String>, keeping locations: [DownloadStore.Location]) {
+        let expected = Set(locations.map { store.mangaFolder($0) + "/" + DownloadStore.hash($0.chapterKey) })
+        let fm = FileManager.default
+        for folder in folders {
+            let entries = store.chapterEntries(inMangaFolder: folder)
+            let orphans = entries.filter { !expected.contains(folder + "/" + $0.hash) }
+            for entry in orphans { try? fm.removeItem(at: entry.url) }
+            if orphans.count == entries.count { try? fm.removeItem(at: store.root.appendingPathComponent(folder, isDirectory: true)) }
+        }
     }
 
     // MARK: Storage
@@ -351,7 +390,7 @@ final class DownloadManager: ObservableObject {
             let pages = try await sources.source(item.sourceId).pages(url: item.chapterURL)
             guard isCurrent(key, worker) else { return }
             guard !pages.isEmpty else { throw DownloadError.noPages }
-            let directory = try store.begin(location)
+            let directory = try store.begin(location, pages: pages.map(\.url))
             let saved = store.existingPages(in: directory)
             setProgress(key, done: pages.indices.filter { saved.contains($0) }.count, total: pages.count)
 
@@ -377,14 +416,23 @@ final class DownloadManager: ObservableObject {
             guard isCurrent(key, worker) else { return }
             let zip = Pref.saveAsCBZ.value(in: defaults)
             let store = self.store
-            let result = try await Task.detached(priority: .utility) { try store.finish(location, zip: zip) }.value
-            guard isCurrent(key, worker) else { return }
+            let count = pages.count
+            // Cancelling the worker cancels the zipping too (a detached task does not inherit it).
+            let finishing = Task.detached(priority: .utility) { try store.finish(location, pages: count, zip: zip, isCancelled: { Task.isCancelled }) }
+            let result = try await withTaskCancellationHandler { try await finishing.value } onCancel: { finishing.cancel() }
+            guard isCurrent(key, worker) else { return removeIfCancelled(key, location) }
             completed(item, pages: result.pages, bytes: result.bytes)
         } catch {
-            guard isCurrent(key, worker), let index = queue.firstIndex(where: { $0.chapterKey == key }) else { return }
+            guard isCurrent(key, worker) else { return removeIfCancelled(key, location) }
+            guard let index = queue.firstIndex(where: { $0.chapterKey == key }) else { return }
             queue[index].state = .error(error.localizedDescription)
             AppLog.logger.error("Download failed (\(key, privacy: .public)): \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// A chapter cancelled while zipping can get its archive moved into place after `cancel` removed its files.
+    private func removeIfCancelled(_ key: String, _ location: DownloadStore.Location) {
+        if !queue.contains(where: { $0.chapterKey == key }) { store.remove(location) }
     }
 
     /// One page: three tries, waiting longer after each failure.
@@ -422,13 +470,19 @@ final class DownloadManager: ObservableObject {
 
     private func completed(_ item: DownloadItem, pages: Int, bytes: Int64) {
         queue.removeAll { $0.chapterKey == item.chapterKey }
-        downloaded[item.chapterKey] = item.mangaKey
         let now = Date()
-        repo.write { db in
-            try db.execute(
-                sql: "INSERT OR REPLACE INTO download (chapterKey, mangaKey, state, pageCount, bytes, dateAdded) VALUES (?, ?, ?, ?, ?, ?)",
-                arguments: [item.chapterKey, item.mangaKey, RowState.downloaded.rawValue, pages, bytes, now]
-            )
+        do {
+            try repo.db.write { db in
+                try db.execute(
+                    sql: "INSERT OR REPLACE INTO download (chapterKey, mangaKey, state, pageCount, bytes, dateAdded) VALUES (?, ?, ?, ?, ?, ?)",
+                    arguments: [item.chapterKey, item.mangaKey, RowState.downloaded.rawValue, pages, bytes, now]
+                )
+            }
+            downloaded[item.chapterKey] = item.mangaKey
+        } catch {
+            // Most likely the chapter row is gone (its foreign key failed): files nothing tracks.
+            store.remove(location(item))
+            AppLog.logger.error("Download not saved (\(item.chapterKey, privacy: .public)): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -490,6 +544,10 @@ final class DownloadManager: ObservableObject {
 
     private func location(_ item: DownloadItem) -> DownloadStore.Location {
         DownloadStore.Location(sourceId: item.sourceId, mangaKey: item.mangaKey, chapterKey: item.chapterKey)
+    }
+
+    private func location(_ chapter: ChapterRecord) -> DownloadStore.Location {
+        DownloadStore.Location(sourceId: chapter.sourceId, mangaKey: chapter.mangaKey, chapterKey: chapter.key)
     }
 }
 

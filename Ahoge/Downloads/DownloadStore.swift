@@ -18,6 +18,12 @@ struct DownloadStore: Sendable {
     let cache: URL
 
     static let partialMarker = ".partial"
+    /// The page URLs a partial folder's pages were saved for.
+    static let manifest = ".pages"
+    /// Test probe: whether the last CBZ unpack ran on the main thread.
+    nonisolated(unsafe) static var lastUnpackOnMainThread: Bool?
+    /// Test hook: runs once a chapter is zipped, before the archive is moved into place.
+    nonisolated(unsafe) static var willPlaceArchive: (() -> Void)?
 
     /// Keys hold URLs, which are no good as file names; a short hash is.
     static func hash(_ key: String) -> String { String(Data(key.utf8).sha256Hex.prefix(24)) }
@@ -41,10 +47,21 @@ struct DownloadStore: Sendable {
 
     // MARK: Writing
 
-    /// Creates the chapter folder (keeping pages already there) and marks it partial.
-    func begin(_ location: Location) throws -> URL {
+    /// Creates the chapter folder and marks it partial. Pages already there are kept only when they
+    /// were saved for the same page list.
+    func begin(_ location: Location, pages: [String]) throws -> URL {
         let directory = chapterDirectory(location)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fm = FileManager.default
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        let manifest = directory.appendingPathComponent(Self.manifest)
+        let list = Data(pages.joined(separator: "\n").utf8)
+        // A folder from before manifests existed counts as another list.
+        if (try? Data(contentsOf: manifest)) != list {
+            for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? [] where !name.hasPrefix(".") {
+                try fm.removeItem(at: directory.appendingPathComponent(name))
+            }
+            try list.write(to: manifest)
+        }
         let marker = directory.appendingPathComponent(Self.partialMarker)
         if !FileManager.default.fileExists(atPath: marker.path) {
             try Data().write(to: marker)
@@ -77,11 +94,14 @@ struct DownloadStore: Sendable {
         return "jpg"
     }
 
-    /// Clears the partial mark and, when asked, zips the folder into a .cbz and removes it.
-    /// Returns the page count and the bytes on disk.
-    func finish(_ location: Location, zip: Bool) throws -> (pages: Int, bytes: Int64) {
+    /// Keeps one file per page of a `count`-page list and clears the partial mark, then, when asked,
+    /// zips the folder into a .cbz and removes it. Returns the page count and the bytes on disk.
+    /// Cancelled while zipping, it leaves neither the folder nor an archive and throws `CancellationError`.
+    func finish(_ location: Location, pages count: Int, zip: Bool, isCancelled: () -> Bool) throws -> (pages: Int, bytes: Int64) {
         let fm = FileManager.default
         let directory = chapterDirectory(location)
+        Self.prune(directory, pages: count)
+        try? fm.removeItem(at: directory.appendingPathComponent(Self.manifest))
         try fm.removeItem(at: directory.appendingPathComponent(Self.partialMarker))
         let pageCount = pages(in: directory)?.count ?? 0
         guard zip else { return (pageCount, Self.size(of: directory)) }
@@ -92,10 +112,47 @@ struct DownloadStore: Sendable {
         let names = try fm.contentsOfDirectory(atPath: directory.path).filter { !$0.hasPrefix(".") }.sorted()
         let files = try names.map { (name: $0, data: try Data(contentsOf: directory.appendingPathComponent($0), options: .alwaysMapped)) }
         try ZipArchive.write(files: files, to: temporary)
+        Self.willPlaceArchive?()
+        guard !isCancelled() else {
+            try? fm.removeItem(at: temporary)
+            try? fm.removeItem(at: directory)
+            throw CancellationError()
+        }
         try? fm.removeItem(at: target)
         try fm.moveItem(at: temporary, to: target)
         try fm.removeItem(at: directory)
         return (pageCount, Self.size(of: target))
+    }
+
+    /// Moves a chapter's folder or archive to another key's place (its URL changed); the unpacked copy goes.
+    func move(_ from: Location, to: Location) {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: mangaDirectory(to), withIntermediateDirectories: true)
+        for (source, target) in [(chapterDirectory(from), chapterDirectory(to)), (archive(from), archive(to))] where fm.fileExists(atPath: source.path) {
+            try? fm.removeItem(at: target)
+            try? fm.moveItem(at: source, to: target)
+        }
+        remove(from)
+    }
+
+    /// Deletes page files past `count` and, where two share a page number (another image type), the older one.
+    private static func prune(_ directory: URL, pages count: Int) {
+        let fm = FileManager.default
+        var kept: [Int: (file: URL, date: Date)] = [:]
+        for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? [] where !name.hasPrefix(".") {
+            let file = directory.appendingPathComponent(name)
+            guard let number = Int(name.prefix { $0 != "." }), number >= 1, number <= count else {
+                try? fm.removeItem(at: file)
+                continue
+            }
+            let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            if let other = kept[number] {
+                let older = other.date > date ? file : other.file
+                try? fm.removeItem(at: older)
+                if older == file { continue }
+            }
+            kept[number] = (file, date)
+        }
     }
 
     /// Removes every trace of a chapter: folder, archive and unpacked copy.
@@ -103,6 +160,7 @@ struct DownloadStore: Sendable {
         let fm = FileManager.default
         try? fm.removeItem(at: chapterDirectory(location))
         try? fm.removeItem(at: archive(location))
+        try? fm.removeItem(at: archive(location).appendingPathExtension("tmp"))
         try? fm.removeItem(at: unpacked(location))
         // Drop the manga folder once it holds nothing.
         let manga = mangaDirectory(location)
@@ -138,6 +196,7 @@ struct DownloadStore: Sendable {
             try fm.createDirectory(at: target, withIntermediateDirectories: true)
             let marker = target.appendingPathComponent(Self.partialMarker)
             try Data().write(to: marker)
+            Self.lastUnpackOnMainThread = Thread.isMainThread
             try ZipArchive.extractAll(from: archive, to: target)
             try fm.removeItem(at: marker)
         } catch {
@@ -176,6 +235,13 @@ struct DownloadStore: Sendable {
     }
 
     func mangaFolder(_ location: Location) -> String { location.sourceId + "/" + Self.hash(location.mangaKey) }
+
+    /// The chapter folders and archives (also a `.cbz.tmp` being written) in a manga folder ("sourceId/mangaHash"), with their chapter key hash.
+    func chapterEntries(inMangaFolder folder: String) -> [(hash: String, url: URL)] {
+        let directory = root.appendingPathComponent(folder, isDirectory: true)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names.filter { !$0.hasPrefix(".") }.map { name in (String(name.prefix { $0 != "." }), directory.appendingPathComponent(name)) }
+    }
 
     // MARK: Sizes
 
