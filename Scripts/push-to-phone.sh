@@ -1,28 +1,42 @@
 #!/usr/bin/env bash
 # Keeps Ahoge current on the iPhone from WSL: builds new commits of a branch, installs them over Wi-Fi (or USB),
 # and re-signs before the free Apple ID's 7 days run out. Safe to run on a timer; see Scripts/install-push-task.ps1.
-# Usage: push-to-phone.sh [branch] [--force]    --force installs even when the branch is behind what is on the phone.
+# Usage: push-to-phone.sh [branch] [--force] [--quiet-hours HH-HH]
+# Installing kills the running app, so new commits install only inside the quiet window (local hours, start inclusive,
+# end exclusive, default 02-06, may wrap midnight like 22-06). --force installs at once, at any hour, and even when the
+# branch is behind what is on the phone. Re-signing runs inside the window after 3 days, and outside it after 6 days.
+# The Windows task does not wake the PC; if it is usually off at night, move the window with -QuietHours.
 set -euo pipefail
 
 branch="main"
 force=false
-for arg in "$@"; do
-  case "$arg" in
+quiet="02-06"
+while [ $# -gt 0 ]; do
+  case "$1" in
     --force) force=true ;;
-    *) branch="$arg" ;;
+    --quiet-hours) quiet="${2-}"; shift ;;
+    *) branch="$1" ;;
   esac
+  shift || true
 done
 
 here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/push-policy.sh"
 home="${AHOGE_PUSH_DIR:-$HOME/.ahoge-push}"
 remote="https://github.com/QuackyPROG/ahoge.git"
-resign_after=$((3 * 24 * 60 * 60))
 mkdir -p "$home"
 exec >>"$home/push.log" 2>&1
 exec 9>"$home/lock"
 flock -n 9 || exit 0
 
 log() { echo "$(date '+%F %T') $*"; }
+
+if ! quiet_hours_valid "$quiet"; then
+  log "invalid --quiet-hours '$quiet'; expected HH-HH with hours 00-23"
+  exit 1
+fi
+hour="$(date +%H)"
+log "local hour $hour, quiet window $quiet"
 
 started_relay=false
 cleanup() {
@@ -63,7 +77,7 @@ head="$(git rev-parse FETCH_HEAD)"
 installed="$(cat "$home/installed-commit" 2>/dev/null || true)"
 signed_at="$(cat "$home/installed-at" 2>/dev/null || echo 0)"
 due=false
-[ $(($(date +%s) - signed_at)) -ge "$resign_after" ] && due=true
+should_resign "$quiet" "$hour" $(($(date +%s) - signed_at)) && due=true
 
 # Runs under `if`, where set -e is off, so each step that can fail stops the build itself.
 build() {
@@ -90,8 +104,10 @@ if [ "$head" = "$installed" ]; then
   exit 0
 fi
 
+if ! should_install "$quiet" "$hour" "$force"; then
+  log "waiting for quiet window $quiet (now $hour)"
 # Older builds can't read a newer library, so a branch that went backwards never lands by itself.
-if [ -n "$installed" ] && ! $force && ! git merge-base --is-ancestor "$installed" "$head"; then
+elif [ -n "$installed" ] && ! $force && ! git merge-base --is-ancestor "$installed" "$head"; then
   log "$branch (${head:0:7}) does not contain ${installed:0:7} from the phone; not installing it (--force overrides)"
 else
   log "building $branch ${head:0:7}"
