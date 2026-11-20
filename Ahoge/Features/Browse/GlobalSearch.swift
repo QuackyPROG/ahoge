@@ -96,7 +96,8 @@ final class GlobalSearch: ObservableObject {
         let state: State
         do {
             let page = try await searcher(id, query)
-            state = .done(page.manga)
+            var seen = Set<String>()
+            state = .done(page.manga.filter { seen.insert($0.url).inserted })
         } catch is CancellationError {
             return
         } catch {

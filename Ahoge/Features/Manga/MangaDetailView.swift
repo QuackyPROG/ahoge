@@ -289,7 +289,7 @@ struct MangaDetailView: View {
 
     @ViewBuilder
     private func genreChips(_ genres: [String]) -> some View {
-        let chips = ForEach(genres, id: \.self) { genre in
+        let chips = ForEach(genres.uniqued(), id: \.self) { genre in
             NavigationLink(value: Route.sourceGenre(ref.sourceId, genre: genre)) {
                 Text(genre)
                     .font(.caption.weight(.medium))

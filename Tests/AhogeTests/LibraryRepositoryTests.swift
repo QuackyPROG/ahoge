@@ -48,6 +48,22 @@ final class LibraryRepositoryTests: XCTestCase {
         XCTAssertEqual(updated.genres, ["Action"])
     }
 
+    func testDetailsRefreshKeepsFieldsTheSourceLeavesEmpty() throws {
+        let repo = try repository()
+        let full = try JSONDecoder().decode(MangaDetails.self, from: Data(#"{"title":"One","cover":"","author":"A","artist":"B","description":"D","genres":["x"],"status":"ongoing"}"#.utf8))
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", details: full)
+        let blank = try JSONDecoder().decode(MangaDetails.self, from: Data(#"{"title":"One","cover":"","author":"","artist":" ","genres":[],"status":"unknown"}"#.utf8))
+        repo.upsert(sourceId: "en.demo", url: "/m/1", details: blank)
+        XCTAssertEqual(manga.author, "A")
+        XCTAssertEqual(manga.artist, "B")
+        XCTAssertEqual(manga.summary, "D")
+        XCTAssertEqual(manga.genres, ["x"])
+        XCTAssertEqual(manga.status, "ongoing")
+        let newAuthor = try JSONDecoder().decode(MangaDetails.self, from: Data(#"{"title":"One","author":"B"}"#.utf8))
+        repo.upsert(sourceId: "en.demo", url: "/m/1", details: newAuthor)
+        XCTAssertEqual(manga.author, "B")
+    }
+
     func testReopenLoadsSavedState() throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("library-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: file) }

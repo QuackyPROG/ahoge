@@ -84,8 +84,8 @@ final class SourceBrowseModel: ObservableObject {
         do {
             let result = try await fetch(feed, query.trimmingCharacters(in: .whitespaces), next, filters)
             guard current == generation else { return }
-            let known = Set(items.map(\.url))
-            items += result.manga.filter { !known.contains($0.url) }
+            var known = Set(items.map(\.url))
+            items += result.manga.filter { known.insert($0.url).inserted }
             page = next
             hasNext = result.hasNextPage && !result.manga.isEmpty
         } catch {

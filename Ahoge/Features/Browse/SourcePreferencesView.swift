@@ -70,7 +70,7 @@ struct SourcePreferencesView: View {
                 get: { if case .string(let value) = current(item) { return value } else { return "" } },
                 set: { save(.string($0), item) }
             )) {
-                ForEach(item.options, id: \.value) { Text($0.title).tag($0.value) }
+                ForEach(Array(item.options.enumerated()), id: \.offset) { Text($0.element.title).tag($0.element.value) }
             }
         case .text:
             TextField(item.title, text: Binding<String>(

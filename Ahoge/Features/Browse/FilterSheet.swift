@@ -58,7 +58,7 @@ private struct FilterRows: View {
             TriStateRow(name: name, state: tristate(key))
         case .select(let key, let name, let options, _):
             Picker(name, selection: option(key)) {
-                ForEach(options, id: \.value) { Text($0.label).tag($0.value) }
+                ForEach(Array(options.enumerated()), id: \.offset) { Text($0.element.label).tag($0.element.value) }
             }
             .pickerStyle(.menu)
         case .sort(let key, let name, let options, let fallback):
@@ -146,7 +146,7 @@ private struct SortRows: View {
 
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
-            ForEach(options, id: \.value) { option in
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
                 Button {
                     if value.value == option.value { value.ascending.toggle() } else { value = SortValue(value: option.value, ascending: false) }
                 } label: {

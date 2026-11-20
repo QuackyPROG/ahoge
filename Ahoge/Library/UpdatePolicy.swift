@@ -2,7 +2,7 @@ import Foundation
 
 /// Why a library update leaves a title out.
 enum SkipReason: Equatable {
-    case hasUnread, notStarted, completed, notDue, excludedCategory
+    case hasUnread, notStarted, completed, notDue, never, excludedCategory
 }
 
 /// The settings that decide which titles a library update refreshes.
@@ -36,7 +36,7 @@ enum UpdatePolicy {
         if rules.skipUnread, manga.unreadCount > 0 { return .hasUnread }
         // A title that was never fetched has no chapters to have started.
         if rules.skipUnstarted, !manga.chapters.isEmpty, !manga.hasStartedReading { return .notStarted }
-        if manga.updateInterval == 0 { return .notDue }
+        if manga.updateInterval == 0 { return .never }
         if let due = dueDate(manga, rules: rules), now < due { return .notDue }
         return nil
     }

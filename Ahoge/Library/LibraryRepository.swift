@@ -191,11 +191,15 @@ final class LibraryRepository: ObservableObject {
         objectWillChange.send()
         if !details.title.isEmpty, !keepTitle { manga.title = details.title }
         if !details.cover.isEmpty { manga.coverUrl = details.cover }
-        manga.author = details.author
-        manga.artist = details.artist
-        manga.summary = details.description
-        manga.genres = details.genres
-        manga.status = details.status
+        // A source that returns a field empty (or status "unknown") keeps what was there.
+        func filled(_ new: String, else old: String) -> String {
+            new.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? old : new
+        }
+        manga.author = filled(details.author, else: manga.author)
+        manga.artist = filled(details.artist, else: manga.artist)
+        manga.summary = filled(details.description, else: manga.summary)
+        if !details.genres.isEmpty { manga.genres = details.genres }
+        if details.status != "unknown" { manga.status = details.status }
         write { try manga.update($0) }
         return manga
     }

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// A Mihon/Tachiyomi backup (`.tachibk`) read into Ahoge's own `Backup`, so `BackupService.restore`
@@ -36,7 +37,7 @@ enum MihonBackupImporter {
         var matches: [Int64: RepoSource?] = [:]
         func match(_ id: Int64) -> RepoSource? {
             if let cached = matches[id] { return cached }
-            let found = sourceNames[id].flatMap { find($0, in: sources) }
+            let found = sourceNames[id].flatMap { find($0, id: id, in: sources) }
             matches[id] = .some(found)
             return found
         }
@@ -100,11 +101,20 @@ enum MihonBackupImporter {
         return Imported(backup: backup, unmatchedSources: unmatched)
     }
 
-    /// Case-insensitive name match. Mihon's backup has no language, so with several candidates English wins.
-    static func find(_ name: String, in sources: [RepoSource]) -> RepoSource? {
+    /// Case-insensitive name match. Mihon's backup has no language, so among same-named sources the
+    /// one whose Mihon id matches `id` wins, else English, else the first.
+    static func find(_ name: String, id: Int64? = nil, in sources: [RepoSource]) -> RepoSource? {
         let wanted = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidates = sources.filter { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(wanted) == .orderedSame }
+        if let id, let exact = candidates.first(where: { generateId(name: name, lang: $0.lang) == id }) { return exact }
         return candidates.first { $0.lang == "en" } ?? candidates.first
+    }
+
+    /// Mihon's `HttpSource.generateId`: MD5 of "name/lang/version", first 8 bytes big-endian, sign bit cleared.
+    static func generateId(name: String, lang: String, versionId: Int = 1) -> Int64 {
+        let digest = Insecure.MD5.hash(data: Data("\(name.lowercased())/\(lang)/\(versionId)".utf8))
+        let high = digest.prefix(8).reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+        return Int64(bitPattern: high & UInt64(Int64.max))
     }
 
     private static func status(_ value: Int) -> String {
