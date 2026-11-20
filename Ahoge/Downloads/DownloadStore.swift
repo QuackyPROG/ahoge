@@ -188,6 +188,13 @@ struct DownloadStore: Sendable {
 
     func mangaFolder(_ location: Location) -> String { location.sourceId + "/" + Self.hash(location.mangaKey) }
 
+    /// The chapter folders and archives (also a `.cbz.tmp` being written) in a manga folder ("sourceId/mangaHash"), with their chapter key hash.
+    func chapterEntries(inMangaFolder folder: String) -> [(hash: String, url: URL)] {
+        let directory = root.appendingPathComponent(folder, isDirectory: true)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names.filter { !$0.hasPrefix(".") }.map { name in (String(name.prefix { $0 != "." }), directory.appendingPathComponent(name)) }
+    }
+
     // MARK: Sizes
 
     func clearCache() { try? FileManager.default.removeItem(at: cache) }

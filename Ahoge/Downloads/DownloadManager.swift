@@ -228,14 +228,20 @@ final class DownloadManager: ObservableObject {
         return store.localPages(DownloadStore.Location(sourceId: ChapterRecord.sourceId(ofKey: chapterKey), mangaKey: mangaKey, chapterKey: chapterKey))
     }
 
-    /// Rebuilds the downloaded rows from what is on disk (Mihon's "Reindex downloads"). Chapters
-    /// still being written (`.partial`) do not count.
+    /// Rebuilds the downloaded rows from what is on disk (Mihon's "Reindex downloads"), and deletes
+    /// chapter folders and archives that match no chapter. Chapters still being written (`.partial`) do not count.
     func reindex() {
-        let candidates = (try? repo.db.read { db in
+        let rows = try? repo.db.read { db in
             try Row.fetchAll(db, sql: "SELECT chapter.key AS chapterKey, chapter.mangaKey AS mangaKey, manga.sourceId AS sourceId FROM chapter JOIN manga ON manga.key = chapter.mangaKey")
-        }) ?? []
+        }
+        let candidates = rows ?? []
         let folders = store.mangaFolders()
         let queued = Set(queue.map(\.chapterKey))
+        // Without the chapter rows every file would look orphaned, so nothing is swept then.
+        if rows != nil {
+            let chapters = candidates.map { DownloadStore.Location(sourceId: $0["sourceId"], mangaKey: $0["mangaKey"], chapterKey: $0["chapterKey"]) }
+            sweep(folders, keeping: chapters + queue.map { location($0) })
+        }
         var found: [(location: DownloadStore.Location, pages: Int, bytes: Int64)] = []
         for row in candidates {
             let location = DownloadStore.Location(sourceId: row["sourceId"], mangaKey: row["mangaKey"], chapterKey: row["chapterKey"])
@@ -254,6 +260,18 @@ final class DownloadManager: ObservableObject {
             }
         }
         downloaded = Dictionary(found.map { ($0.location.chapterKey, $0.location.mangaKey) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Deletes chapter folders and archives in `folders` that belong to none of `locations`, then empty manga folders.
+    private func sweep(_ folders: Set<String>, keeping locations: [DownloadStore.Location]) {
+        let expected = Set(locations.map { store.mangaFolder($0) + "/" + DownloadStore.hash($0.chapterKey) })
+        let fm = FileManager.default
+        for folder in folders {
+            let entries = store.chapterEntries(inMangaFolder: folder)
+            let orphans = entries.filter { !expected.contains(folder + "/" + $0.hash) }
+            for entry in orphans { try? fm.removeItem(at: entry.url) }
+            if orphans.count == entries.count { try? fm.removeItem(at: store.root.appendingPathComponent(folder, isDirectory: true)) }
+        }
     }
 
     // MARK: Storage

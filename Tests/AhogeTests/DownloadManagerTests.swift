@@ -163,6 +163,32 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertEqual(downloads.localPages(manga.chapter(1).key)?.count, 3)
     }
 
+    func testReindexDeletesFoldersAndArchivesWithNoChapter() async throws {
+        let repo = try LibraryRepository.inMemory()
+        let manga = SourceFixture.manga(in: repo, chapters: 2)
+        let downloads = manager(repo, SourceManager(extensions: try SourceFixture.extensions()), transport())
+        downloads.enqueue([manga.chapter(1)])
+        await downloads.waitUntilIdle()
+        downloads.pause()
+        downloads.enqueue([manga.chapter(2)])
+        let folder = root.appendingPathComponent(SourceFixture.sourceId).appendingPathComponent(DownloadStore.hash(manga.key))
+        let fm = FileManager.default
+        let orphan = folder.appendingPathComponent(DownloadStore.hash("en.test\n/gone/1"))
+        try fm.createDirectory(at: orphan, withIntermediateDirectories: true)
+        try jpeg.write(to: orphan.appendingPathComponent("001.jpg"))
+        try jpeg.write(to: folder.appendingPathComponent(DownloadStore.hash("en.test\n/gone/2") + ".cbz"))
+        let partial = folder.appendingPathComponent(DownloadStore.hash(manga.chapter(2).key))
+        try fm.createDirectory(at: partial, withIntermediateDirectories: true)
+        try Data().write(to: partial.appendingPathComponent(DownloadStore.partialMarker))
+        try jpeg.write(to: partial.appendingPathComponent("001.jpg"))
+
+        downloads.reindex()
+
+        XCTAssertEqual(Set(try fm.contentsOfDirectory(atPath: folder.path)), [DownloadStore.hash(manga.chapter(1).key), DownloadStore.hash(manga.chapter(2).key)])
+        XCTAssertTrue(downloads.isDownloaded(manga.chapter(1).key))
+        XCTAssertFalse(downloads.isDownloaded(manga.chapter(2).key))
+    }
+
     func testDeleteRemovesFilesAndRow() async throws {
         let repo = try LibraryRepository.inMemory()
         let manga = SourceFixture.manga(in: repo, chapters: 1)
