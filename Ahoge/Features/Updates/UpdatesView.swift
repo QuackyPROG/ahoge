@@ -11,6 +11,7 @@ struct UpdatesView: View {
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var updater: LibraryUpdater
     @EnvironmentObject private var downloads: DownloadManager
+    @EnvironmentObject private var navigator: AppNavigator
     @Environment(\.palette) private var palette
     @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
     @State private var reading: UpdateEntry?
@@ -38,7 +39,7 @@ struct UpdatesView: View {
                 && unreadState.matches(!entry.chapter.read)
                 && startedState.matches(entry.manga.hasStartedReading)
         }
-        NavigationStack {
+        NavigationStack(path: navigator.binding(for: .updates)) {
             List(selection: $selection) {
                 Section {
                     Text(lastUpdatedText)

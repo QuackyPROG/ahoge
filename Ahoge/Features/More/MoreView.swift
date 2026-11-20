@@ -4,6 +4,7 @@ struct MoreView: View {
     @Environment(\.palette) private var palette
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var downloads: DownloadManager
+    @EnvironmentObject private var navigator: AppNavigator
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
     @AppStorage(Pref.browseHideInLibrary.name) private var hideInLibrary = false
@@ -20,7 +21,7 @@ struct MoreView: View {
     @State private var query = ""
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigator.binding(for: .more)) {
             List {
                 Section {
                     VStack(spacing: 6) {

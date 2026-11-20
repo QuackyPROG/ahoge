@@ -35,6 +35,20 @@ final class AppNavigator: ObservableObject {
     @Published var pendingRoute: Route?
     /// A repository link waiting for the person to confirm adding it.
     @Published var pendingRepo: URL?
+    /// Each tab's navigation stack, so any view can push onto the visible tab.
+    @Published var paths: [AppTab: [Route]] = [:]
+
+    func path(for tab: AppTab) -> [Route] { paths[tab] ?? [] }
+
+    /// For a tab root's `NavigationStack(path:)`.
+    func binding(for tab: AppTab) -> Binding<[Route]> {
+        Binding(get: { self.path(for: tab) }, set: { self.paths[tab] = $0 })
+    }
+
+    /// Shows `route` on top of the selected tab.
+    func push(_ route: Route) {
+        paths[tab, default: []].append(route)
+    }
 
     /// Shows `route` on top of the Library tab.
     func open(_ route: Route) {

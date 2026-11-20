@@ -21,7 +21,6 @@ struct LibraryView: View {
     @AppStorage(Pref.libraryShelf.name) private var shelf = 0
     @AppStorage(Pref.libraryContinueButton.name) private var continueButton = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
-    @State private var path: [Route] = []
     @EnvironmentObject private var navigator: AppNavigator
     @State private var reading: (manga: LibraryManga, chapter: ChapterRecord)?
     @State private var search = ""
@@ -79,7 +78,7 @@ struct LibraryView: View {
         let shelves = snap.shelves
         let currentId = snap.currentId
         let current = Binding(get: { currentId }, set: { shelf = $0 })
-        NavigationStack(path: $path) {
+        NavigationStack(path: navigator.binding(for: .library)) {
             VStack(spacing: 0) {
                 if showTabs, shelves.count > 1 {
                     CategoryTabBar(
@@ -153,7 +152,7 @@ struct LibraryView: View {
             .onChange(of: navigator.pendingRoute, initial: true) { _, route in
                 guard let route else { return }
                 navigator.pendingRoute = nil
-                path = [route]
+                navigator.paths[.library] = [route]
             }
         }
     }
@@ -330,7 +329,7 @@ struct LibraryView: View {
 
     private func openRandom(_ snap: Snapshot) {
         guard let pick = (snap.items[snap.currentId] ?? []).randomElement() else { return }
-        path.append(.manga(pick.ref))
+        navigator.paths[.library, default: []].append(.manga(pick.ref))
     }
 
     private func endSelection() {

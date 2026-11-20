@@ -7,9 +7,10 @@ struct BrowseView: View {
     }
 
     @State private var tab: Tab = .sources
+    @EnvironmentObject private var navigator: AppNavigator
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigator.binding(for: .browse)) {
             Group {
                 switch tab {
                 case .sources: SourcesView()
