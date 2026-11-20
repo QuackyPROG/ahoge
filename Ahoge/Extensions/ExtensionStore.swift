@@ -18,6 +18,8 @@ final class ExtensionStore: ObservableObject {
 
     private let directory: URL
     private let client: RepoClient
+    /// Set when state.json exists but did not load: saving now would wipe the user's list, so it is off until restart.
+    private var saveBlocked: String?
 
     nonisolated static func defaultDirectory() -> URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Extensions")
@@ -96,6 +98,8 @@ final class ExtensionStore: ObservableObject {
     }
 
     func uninstall(_ id: String) {
+        // A blocked store does not know what is installed, so it leaves scripts alone.
+        if saveBlocked != nil { return save() }
         try? FileManager.default.removeItem(at: scriptURL(id))
         installed.removeAll { $0.id == id }
         save()
@@ -147,12 +151,39 @@ final class ExtensionStore: ObservableObject {
     private func scriptURL(_ id: String) -> URL { scriptsDirectory.appendingPathComponent("\(id).js") }
 
     private func load() {
-        guard let data = try? Data(contentsOf: stateURL), let state = try? JSONDecoder().decode(State.self, from: data) else { return }
-        repos = state.repos
-        installed = state.installed
+        let data: Data
+        do {
+            data = try Data(contentsOf: stateURL)
+        } catch CocoaError.fileReadNoSuchFile {
+            return
+        } catch {
+            saveBlocked = "The extension list could not be read (\(error.localizedDescription)). Changes will not be saved until the app restarts."
+            lastError = saveBlocked
+            return
+        }
+        do {
+            let state = try JSONDecoder().decode(State.self, from: data)
+            repos = state.repos
+            installed = state.installed
+        } catch {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyyMMdd-HHmmss"
+            let copy = directory.appendingPathComponent("state.json.unreadable-\(formatter.string(from: Date()))")
+            if (try? FileManager.default.moveItem(at: stateURL, to: copy)) != nil {
+                saveBlocked = "The extension list was unreadable. A copy was kept as \(copy.lastPathComponent) in the app's Extensions folder. Changes will not be saved until the app restarts."
+            } else {
+                saveBlocked = "The extension list could not be read. Changes will not be saved until the app restarts."
+            }
+            lastError = saveBlocked
+        }
     }
 
     private func save() {
+        if let saveBlocked {
+            lastError = saveBlocked
+            return
+        }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(State(repos: repos, installed: installed))
