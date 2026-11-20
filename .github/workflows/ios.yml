@@ -15,9 +15,10 @@ concurrency:
 env:
   # CI never uses Xcode's index; building it costs compile time.
   XCODE_FLAGS: COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO
-  # brew otherwise updates itself first, which sometimes takes minutes.
-  HOMEBREW_NO_AUTO_UPDATE: 1
-  HOMEBREW_NO_INSTALL_CLEANUP: 1
+  # XcodeGen comes from its GitHub release, checked against GitHub's SHA-256 for the file.
+  # brew install took up to 2.5 minutes; the download takes seconds.
+  XCODEGEN_VERSION: 2.46.0
+  XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
 jobs:
   # Tests, then the simulator app zipped from the same build (Debug, no second compile).
   test:
@@ -44,7 +45,12 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
           restore-keys: spm-${{ runner.os }}-
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip" -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Generate project
         run: xcodegen generate
       - name: Xcode version
@@ -99,7 +105,12 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
           restore-keys: spm-${{ runner.os }}-
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip" -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Generate project
         run: xcodegen generate
       - name: Build unsigned device app
