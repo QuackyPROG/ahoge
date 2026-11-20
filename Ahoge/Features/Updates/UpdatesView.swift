@@ -155,7 +155,12 @@ struct UpdatesView: View {
             .onChange(of: navigator.tab, initial: true) { old, new in
                 if old == .updates || new == .updates { lastSeen = Date().timeIntervalSince1970 }
             }
-            .onChange(of: updater.lastUpdated) { if navigator.tab == .updates { lastSeen = Date().timeIntervalSince1970 } }
+            .onChange(of: updater.lastUpdated) {
+                // Only while the list itself shows: not under the reader or a pushed page.
+                if navigator.tab == .updates && navigator.reader == nil && navigator.path(for: .updates).isEmpty {
+                    lastSeen = Date().timeIntervalSince1970
+                }
+            }
         }
     }
 
