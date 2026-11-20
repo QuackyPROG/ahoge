@@ -1,6 +1,6 @@
 # 01 — Webtoon pages decode once, at screen width
 
-- **Status:** in-progress
+- **Status:** done
 - **Blocked by:** none
 - **Change type:** logic
 - **Model:** sonnet  <!-- 4 files plus tests, and cache keys several call sites share -->
@@ -52,9 +52,9 @@ decodeWidth: CGFloat = ImageLoader.maxPixelWidth
 6. `ReaderView`: store the reader's width in points from the existing background `GeometryReader` next to `isLandscape`, read `@Environment(\.displayScale)`, and set `layout.webtoonWidth = min(ImageLoader.maxPixelWidth, (width * displayScale).rounded(.up))` in webtoon mode (2048 otherwise). Pass it to `ReaderPageView` as `decodeWidth` for webtoon items. `currentImage` (the share button) in webtoon mode reads `sliceKey(url, 0, maxPixelWidth: layout.webtoonWidth, transform:)` first, so the share button does not disappear now that webtoon pages are always slices.
 
 ## Done when
-- [ ] The new and existing tests in `ImageLoaderTests`, `PageGeometryTests` and `ReaderModelTests` pass in the CI `test` job (`.github/workflows/ios.yml`, macOS runner), with the run URL in the report. No local Swift toolchain is available on Windows.
-- [ ] The CI build compiles with no new warnings in the changed files.
-- [ ] `ImageMemoryCache`'s 96 MiB limit and its test are unchanged.
+- [x] The new and existing tests in `ImageLoaderTests`, `PageGeometryTests` and `ReaderModelTests` pass in the CI `test` job (`.github/workflows/ios.yml`, macOS runner), with the run URL in the report. No local Swift toolchain is available on Windows.
+- [x] The CI build compiles with no new warnings in the changed files.
+- [x] `ImageMemoryCache`'s 96 MiB limit and its test are unchanged.
 
 ## User checks
 - On device, open a streamed webtoon chapter with tall pages and scroll down steadily: the stutter as the next page arrives is gone or clearly smaller than before.
