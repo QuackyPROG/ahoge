@@ -215,4 +215,23 @@ final class BackupServiceTests: XCTestCase {
         let restored = try XCTUnwrap(target.manga(sourceId: "en.demo", url: "/m/1"))
         XCTAssertEqual(target.categoryIds(of: restored), [reading.id])
     }
+
+    func testRestoreKeepsAnExistingTitlesSmartInterval() async throws {
+        let target = try LibraryRepository.inMemory()
+        let existing = target.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        target.setInLibrary(existing, true)
+        XCTAssertNil(existing.updateInterval)
+
+        let backup = Backup(
+            createdAt: Date(timeIntervalSince1970: 5000),
+            manga: [
+                BackupManga(sourceId: "en.demo", url: "/m/1", title: "One", updateInterval: 7),
+                BackupManga(sourceId: "en.demo", url: "/m/2", title: "Two", updateInterval: 7),
+            ]
+        )
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
+
+        XCTAssertNil(target.manga(sourceId: "en.demo", url: "/m/1")?.updateInterval, "Smart stays Smart")
+        XCTAssertEqual(target.manga(sourceId: "en.demo", url: "/m/2")?.updateInterval, 7, "new to the device")
+    }
 }
