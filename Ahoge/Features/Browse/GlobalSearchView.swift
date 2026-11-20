@@ -15,6 +15,7 @@ struct GlobalSearchView: View {
 private struct GlobalSearchScreen: View {
     @EnvironmentObject private var store: ExtensionStore
     @EnvironmentObject private var repo: LibraryRepository
+    @EnvironmentObject private var navigator: AppNavigator
     @StateObject private var search: GlobalSearch
     @State private var query: String
     @State private var searched = ""
@@ -24,8 +25,6 @@ private struct GlobalSearchScreen: View {
     private let migrating: MangaRef?
     /// The result picked to migrate to.
     @State private var target: MangaRef?
-    /// The new entry after a migration, opened in place of the search.
-    @State private var migrated: MangaRef?
 
     init(initialQuery: String, migrating: MangaRef?, makeSearch: @autoclosure @escaping () -> GlobalSearch) {
         self.migrating = migrating
@@ -57,10 +56,9 @@ private struct GlobalSearchScreen: View {
         .task { if searched.isEmpty { start() } }
         .sheet(isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } })) {
             if let target, let migrating, let old = repo.manga(sourceId: migrating.sourceId, url: migrating.url) {
-                MigrateSheet(old: old, target: target) { migrated = $0 }
+                MigrateSheet(old: old, target: target) { navigator.finishMigration(from: migrating, to: $0) }
             }
         }
-        .navigationDestination(item: $migrated) { MangaDetailView(ref: $0) }
     }
 
     private func start() {

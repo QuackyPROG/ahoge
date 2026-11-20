@@ -17,6 +17,7 @@ final class SettingsSearchTests: XCTestCase {
         let entry = SettingsIndex.search("migrate").first { $0.title == "Migrate" }
         XCTAssertEqual(entry?.destination, .migrate)
     }
+
     func testBlankQueryFindsNothing() {
         XCTAssertTrue(SettingsIndex.search("   ").isEmpty)
     }

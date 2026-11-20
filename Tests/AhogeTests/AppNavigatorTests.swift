@@ -43,6 +43,7 @@ final class AppNavigatorTests: XCTestCase {
         navigator.push(.sourceSearch("en.demo", query: "One"))
         XCTAssertEqual(navigator.path(for: .library), [.manga(one), .migrate(one), .sourceSearch("en.demo", query: "One")])
     }
+
     func testMoreMigrateASourceThenATitleStacksTheMigrateSearchOnTop() {
         let navigator = AppNavigator()
         navigator.tab = .more
@@ -51,6 +52,7 @@ final class AppNavigatorTests: XCTestCase {
         navigator.push(.migrate(one))
         XCTAssertEqual(navigator.path(for: .more), [.migrateSources, .migrateTitles("s"), .migrate(one)])
     }
+
     func testATitleTappedInUpcomingStacksOnTopOfIt() {
         let navigator = AppNavigator()
         navigator.tab = .updates
@@ -58,6 +60,52 @@ final class AppNavigatorTests: XCTestCase {
         navigator.push(.manga(one))
         XCTAssertEqual(navigator.path(for: .updates), [.upcoming, .manga(one)])
     }
+
+    func testMigratingFromAMangaPageReplacesThePageAndTheSearch() {
+        XCTAssertEqual([Route].finishingMigration([.manga(one), .migrate(one)], from: one, to: two), [.manga(two)])
+    }
+
+    func testMigratingKeepsWhatWasBelowTheOldPage() {
+        XCTAssertEqual(
+            [Route].finishingMigration([.globalSearch("x"), .manga(one), .migrate(one)], from: one, to: two),
+            [.globalSearch("x"), .manga(two)]
+        )
+    }
+
+    func testMigratingFromMoreMigrateReturnsToTheTitlesList() {
+        XCTAssertEqual(
+            [Route].finishingMigration([.migrateSources, .migrateTitles("s"), .migrate(one)], from: one, to: two),
+            [.migrateSources, .migrateTitles("s")]
+        )
+    }
+
+    func testMigratingDropsScreensOpenedFromTheMigrateSearch() {
+        XCTAssertEqual(
+            [Route].finishingMigration([.manga(one), .migrate(one), .sourceSearch("en.demo", query: "One")], from: one, to: two),
+            [.manga(two)]
+        )
+    }
+
+    func testMigratingLeavesAPathWithoutTheMigrateSearchAlone() {
+        let path: [Route] = [.manga(one), .globalSearch("x")]
+        XCTAssertEqual([Route].finishingMigration(path, from: one, to: two), path)
+    }
+
+    func testMigratingMatchesAPageOpenedWithoutTitleOrCover() {
+        // A deep link opens a page with an empty title; Migrate pushes the library entry's full ref.
+        let bare = MangaRef(sourceId: one.sourceId, url: one.url, title: "", cover: "")
+        XCTAssertEqual([Route].finishingMigration([.manga(bare), .migrate(one)], from: one, to: two), [.manga(two)])
+    }
+
+    func testFinishMigrationRewritesTheSelectedTabsPath() {
+        let navigator = AppNavigator()
+        navigator.tab = .library
+        navigator.push(.manga(one))
+        navigator.push(.migrate(one))
+        navigator.finishMigration(from: one, to: two)
+        XCTAssertEqual(navigator.path(for: .library), [.manga(two)])
+    }
+
     func testOpeningAMangaSelectsLibraryAndQueuesTheRoute() {
         let navigator = AppNavigator()
         navigator.tab = .more
