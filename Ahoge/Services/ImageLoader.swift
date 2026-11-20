@@ -184,7 +184,8 @@ actor ImageLoader {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) > 0 else { return nil }
         let size = pixelSize(of: source)
-        if let size, size.width <= maxPixelWidth, max(size.width, size.height) <= maxPixelLength {
+        // A turned image takes the thumbnail path below, which draws it upright; UIImage(data:) would only tag it.
+        if let size, size.width <= maxPixelWidth, max(size.width, size.height) <= maxPixelLength, orientation(of: source) == 1 {
             guard let image = UIImage(data: data) else { return nil }
             return image.preparingForDisplay() ?? image
         }
@@ -206,6 +207,12 @@ actor ImageLoader {
               CGImageSourceGetCount(source) > 0, let size = pixelSize(of: source) else { return nil }
         let scale = min(1, maxPixelWidth / size.width)
         return CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+    }
+
+    /// The image's EXIF orientation, 1 (upright) when absent.
+    private nonisolated static func orientation(of source: CGImageSource) -> Int {
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        return (properties?[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
     }
 
     /// The image's pixel size as shown (after its orientation); nil when unknown.

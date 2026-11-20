@@ -1,7 +1,7 @@
 # State: reader-scroll-stutter
 
 - **Lane:** fast
-- **Stage:** verify
+- **Stage:** implement
 - **Branch:** yaaw/reader-scroll-stutter
 - **Base:** origin/main
 - **Issue:** https://github.com/QuackyPROG/ahoge/issues/16
@@ -20,3 +20,4 @@ A gate is passed only when its line is ticked with a date. Fast lane marks spec 
 - 2026-11-20 20:39: interrogate approved by user; stage → plan (fast lane)
 - 2026-11-20 20:41: ticket 01 approved by user; stage → implement
 - 2026-11-20 21:02: ticket 01 done (0708d30, CI run 44738672955 green); final review: 2 medium, 2 low; stage → verify
+- 2026-11-20 21:50: ticket 02 approved by user (medium findings from 01); stage → implement

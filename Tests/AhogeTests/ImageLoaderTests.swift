@@ -13,6 +13,40 @@ final class ImageLoaderTests: XCTestCase {
         return image.pngData()!
     }
 
+    /// A JPEG of `width` × `height` raw pixels carrying EXIF `orientation`.
+    private func jpeg(width: Int, height: Int, orientation: Int) throws -> Data {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        let cgImage = try XCTUnwrap(image.cgImage)
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, cgImage, [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    func testRotatedPageDecodesUpright() throws {
+        let image = try XCTUnwrap(ImageLoader.decode(jpeg(width: 100, height: 200, orientation: 6), maxPixelWidth: 2048))
+        XCTAssertEqual(image.imageOrientation, .up)
+        XCTAssertEqual(image.cgImage?.width, 200)
+        XCTAssertEqual(image.cgImage?.height, 100)
+    }
+
+    func testRotatedPageSlicesAreUpright() throws {
+        let slices = ImageLoader.slices(try jpeg(width: 100, height: 200, orientation: 6), maxPixelWidth: 2048)
+        XCTAssertEqual(slices.count, 1)
+        XCTAssertEqual(slices.first?.cgImage?.width, 200)
+        XCTAssertEqual(slices.first?.cgImage?.height, 100)
+    }
+
+    func testRotatedPageSizeIsAsShown() throws {
+        XCTAssertEqual(ImageLoader.pixelSize(try jpeg(width: 100, height: 200, orientation: 6), maxPixelWidth: 2048), CGSize(width: 200, height: 100))
+    }
+
     func testWideImageIsDecodedAtTheLimit() throws {
         let image = try XCTUnwrap(ImageLoader.decode(png(width: 3000, height: 1000), maxPixelWidth: 600))
         XCTAssertEqual(image.cgImage?.width, 600)
@@ -89,7 +123,7 @@ final class ImageLoaderTests: XCTestCase {
         XCTAssertEqual(first.cgImage?.width, 400)
         XCTAssertLessThanOrEqual(first.cgImage?.height ?? .max, 4096)
         XCTAssertEqual(ImageMemoryCache.shared.size(of: url), CGSize(width: 800, height: 20000))
-        for index in 1..<3 {
+        for index in 1..<5 {
             XCTAssertNotNil(ImageMemoryCache.shared[ImageLoader.sliceKey(url, index, maxPixelWidth: 400)])
         }
     }
@@ -105,7 +139,9 @@ final class ImageLoaderTests: XCTestCase {
         do {
             _ = try await ImageLoader.shared.slice(1, of: url, maxPixelWidth: 400)
             XCTFail("there is no second slice")
-        } catch {}
+        } catch {
+            XCTAssertEqual(error as? URLError, URLError(.cannotDecodeContentData))
+        }
     }
 
     func testGarbageIsNil() {

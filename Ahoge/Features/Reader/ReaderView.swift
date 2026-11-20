@@ -247,8 +247,11 @@ struct ReaderView: View {
 
     /// Pixels across a webtoon page is decoded at: the screen's width, at most the decode limit.
     private var webtoonWidth: CGFloat {
-        guard mode == .webtoon, readerWidth > 0 else { return ImageLoader.maxPixelWidth }
-        return min(ImageLoader.maxPixelWidth, (readerWidth * displayScale).rounded(.up))
+        guard mode == .webtoon else { return ImageLoader.maxPixelWidth }
+        // Before the reader is measured, the screen's width stands in, so the first decode is already at the final width.
+        let width = readerWidth > 0 ? readerWidth : screen?.bounds.width ?? 0
+        guard width > 0 else { return ImageLoader.maxPixelWidth }
+        return min(ImageLoader.maxPixelWidth, (width * displayScale).rounded(.up))
     }
 
     private func pageTransform(paged: Bool, half: ImageTransform.Half? = nil) -> ImageTransform {
@@ -517,12 +520,12 @@ struct ReaderView: View {
 
     private var currentImage: UIImage? {
         guard let pages = model.currentSection?.pages, pages.indices.contains(model.currentPage) else { return nil }
-        // With a transform on, only the transformed copy is cached.
         let url = pages[model.currentPage].url
         let transform = pageTransform(paged: mode.isPaged)
         // Webtoon pages are always slices; the first one stands for the page.
         if mode == .webtoon, let slice = ImageMemoryCache.shared[ImageLoader.sliceKey(url, 0, maxPixelWidth: webtoonWidth, transform: transform)] { return slice }
-        return ImageMemoryCache.shared[ImageLoader.cacheKey(url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: pageTransform(paged: mode.isPaged))]
+        // With a transform on, only the transformed copy is cached.
+        return ImageMemoryCache.shared[ImageLoader.cacheKey(url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)]
             ?? ImageMemoryCache.shared[url]
     }
 
