@@ -136,12 +136,32 @@ final class DownloadManagerTests: XCTestCase {
 
         downloads.enqueue([manga.chapter(1)])
         await downloads.waitUntilIdle()
-        XCTAssertEqual(filesOnDisk(), [".partial", "001.jpg", "002.jpg"])
+        XCTAssertEqual(filesOnDisk(), [".pages", ".partial", "001.jpg", "002.jpg"])
 
         downloads.cancel([manga.chapter(1).key])
         XCTAssertTrue(downloads.queue.isEmpty)
         XCTAssertEqual(filesOnDisk(), [])
         XCTAssertEqual(try rowCount(repo, state: 0), 0)
+    }
+
+    func testResumeAfterThePageListChangedKeepsOnlyTheNewPages() async throws {
+        let repo = try LibraryRepository.inMemory()
+        let manga = SourceFixture.manga(in: repo, chapters: 1)
+        let chapter = manga.chapter(1)
+        let location = DownloadStore.Location(sourceId: SourceFixture.sourceId, mangaKey: manga.key, chapterKey: chapter.key)
+        let directory = try DownloadStore(root: root, cache: cache).begin(location, pages: (1...3).map { "https://img.test/c/1/\($0).jpg" })
+        for name in ["001.jpg", "002.jpg", "003.jpg"] { try jpeg.write(to: directory.appendingPathComponent(name)) }
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        let page = jpeg
+        let stub = StubTransport { request in (200, [:], request.url!.lastPathComponent == "1.jpg" ? png : page, nil) }
+        let downloads = manager(repo, SourceManager(extensions: try SourceFixture.extensions(pageCount: 2)), stub)
+
+        downloads.enqueue([chapter])
+        await downloads.waitUntilIdle()
+
+        XCTAssertTrue(downloads.isDownloaded(chapter.key))
+        XCTAssertEqual(filesOnDisk(), ["001.png", "002.jpg"])
+        XCTAssertEqual(try repo.db.read { try Int.fetchOne($0, sql: "SELECT pageCount FROM download") }, 2)
     }
 
     func testReindexRestoresRowsFromDiskAndIgnoresPartialChapters() async throws {

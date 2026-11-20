@@ -390,7 +390,7 @@ final class DownloadManager: ObservableObject {
             let pages = try await sources.source(item.sourceId).pages(url: item.chapterURL)
             guard isCurrent(key, worker) else { return }
             guard !pages.isEmpty else { throw DownloadError.noPages }
-            let directory = try store.begin(location)
+            let directory = try store.begin(location, pages: pages.map(\.url))
             let saved = store.existingPages(in: directory)
             setProgress(key, done: pages.indices.filter { saved.contains($0) }.count, total: pages.count)
 
@@ -416,7 +416,8 @@ final class DownloadManager: ObservableObject {
             guard isCurrent(key, worker) else { return }
             let zip = Pref.saveAsCBZ.value(in: defaults)
             let store = self.store
-            let result = try await Task.detached(priority: .utility) { try store.finish(location, zip: zip) }.value
+            let count = pages.count
+            let result = try await Task.detached(priority: .utility) { try store.finish(location, pages: count, zip: zip) }.value
             guard isCurrent(key, worker) else { return }
             completed(item, pages: result.pages, bytes: result.bytes)
         } catch {

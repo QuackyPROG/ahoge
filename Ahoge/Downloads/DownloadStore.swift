@@ -18,6 +18,8 @@ struct DownloadStore: Sendable {
     let cache: URL
 
     static let partialMarker = ".partial"
+    /// The page URLs a partial folder's pages were saved for.
+    static let manifest = ".pages"
     /// Test probe: whether the last CBZ unpack ran on the main thread.
     nonisolated(unsafe) static var lastUnpackOnMainThread: Bool?
 
@@ -43,10 +45,21 @@ struct DownloadStore: Sendable {
 
     // MARK: Writing
 
-    /// Creates the chapter folder (keeping pages already there) and marks it partial.
-    func begin(_ location: Location) throws -> URL {
+    /// Creates the chapter folder and marks it partial. Pages already there are kept only when they
+    /// were saved for the same page list.
+    func begin(_ location: Location, pages: [String]) throws -> URL {
         let directory = chapterDirectory(location)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fm = FileManager.default
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        let manifest = directory.appendingPathComponent(Self.manifest)
+        let list = Data(pages.joined(separator: "\n").utf8)
+        // A folder from before manifests existed counts as another list.
+        if (try? Data(contentsOf: manifest)) != list {
+            for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? [] where !name.hasPrefix(".") {
+                try fm.removeItem(at: directory.appendingPathComponent(name))
+            }
+            try list.write(to: manifest)
+        }
         let marker = directory.appendingPathComponent(Self.partialMarker)
         if !FileManager.default.fileExists(atPath: marker.path) {
             try Data().write(to: marker)
@@ -79,11 +92,13 @@ struct DownloadStore: Sendable {
         return "jpg"
     }
 
-    /// Clears the partial mark and, when asked, zips the folder into a .cbz and removes it.
-    /// Returns the page count and the bytes on disk.
-    func finish(_ location: Location, zip: Bool) throws -> (pages: Int, bytes: Int64) {
+    /// Keeps one file per page of a `count`-page list and clears the partial mark, then, when asked,
+    /// zips the folder into a .cbz and removes it. Returns the page count and the bytes on disk.
+    func finish(_ location: Location, pages count: Int, zip: Bool) throws -> (pages: Int, bytes: Int64) {
         let fm = FileManager.default
         let directory = chapterDirectory(location)
+        Self.prune(directory, pages: count)
+        try? fm.removeItem(at: directory.appendingPathComponent(Self.manifest))
         try fm.removeItem(at: directory.appendingPathComponent(Self.partialMarker))
         let pageCount = pages(in: directory)?.count ?? 0
         guard zip else { return (pageCount, Self.size(of: directory)) }
@@ -109,6 +124,26 @@ struct DownloadStore: Sendable {
             try? fm.moveItem(at: source, to: target)
         }
         remove(from)
+    }
+
+    /// Deletes page files past `count` and, where two share a page number (another image type), the older one.
+    private static func prune(_ directory: URL, pages count: Int) {
+        let fm = FileManager.default
+        var kept: [Int: (file: URL, date: Date)] = [:]
+        for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? [] where !name.hasPrefix(".") {
+            let file = directory.appendingPathComponent(name)
+            guard let number = Int(name.prefix { $0 != "." }), number >= 1, number <= count else {
+                try? fm.removeItem(at: file)
+                continue
+            }
+            let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            if let other = kept[number] {
+                let older = other.date > date ? file : other.file
+                try? fm.removeItem(at: older)
+                if older == file { continue }
+            }
+            kept[number] = (file, date)
+        }
     }
 
     /// Removes every trace of a chapter: folder, archive and unpacked copy.
