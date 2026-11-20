@@ -213,6 +213,23 @@ final class AppNavigatorTests: XCTestCase {
         XCTAssertEqual(launched.path(for: .browse), [])
         XCTAssertNil(launched.reader)
     }
+    func testASavedChapterThatIsGoneRestoresTheTabAndTitleWithoutTheReader() throws {
+        let defaults = suite()
+        let repo = try LibraryRepository.inMemory()
+        repo.preferences = defaults
+        let manga = SourceFixture.manga(in: repo, chapters: 3)
+        var saved = NavigationSnapshot(tab: .browse)
+        saved.manga = manga.ref
+        saved.readerManga = manga.key
+        saved.readerChapter = "missing"
+        saved.readerPage = 7
+        Pref.navigationSnapshot.set(try JSONEncoder().encode(saved), in: defaults)
+        let launched = AppNavigator()
+        launched.restore(from: defaults, repo: repo)
+        XCTAssertEqual(launched.tab, .browse)
+        XCTAssertEqual(launched.path(for: .browse), [.manga(manga.ref)])
+        XCTAssertNil(launched.reader)
+    }
     func testGlobalIncognitoSavesTheTabOnly() throws {
         let defaults = suite()
         Pref.incognito.set(true, in: defaults)
