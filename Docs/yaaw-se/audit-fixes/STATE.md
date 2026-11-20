@@ -3,7 +3,7 @@ stage: build
 feature: Fix the bugs from the 2026 code audit, GitHub issues #2-#14
 
 ## Tickets
-- [ ] 01: Push script installs only inside a quiet window
+- [x] 01: Push script installs only inside a quiet window
 - [ ] 02: Every tab owns a Route path in AppNavigator
 - [ ] 03: Browse pushes Global search, Open link and Extension details as routes
 - [ ] 04: Manga page pushes "Search all sources" and Migrate as routes
@@ -62,3 +62,4 @@ feature: Fix the bugs from the 2026 code audit, GitHub issues #2-#14
 - 2026-11-20 16:20: planner wrote SPEC.md and 52 tickets; 3 open questions (blocks 09, 31)
 - 2026-11-20 16:35: round-2 answers accepted (Q1-Q5 yes); re-dispatching planner to close open questions
 - 2026-11-20 16:50: spec has no open questions; user approved 52 tickets; stage build
+- 2026-11-20 16:31: 01 shipped (3267823, a196ca4), CI green; review Ship + 1 should-fix applied
