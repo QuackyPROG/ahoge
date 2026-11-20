@@ -25,16 +25,19 @@ here="$(cd "$(dirname "$0")" && pwd)"
 home="${AHOGE_PUSH_DIR:-$HOME/.ahoge-push}"
 remote="https://github.com/QuackyPROG/ahoge.git"
 mkdir -p "$home"
+
+log() { echo "$(date '+%F %T') $*"; }
+
+# Checked before output moves to the log, so a mistyped window also shows on the terminal.
+if ! quiet_hours_valid "$quiet"; then
+  log "invalid --quiet-hours '$quiet'; expected HH-HH with hours 00-23 and start different from end" | tee -a "$home/push.log" >&2
+  exit 1
+fi
+
 exec >>"$home/push.log" 2>&1
 exec 9>"$home/lock"
 flock -n 9 || exit 0
 
-log() { echo "$(date '+%F %T') $*"; }
-
-if ! quiet_hours_valid "$quiet"; then
-  log "invalid --quiet-hours '$quiet'; expected HH-HH with hours 00-23"
-  exit 1
-fi
 hour="$(date +%H)"
 log "local hour $hour, quiet window $quiet"
 

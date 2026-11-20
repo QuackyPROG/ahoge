@@ -9,7 +9,7 @@ param(
     [string]$Distro = 'Ubuntu-24.04',
     [ValidateRange(1, 1440)]
     [int]$Minutes = 360,
-    [ValidatePattern('^([01][0-9]|2[0-3])-([01][0-9]|2[0-3])$')]
+    [ValidatePattern('^(?!(\d\d)-\1$)([01][0-9]|2[0-3])-([01][0-9]|2[0-3])$')]
     [string]$QuietHours = '02-06'
 )
 $ErrorActionPreference = 'Stop'

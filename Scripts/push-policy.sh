@@ -6,7 +6,7 @@ resign_after=$((3 * 24 * 60 * 60))
 resign_urgent_after=$((6 * 24 * 60 * 60))
 
 quiet_hours_valid() { # window
-  [[ "$1" =~ ^([01][0-9]|2[0-3])-([01][0-9]|2[0-3])$ ]]
+  [[ "$1" =~ ^([01][0-9]|2[0-3])-([01][0-9]|2[0-3])$ ]] && [ "${BASH_REMATCH[1]}" != "${BASH_REMATCH[2]}" ]
 }
 
 in_quiet_window() { # window, hour

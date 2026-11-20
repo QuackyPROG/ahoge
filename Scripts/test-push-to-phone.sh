@@ -25,6 +25,7 @@ check no  "22-06 at 21 is outside" in_quiet_window 22-06 21
 check yes "22-06 at 22 is inside"  in_quiet_window 22-06 22
 check yes "22-06 at 3 is inside"   in_quiet_window 22-06 03
 check no  "22-06 at 6 is outside"  in_quiet_window 22-06 06
+check yes "08-10 at 9 is inside"   in_quiet_window 08-10 09
 
 check yes "new commit installs inside the window"       should_install 02-06 03 false
 check no  "new commit waits outside the window"         should_install 02-06 12 false
@@ -45,6 +46,7 @@ check yes "02-06 is valid" quiet_hours_valid 02-06
 check yes "22-06 is valid" quiet_hours_valid 22-06
 check no  "25-06 is rejected" quiet_hours_valid 25-06
 check no  "2-6x is rejected"  quiet_hours_valid 2-6x
+check no  "02-02 is rejected" quiet_hours_valid 02-02
 check no  "empty is rejected" quiet_hours_valid ""
 
 if [ "$failed" -gt 0 ]; then
