@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 
 /// The when and what-to-delete rules for automatic backups, kept pure so they can be tested.
 enum BackupSchedule {
@@ -28,23 +28,58 @@ enum AutoBackup {
         return folder
     }
 
+    private static var running = false
+    private static var backgroundTime = UIBackgroundTaskIdentifier.invalid
+
     /// Makes a backup when the interval has passed, then deletes the oldest ones. True when one was written.
+    /// The snapshot is taken here; encoding and writing run off the main actor.
     @discardableResult
-    static func runIfDue(repo: LibraryRepository, store: ExtensionStore, defaults: UserDefaults = .standard, now: Date = Date()) -> Bool {
+    static func runIfDue(repo: LibraryRepository, store: ExtensionStore, defaults: UserDefaults = .standard, folder: URL? = nil, now: Date = Date()) async -> Bool {
         let hours = Pref.autoBackupInterval.value(in: defaults)
         let lastSeconds = Pref.autoBackupLast.value(in: defaults)
         let last = lastSeconds > 0 ? Date(timeIntervalSince1970: lastSeconds) : nil
-        guard BackupSchedule.isDue(last: last, intervalHours: hours, now: now) else { return false }
+        guard !running, BackupSchedule.isDue(last: last, intervalHours: hours, now: now) else { return false }
+        running = true
+        defer { running = false }
         do {
-            let directory = try folder()
-            let data = try BackupCodec.encode(BackupService.snapshot(of: repo, store: store, defaults: defaults, now: now))
-            try data.write(to: directory.appendingPathComponent(BackupFile.name(at: now)), options: .atomic)
+            let directory = try folder ?? Self.folder()
+            let backup = BackupService.snapshot(of: repo, store: store, defaults: defaults, now: now)
+            let file = directory.appendingPathComponent(BackupFile.name(at: now))
+            let write = Task.detached(priority: .utility) {
+                let data = try BackupCodec.encode(backup)
+                try Task.checkCancellation()
+                try data.write(to: file, options: .atomic)
+            }
+            try await withTaskCancellationHandler { try await write.value } onCancel: { write.cancel() }
             Pref.autoBackupLast.set(now.timeIntervalSince1970, in: defaults)
             rotate(in: directory, keep: Pref.autoBackupKeep.value(in: defaults))
             return true
         } catch {
             return false
         }
+    }
+
+    /// `runIfDue` when the app leaves the screen, holding background time until it ends (or iOS takes it back).
+    static func runInBackground(repo: LibraryRepository, store: ExtensionStore) {
+        guard backgroundTime == .invalid else { return }
+        let work = Task { await runIfDue(repo: repo, store: store) }
+        let time = UIApplication.shared.beginBackgroundTask(withName: "Auto backup") {
+            MainActor.assumeIsolated {
+                work.cancel()
+                endBackgroundTime()
+            }
+        }
+        backgroundTime = time
+        Task {
+            _ = await work.value
+            if backgroundTime == time { endBackgroundTime() }
+        }
+    }
+
+    private static func endBackgroundTime() {
+        guard backgroundTime != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTime)
+        backgroundTime = .invalid
     }
 
     private static func rotate(in folder: URL, keep: Int) {
