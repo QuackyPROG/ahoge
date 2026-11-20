@@ -118,6 +118,45 @@ final class ReaderModelTests: XCTestCase {
         XCTAssertEqual(model.itemID(containing: page), slices.first?.id)
     }
 
+    private func pageItems(_ model: ReaderModel, index: Int) -> [ReaderModel.Item] {
+        model.items.filter { item in
+            if case .page(_, let page, _) = item.kind { return page == index }
+            return false
+        }
+    }
+
+    func testWebtoonPagesAreSlicesFromTheStart() async throws {
+        let reader = try reader(chapters: 1, start: 1)
+        let model = reader.model
+        model.layout = ReaderModel.Layout(sliceTall: true)
+        await model.open(reader.manga.chapter(1), provider: reader.provider, repo: reader.repo)
+        let pages = model.items.filter { if case .page = $0.kind { return true } else { return false } }
+        XCTAssertEqual(pages.count, 3)
+        XCTAssertEqual(pages.map(\.slice), [0, 0, 0])
+        XCTAssertEqual(pages.map(\.id), (0..<3).map { ReaderModel.pageID("/c/1", $0) })
+    }
+
+    func testTallPageKeepsItsIDAndSliceZeroWhenSliced() async throws {
+        let reader = try reader(chapters: 1, start: 1)
+        let model = reader.model
+        model.layout = ReaderModel.Layout(sliceTall: true)
+        await model.open(reader.manga.chapter(1), provider: reader.provider, repo: reader.repo)
+        let page = ReaderModel.pageID("/c/1", 0)
+        model.learnSize(CGSize(width: 800, height: 20000), of: page)
+        let items = pageItems(model, index: 0)
+        XCTAssertEqual(items.first?.id, page)
+        XCTAssertEqual(items.map(\.slice), [0, 1, 2, 3, 4])
+    }
+
+    func testSliceCountFollowsTheWebtoonWidth() async throws {
+        let reader = try reader(chapters: 1, start: 1)
+        let model = reader.model
+        model.layout = ReaderModel.Layout(sliceTall: true, webtoonWidth: 1179)
+        await model.open(reader.manga.chapter(1), provider: reader.provider, repo: reader.repo)
+        model.learnSize(CGSize(width: 2048, height: 20000), of: ReaderModel.pageID("/c/1", 0))
+        XCTAssertEqual(pageItems(model, index: 0).count, 3)
+    }
+
     func testOnlyThePreviousCurrentAndNextChapterStayLoaded() async throws {
         let reader = try reader(chapters: 5, pageCount: 3, start: 1)
         let model = reader.model

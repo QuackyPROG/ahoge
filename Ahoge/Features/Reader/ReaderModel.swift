@@ -21,6 +21,8 @@ final class ReaderModel: ObservableObject {
         var alwaysShowTransition = true
         /// Tall pages become slices at most `ImageLoader.maxPixelLength` long (webtoon mode).
         var sliceTall = false
+        /// Decode width in pixels for webtoon mode.
+        var webtoonWidth: CGFloat = ImageLoader.maxPixelWidth
     }
 
     /// One page of a spread, in screen order.
@@ -165,7 +167,8 @@ final class ReaderModel: ObservableObject {
         let old = pageSizes[pageID]
         pageSizes[pageID] = size
         let wideChanged = PageGeometry.isWide(size) != (old.map(PageGeometry.isWide) ?? false)
-        let slicesChanged = PageGeometry.sliceCount(size) != (old.map(PageGeometry.sliceCount) ?? 1)
+        let width = layout.webtoonWidth
+        let slicesChanged = PageGeometry.sliceCount(size, maxPixelWidth: width) != (old.map { PageGeometry.sliceCount($0, maxPixelWidth: width) } ?? 1)
         guard (wideChanged && (layout.splitWide || layout.dualPage)) || (slicesChanged && layout.sliceTall) else { return }
         rebuildItems()
     }
@@ -255,7 +258,7 @@ final class ReaderModel: ObservableObject {
                 }
                 let ahead = Pref.readerPreloadOnlyOnWiFi.value() && provider.downloads.isOnExpensiveNetwork ? 1 : 3
                 for (index, page) in pages.prefix(ahead).enumerated() {
-                    prefetch(page, id: Self.pageID(next.url, index))
+                    prefetch(page, id: Self.pageID(next.url, index), slice: layout.sliceTall ? 0 : nil)
                 }
             } catch {
                 if generation == self.generation { self.error = error }
@@ -279,13 +282,14 @@ final class ReaderModel: ObservableObject {
     /// Loads a page below the one on screen, as it will be shown, and notes its untransformed size.
     private func prefetch(_ page: SourcePage, id: String, slice: Int? = nil) {
         let transform = transform
-        let key = slice.map { ImageLoader.sliceKey(page.url, $0, transform: transform) }
+        let width = layout.webtoonWidth
+        let key = slice.map { ImageLoader.sliceKey(page.url, $0, maxPixelWidth: width, transform: transform) }
             ?? ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
         Task {
             await PrefetchLimiter.shared.enqueue(key) { [weak self] in
                 let loaded: Bool
                 if let slice {
-                    loaded = (try? await ImageLoader.shared.slice(slice, of: page.url, headers: page.headers, transform: transform, priority: .utility)) != nil
+                    loaded = (try? await ImageLoader.shared.slice(slice, of: page.url, headers: page.headers, maxPixelWidth: width, transform: transform, priority: .utility)) != nil
                 } else {
                     loaded = (try? await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform, priority: .utility)) != nil
                 }
@@ -375,9 +379,11 @@ final class ReaderModel: ObservableObject {
             if layout.splitWide, let size, PageGeometry.isWide(size) {
                 items.append(single(index, half: .first))
                 items.append(single(index, half: .second))
-            } else if layout.sliceTall, let size, PageGeometry.sliceCount(size) > 1 {
+            } else if layout.sliceTall {
                 // Like the halves: the first slice keeps the page's id and stands for the page.
-                for slice in 0..<PageGeometry.sliceCount(size) {
+                // A page not measured yet is one slice, so it is loaded as a slice from the start.
+                let count = size.map { PageGeometry.sliceCount($0, maxPixelWidth: layout.webtoonWidth) } ?? 1
+                for slice in 0..<count {
                     var item = single(index)
                     if slice > 0 {
                         item = Item(id: ids[index] + Self.sliceSuffix + "\(slice)", chapter: section.chapter, kind: item.kind)
