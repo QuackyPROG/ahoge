@@ -81,6 +81,8 @@ extension LibraryRepository {
             if let added = item.dateAdded { manga.dateAdded = added }
         }
 
+        let localOrder = manga.sortedChapters
+        var added: [ChapterRecord] = []
         var local = Dictionary(manga.chapters.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
         var changed: [ChapterRecord] = []
         for source in item.chapters {
@@ -104,6 +106,15 @@ extension LibraryRepository {
                 manga.chapters.append(record)
                 local[source.url] = record
                 changed.append(record)
+                added.append(record)
+            }
+        }
+        let duplicateOrders = Set(added.map(\.sourceOrder)).count < added.count
+        if !added.isEmpty, !localOrder.isEmpty || duplicateOrders {
+            for (order, record) in Self.restoredOrder(local: localOrder, added: added).enumerated() where record.sourceOrder != order {
+                record.objectWillChange.send()
+                record.sourceOrder = order
+                if !changed.contains(where: { $0 === record }) { changed.append(record) }
             }
         }
         manga.refreshUnreadCount()
@@ -137,5 +148,19 @@ extension LibraryRepository {
             }
             if ids != current { setCategories(ids, for: manga) }
         }
+    }
+
+    /// Reading order after a restore (`sourceOrder` 0 is newest): local chapters keep their order,
+    /// backup-only chapters with a number go in by number, those without one go last in backup order.
+    private static func restoredOrder(local: [ChapterRecord], added: [ChapterRecord]) -> [ChapterRecord] {
+        let added = added.enumerated()
+            .sorted { ($0.element.sourceOrder, $0.offset) < ($1.element.sourceOrder, $1.offset) }
+            .map(\.element)
+        var result = local
+        for record in added where record.number >= 0 {
+            let index = result.firstIndex { $0.number >= 0 && $0.number < record.number } ?? result.count
+            result.insert(record, at: index)
+        }
+        return result + added.filter { $0.number < 0 }
     }
 }

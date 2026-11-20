@@ -172,4 +172,33 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertEqual(Pref.incognitoSources.value(in: withSettingsDefaults), ["x"])
         XCTAssertEqual(withSettings.library.map(\.title), ["One"])
     }
+
+    func testRestoredChaptersGetUniqueSourceOrderInReadingOrder() async throws {
+        let target = try LibraryRepository.inMemory()
+        let one = target.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        target.setInLibrary(one, true)
+        target.applyChapters([chapter("/c/10", 10), chapter("/c/9", 9), chapter("/c/8", 8)], to: one)
+
+        let backup = Backup(
+            createdAt: Date(timeIntervalSince1970: 5000),
+            manga: [BackupManga(
+                sourceId: "en.demo", url: "/m/1", title: "One",
+                chapters: [
+                    BackupChapter(url: "/c/11", name: "Ch 11", number: 11, sourceOrder: 0),
+                    BackupChapter(url: "/c/8.5", name: "Ch 8.5", number: 8.5, sourceOrder: 1),
+                ]
+            )]
+        )
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
+
+        let merged = try XCTUnwrap(target.manga(sourceId: "en.demo", url: "/m/1"))
+        XCTAssertEqual(merged.sortedChapters.map(\.number), [11, 10, 9, 8.5, 8])
+        XCTAssertEqual(merged.sortedChapters.map(\.sourceOrder), [0, 1, 2, 3, 4])
+        let reloaded = try LibraryRepository(db: target.db)
+        XCTAssertEqual(reloaded.manga(sourceId: "en.demo", url: "/m/1")?.sortedChapters.map(\.number), [11, 10, 9, 8.5, 8], "saved, not only in memory")
+
+        let nine = try XCTUnwrap(merged.chapters.first { $0.number == 9 })
+        target.markPreviousRead(nine, in: merged)
+        XCTAssertEqual(merged.chapters.filter(\.read).map(\.number).sorted(), [8, 8.5, 9])
+    }
 }
