@@ -49,6 +49,30 @@ check no  "2-6x is rejected"  quiet_hours_valid 2-6x
 check no  "02-02 is rejected" quiet_hours_valid 02-02
 check no  "empty is rejected" quiet_hours_valid ""
 
+# only_docs_changed runs in a throwaway repository: app, docs-only and README-only commits on top of each other.
+repo="$(mktemp -d)"
+(
+  cd "$repo" || exit 1
+  git init --quiet
+  git config user.email test@example.com
+  git config user.name test
+  commit() { mkdir -p "$(dirname "$1")"; echo "$2" >>"$1"; git add -A; git commit --quiet -m "$1"; git rev-parse HEAD; }
+  app=$(commit Ahoge/App.swift one)
+  docs=$(commit Docs/plans/STATE.md note)
+  readme=$(commit README.md intro)
+  code=$(commit Ahoge/App.swift two)
+  printf '%s\n' "$app" "$docs" "$readme" "$code"
+) >"$repo.commits" || { echo "FAIL: could not set up the test repository"; failed=$((failed + 1)); }
+{ read -r app; read -r docs; read -r readme; read -r code; } <"$repo.commits"
+in_repo() { (cd "$repo" && "$@"); }
+check yes "docs commit after an app commit is docs only"   in_repo only_docs_changed "$app" "$docs"
+check yes "docs and README commits together are docs only" in_repo only_docs_changed "$app" "$readme"
+check no  "a code commit is not docs only"                 in_repo only_docs_changed "$readme" "$code"
+check no  "docs then code is not docs only"                in_repo only_docs_changed "$app" "$code"
+check no  "going backwards is not docs only"               in_repo only_docs_changed "$docs" "$app"
+check no  "no installed commit is not docs only"           in_repo only_docs_changed "" "$docs"
+rm -rf "$repo" "$repo.commits"
+
 if [ "$failed" -gt 0 ]; then
   echo "$failed case(s) failed"
   exit 1

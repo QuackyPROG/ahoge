@@ -107,6 +107,17 @@ if [ "$head" = "$installed" ]; then
   exit 0
 fi
 
+# A docs-only commit leaves the app as it is, so it is recorded at any hour without a build or an install.
+if ! $force && only_docs_changed "$installed" "$head"; then
+  log "only docs changed since ${installed:0:7}; recording ${head:0:7} without a build"
+  echo "$head" >"$home/installed-commit"
+  if $due; then
+    log "re-signing ${head:0:7}"
+    deploy "$head"
+  fi
+  exit 0
+fi
+
 if ! should_install "$quiet" "$hour" "$force"; then
   log "waiting for quiet window $quiet (now $hour)"
 # Older builds can't read a newer library, so a branch that went backwards never lands by itself.

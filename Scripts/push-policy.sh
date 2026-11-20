@@ -29,3 +29,10 @@ should_resign() { # window, hour, signature age in seconds
     [ "$3" -ge "$resign_urgent_after" ]
   fi
 }
+
+# Whether the commits after <installed> up to <head> change only docs (Docs/ and Markdown files), so the app on
+# the phone is already current. Runs in the repository; going backwards or no installed commit is never docs only.
+only_docs_changed() { # installed head
+  [ -n "$1" ] && git merge-base --is-ancestor "$1" "$2" 2>/dev/null &&
+    git diff --quiet "$1" "$2" -- . ':(exclude)Docs' ':(exclude,glob)**/*.md'
+}
