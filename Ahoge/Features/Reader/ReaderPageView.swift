@@ -93,6 +93,23 @@ struct ReaderPageView: View {
                 failed = true
             }
         }
+        // Off screen the view lets go of its image, so the cache's evictions free memory; back on
+        // screen it takes it from the cache, or the task above loads it again.
+        .onAppear {
+            guard image == nil else { return }
+            let key = cacheKey
+            if let cached = ImageMemoryCache.shared[key] {
+                image = cached
+                loadedKey = key
+            } else {
+                shown = false
+            }
+        }
+        .onDisappear {
+            if let image, image.size.height > 0 { PageAspect.known[cacheKey] = image.size.width / image.size.height }
+            image = nil
+            loadedKey = nil
+        }
     }
 
     @ViewBuilder private func pageMenu(_ image: UIImage) -> some View {
