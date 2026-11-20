@@ -67,11 +67,11 @@ final class ReaderModelTests: XCTestCase {
         let gate = Gate()
         let reader = try reader(chapters: 6, start: 5, gate: gate, gatedChapter: "/c/6")
         let model = reader.model
-        await model.open(reader.manga.chapter(5), provider: reader.provider)
+        await model.open(reader.manga.chapter(5), provider: reader.provider, repo: reader.repo)
         model.position = ReaderModel.pageID("/c/5", 2)
-        model.positionChanged(repo: reader.repo, provider: reader.provider)
+        model.positionChanged(repo: reader.repo, provider: reader.provider, repo: reader.repo)
         try await waitUntil { gate.isWaiting }
-        await model.open(reader.manga.chapter(4), provider: reader.provider)
+        await model.open(reader.manga.chapter(4), provider: reader.provider, repo: reader.repo)
         gate.open(throwing: error)
         try await waitUntil { !model.isLoadingNext }
         XCTAssertEqual(model.sections.map(\.id), ["/c/4"])
@@ -86,13 +86,30 @@ final class ReaderModelTests: XCTestCase {
         try await staleNextIsDropped(throwing: URLError(.timedOut))
     }
 
+    func testOpeningAnotherChapterCreditsTheTimeToTheChapterBefore() async throws {
+        let reader = try reader(chapters: 2, start: 1)
+        let model = reader.model
+        let (one, two) = (reader.manga.chapter(1), reader.manga.chapter(2))
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        await model.open(one, provider: reader.provider, repo: reader.repo)
+        reader.repo.recordHistory(one)
+        model.startClock(now: t0)
+        await model.open(two, provider: reader.provider, repo: reader.repo, now: t0.addingTimeInterval(60))
+        reader.repo.recordHistory(two)
+        model.startClock(now: t0.addingTimeInterval(60))
+        model.stopClock(repo: reader.repo, now: t0.addingTimeInterval(90))
+        let history = reader.repo.historyByChapter()
+        XCTAssertEqual(history[one.key]?.timeRead, 60)
+        XCTAssertEqual(history[two.key]?.timeRead, 30)
+    }
+
     func testOnlyThePreviousCurrentAndNextChapterStayLoaded() async throws {
         let reader = try reader(chapters: 5, pageCount: 3, start: 1)
         let model = reader.model
-        await model.open(reader.manga.chapter(1), provider: reader.provider)
+        await model.open(reader.manga.chapter(1), provider: reader.provider, repo: reader.repo)
         for number in 1...3 {
             model.position = ReaderModel.pageID("/c/\(number)", 2)
-            model.positionChanged(repo: reader.repo, provider: reader.provider)
+            model.positionChanged(repo: reader.repo, provider: reader.provider, repo: reader.repo)
             try await waitUntil { !model.isLoadingNext && model.sections.contains { $0.id == "/c/\(number + 1)" } }
             XCTAssertLessThanOrEqual(model.sections.count, 3)
         }

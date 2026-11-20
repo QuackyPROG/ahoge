@@ -97,8 +97,10 @@ final class ReaderModel: ObservableObject {
 
     func chapter(before chapter: ChapterRecord) -> ChapterRecord? { navigator.previous(before: chapter) }
 
-    /// Shows only `chapter`, replacing what was loaded, at `page` (its saved page when nil).
-    func open(_ chapter: ChapterRecord, page: Int? = nil, provider: PageProvider) async {
+    /// Shows only `chapter`, replacing what was loaded, at `page` (its saved page when nil). The time
+    /// read so far goes to the chapter before; the clock starts again once `chapter` is ready.
+    func open(_ chapter: ChapterRecord, page: Int? = nil, provider: PageProvider, repo: LibraryRepository, now: Date = Date()) async {
+        stopClock(repo: repo, now: now)
         generation += 1
         ready = false
         error = nil

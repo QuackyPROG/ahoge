@@ -76,7 +76,7 @@ struct ReaderView: View {
             if !model.ready && model.error == nil {
                 ProgressView().tint(background.foreground)
             } else if let error = model.error, model.sections.isEmpty {
-                ErrorStateView(error: error, retry: { Task { await model.open(model.currentChapter, provider: pages) } })
+                ErrorStateView(error: error, retry: { Task { await model.open(model.currentChapter, provider: pages, repo: repo) } })
                     .foregroundStyle(background.foreground)
             }
             filters
@@ -121,7 +121,7 @@ struct ReaderView: View {
         .preferredColorScheme(.dark)
         .task {
             guard model.sections.isEmpty else { return }
-            await model.open(start, provider: pages)
+            await model.open(start, provider: pages, repo: repo)
         }
         .task { await flashHints(tapZones: true) }
         .onChange(of: model.position) { model.positionChanged(repo: repo, provider: pages) }
@@ -172,7 +172,7 @@ struct ReaderView: View {
         .onChange(of: keepScreenOn) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .sheet(isPresented: $showChapters) {
             ReaderChapterList(manga: model.manga, current: model.currentChapter) { chapter in
-                Task { await model.open(chapter, provider: pages) }
+                Task { await model.open(chapter, provider: pages, repo: repo) }
             }
             .preferredColorScheme(.dark)
         }
@@ -189,7 +189,7 @@ struct ReaderView: View {
 
     private func open(_ chapter: ChapterRecord?) {
         guard let chapter else { return }
-        Task { await model.open(chapter, provider: pages) }
+        Task { await model.open(chapter, provider: pages, repo: repo) }
     }
 
     /// The reading mode for a moment on open, and the tap zones with it (Mihon's hints).
