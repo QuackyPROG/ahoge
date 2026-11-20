@@ -81,8 +81,9 @@ enum BackupService {
     }
 
     /// Adds and merges; nothing already on the device is removed. Repositories are added first and
-    /// sources the backup had installed are installed when a repository lists them.
-    static func restore(_ backup: Backup, into repo: LibraryRepository, store: ExtensionStore, defaults: UserDefaults) async -> RestoreReport {
+    /// sources the backup had installed are installed when a repository lists them. Settings are
+    /// overwritten only with `includingSettings`.
+    static func restore(_ backup: Backup, into repo: LibraryRepository, store: ExtensionStore, defaults: UserDefaults, includingSettings: Bool) async -> RestoreReport {
         var report = RestoreReport()
 
         for url in backup.repos where !store.repos.contains(where: { $0.url == url }) {
@@ -102,7 +103,7 @@ enum BackupService {
             report.restoredManga += 1
         }
 
-        for (name, value) in backup.preferences where Pref.backupNames.contains(name) {
+        for (name, value) in backup.preferences where includingSettings && Pref.backupNames.contains(name) {
             defaults.set(value.stored, forKey: name)
         }
 

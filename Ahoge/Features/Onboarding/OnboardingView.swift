@@ -128,7 +128,7 @@ struct OnboardingView: View {
         defer { working = false }
         do {
             let backup = try BackupService.load(try Data(contentsOf: url), sources: extensions.rows().map { $0.source })
-            let report = await BackupService.restore(backup, into: repo, store: extensions, defaults: .standard)
+            let report = await BackupService.restore(backup, into: repo, store: extensions, defaults: .standard, includingSettings: true)
             note = "\(report.restoredManga) title\(report.restoredManga == 1 ? "" : "s") restored."
             step = .done
         } catch {

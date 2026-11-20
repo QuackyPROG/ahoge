@@ -16,6 +16,7 @@ struct DataStorageView: View {
     @State private var exporting: BackupDocument?
     @State private var exportName = ""
     @State private var importing = false
+    @State private var pickedBackup: URL?
     @State private var restoring = false
     @State private var report: RestoreReport?
     @State private var message: String?
@@ -136,12 +137,24 @@ struct DataStorageView: View {
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.data]) { result in
             switch result {
-            case .success(let url): Task { await restore(from: url) }
+            case .success(let url): pickedBackup = url
             case .failure(let error): message = error.localizedDescription
             }
         }
         .sheet(item: Binding(get: { report.map(ReportItem.init) }, set: { if $0 == nil { report = nil } })) { item in
             NavigationStack { RestoreReportView(report: item.report) }
+        }
+        .confirmationDialog(
+            "Restore this backup?",
+            isPresented: Binding(get: { pickedBackup != nil }, set: { if !$0 { pickedBackup = nil } }),
+            titleVisibility: .visible,
+            presenting: pickedBackup
+        ) { url in
+            Button("Restore library") { Task { await restore(from: url, includingSettings: false) } }
+            Button("Restore library and settings") { Task { await restore(from: url, includingSettings: true) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The backup is merged into your library. \"Restore library and settings\" also replaces your settings, including incognito, app lock, download and backup settings, with the backup's.")
         }
         .confirmationDialog("Reset per-series reader settings?", isPresented: $confirmResetReader, titleVisibility: .visible) {
             Button("Reset", role: .destructive) {
@@ -199,14 +212,14 @@ struct DataStorageView: View {
         }
     }
 
-    private func restore(from url: URL) async {
+    private func restore(from url: URL, includingSettings: Bool) async {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         restoring = true
         defer { restoring = false }
         do {
             let backup = try BackupService.load(try Data(contentsOf: url), sources: extensions.rows().map { $0.source })
-            report = await BackupService.restore(backup, into: repo, store: extensions, defaults: .standard)
+            report = await BackupService.restore(backup, into: repo, store: extensions, defaults: .standard, includingSettings: includingSettings)
         } catch {
             message = error.localizedDescription
         }
