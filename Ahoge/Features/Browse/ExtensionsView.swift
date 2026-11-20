@@ -57,6 +57,7 @@ struct ExtensionsView: View {
             }
         }
         .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
+        .dismissOnRoute { showRepos = false }
         .alert("Extension error", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

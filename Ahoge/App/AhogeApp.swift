@@ -13,7 +13,9 @@ struct AhogeApp: App {
         let sources = SourceManager(extensions: store)
         _extensions = StateObject(wrappedValue: store)
         _sources = StateObject(wrappedValue: sources)
-        _services = StateObject(wrappedValue: AppServices(extensions: store, sources: sources))
+        let services = AppServices(extensions: store, sources: sources)
+        _services = StateObject(wrappedValue: services)
+        Self.restoreNavigation(services)
     }
 
     var body: some Scene {
@@ -28,8 +30,19 @@ struct AhogeApp: App {
                     .environmentObject(loaded.downloads)
                     .environmentObject(navigator)
             case .failed(let error):
-                DatabaseErrorView(error: error, retry: { services.load() })
+                DatabaseErrorView(error: error, retry: {
+                    services.load()
+                    Self.restoreNavigation(services)
+                })
             }
+        }
+    }
+
+    /// Reopens where the person was, once the library has opened.
+    @MainActor
+    private static func restoreNavigation(_ services: AppServices) {
+        if case .loaded(let loaded) = services.state {
+            AppNavigator.shared.restore(repo: loaded.library)
         }
     }
 }

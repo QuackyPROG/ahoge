@@ -133,6 +133,14 @@ final class ReaderModelTests: XCTestCase {
         let position = try XCTUnwrap(model.position)
         XCTAssertTrue(model.items.contains { $0.id == position })
     }
+
+    func testOpenAtASavedPageStartsThere() async throws {
+        let reader = try reader(chapters: 2, pageCount: 10, start: 1)
+        let model = reader.model
+        await model.open(reader.manga.chapter(1), page: 7, provider: reader.provider, repo: reader.repo)
+        XCTAssertNil(model.error)
+        XCTAssertEqual(model.currentPage, 7)
+    }
 }
 
 final class ReadingModeTests: XCTestCase {

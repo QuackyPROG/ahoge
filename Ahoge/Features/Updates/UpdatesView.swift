@@ -14,8 +14,6 @@ struct UpdatesView: View {
     @EnvironmentObject private var navigator: AppNavigator
     @Environment(\.palette) private var palette
     @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
-    @State private var reading: UpdateEntry?
-    @State private var visible = false
     @State private var selecting = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.updatesBookmarked.name) private var bookmarkedFilter = Pref.updatesBookmarked.defaultValue
@@ -51,7 +49,7 @@ struct UpdatesView: View {
                     Section {
                         ForEach(group.items) { entry in
                             HStack(spacing: 4) {
-                                UpdateRow(manga: entry.manga, chapter: entry.chapter, headers: referer(entry.manga)) { reading = entry }
+                                UpdateRow(manga: entry.manga, chapter: entry.chapter, headers: referer(entry.manga)) { navigator.read(entry.chapter, in: entry.manga) }
                                     .allowsHitTesting(!selecting)
                                 if !selecting { ChapterDownloadButton(chapter: entry.chapter) }
                             }
@@ -153,12 +151,11 @@ struct UpdatesView: View {
             }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
-            .fullScreenCover(item: $reading) { entry in
-                ReaderView(sourceId: entry.manga.sourceId, manga: entry.manga, chapter: entry.chapter)
+            // Seen follows the selected tab: on iPad a hidden tab never disappears.
+            .onChange(of: navigator.tab, initial: true) { old, new in
+                if old == .updates || new == .updates { lastSeen = Date().timeIntervalSince1970 }
             }
-            .onAppear { visible = true; lastSeen = Date().timeIntervalSince1970 }
-            .onDisappear { visible = false; lastSeen = Date().timeIntervalSince1970 }
-            .onChange(of: updater.lastUpdated) { if visible { lastSeen = Date().timeIntervalSince1970 } }
+            .onChange(of: updater.lastUpdated) { if navigator.tab == .updates { lastSeen = Date().timeIntervalSince1970 } }
         }
     }
 

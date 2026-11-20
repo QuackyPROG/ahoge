@@ -123,7 +123,7 @@ final class ChapterRecord: ObservableObject, Identifiable, Codable, FetchableRec
 }
 
 /// Navigation value for a manga (from a source listing or the library).
-struct MangaRef: Hashable {
+struct MangaRef: Hashable, Codable {
     let sourceId: String
     let url: String
     let title: String

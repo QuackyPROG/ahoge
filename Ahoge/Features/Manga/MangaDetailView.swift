@@ -12,7 +12,6 @@ struct MangaDetailView: View {
     @State private var isLoading = false
     @State private var error: Error?
     @State private var expanded = false
-    @State private var reading: ChapterRecord?
     @State private var webTarget: WebTarget?
     @State private var showCover = false
     @AppStorage(Pref.libraryDefaultCategory.name) private var defaultCategory = LibraryPrefs.alwaysAsk
@@ -129,8 +128,17 @@ struct MangaDetailView: View {
         } message: {
             Text("The title is no longer in your library.")
         }
-        .fullScreenCover(item: $reading) { chapter in
-            if let manga { ReaderView(sourceId: ref.sourceId, manga: manga, chapter: chapter) }
+        .dismissOnRoute {
+            webTarget = nil
+            showCover = false
+            filteringScanlators = false
+            editingNotes = false
+            // The duplicates sheet's onDismiss would open these next.
+            pendingMigration = nil
+            pendingAdd = false
+            duplicates = []
+            migratingFrom = nil
+            choosingCategories = false
         }
     }
 
@@ -372,7 +380,7 @@ struct MangaDetailView: View {
             ChapterRow(chapter: chapter, title: display.title(of: chapter))
         } else {
             HStack(spacing: 4) {
-                Button { reading = chapter } label: { ChapterRow(chapter: chapter, title: display.title(of: chapter)) }
+                Button { navigator.read(chapter, in: manga) } label: { ChapterRow(chapter: chapter, title: display.title(of: chapter)) }
                     .buttonStyle(.plain)
                 ChapterDownloadButton(chapter: chapter)
             }
@@ -481,7 +489,7 @@ struct MangaDetailView: View {
     @ViewBuilder
     private var resumeButton: some View {
         if let next = nextChapter {
-            Button { reading = next } label: {
+            Button { if let manga { navigator.read(next, in: manga) } } label: {
                 Label(manga?.hasStartedReading == true ? "Resume" : "Start", systemImage: "play.fill")
                     .font(.headline)
                     .padding(.horizontal, 20)

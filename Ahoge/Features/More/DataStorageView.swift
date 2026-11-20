@@ -150,6 +150,12 @@ struct DataStorageView: View {
         } message: { _ in
             Text("The backup is merged into your library. \"Restore library and settings\" also replaces your settings, including incognito, app lock, download and backup settings, with the backup's.")
         }
+        .dismissOnRoute {
+            importing = false
+            report = nil
+            pickedBackup = nil
+            confirmClearCookies = false
+        }
         .confirmationDialog("Reset per-series reader settings?", isPresented: $confirmResetReader, titleVisibility: .visible) {
             Button("Reset", role: .destructive) {
                 let count = PerSeriesReaderSettings.reset()

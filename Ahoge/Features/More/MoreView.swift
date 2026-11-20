@@ -185,6 +185,10 @@ struct MoreView: View {
             }
             .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
             .fullScreenCover(isPresented: $showGuide) { OnboardingView { showGuide = false } }
+            .dismissOnRoute {
+                showRepos = false
+                showGuide = false
+            }
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
     }

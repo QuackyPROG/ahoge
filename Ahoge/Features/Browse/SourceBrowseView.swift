@@ -226,6 +226,11 @@ struct SourceBrowseView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .dismissOnRoute {
+            webTarget = nil
+            importing = false
+            editing = nil
+        }
     }
 
     /// Mihon-style feed chips. Filters stay in effect while searching.

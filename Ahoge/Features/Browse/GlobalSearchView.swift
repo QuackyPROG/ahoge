@@ -66,6 +66,10 @@ private struct GlobalSearchScreen: View {
         .alert("This title is no longer in your library.", isPresented: $oldGone) {
             Button("OK", role: .cancel) {}
         }
+        .dismissOnRoute {
+            pick = nil
+            oldGone = false
+        }
     }
 
     private func start() {

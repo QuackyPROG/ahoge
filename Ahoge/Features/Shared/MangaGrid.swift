@@ -41,6 +41,7 @@ struct MangaGrid: View {
         }
         .padding(.horizontal)
         .sheet(item: $choosingCategories) { SetCategoriesSheet(manga: [$0]) }
+        .dismissOnRoute { choosingCategories = nil }
     }
 
     private var gridColumns: [GridItem] {
