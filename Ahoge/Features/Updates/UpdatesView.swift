@@ -14,7 +14,6 @@ struct UpdatesView: View {
     @EnvironmentObject private var navigator: AppNavigator
     @Environment(\.palette) private var palette
     @AppStorage(Pref.updatesLastSeen.name) private var lastSeen = 0.0
-    @State private var visible = false
     @State private var selecting = false
     @AppStorage(Pref.downloadedOnly.name) private var downloadedOnly = false
     @AppStorage(Pref.updatesBookmarked.name) private var bookmarkedFilter = Pref.updatesBookmarked.defaultValue
@@ -152,9 +151,11 @@ struct UpdatesView: View {
             }
             .themedScreen()
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
-            .onAppear { visible = true; lastSeen = Date().timeIntervalSince1970 }
-            .onDisappear { visible = false; lastSeen = Date().timeIntervalSince1970 }
-            .onChange(of: updater.lastUpdated) { if visible { lastSeen = Date().timeIntervalSince1970 } }
+            // Seen follows the selected tab: on iPad a hidden tab never disappears.
+            .onChange(of: navigator.tab, initial: true) { old, new in
+                if old == .updates || new == .updates { lastSeen = Date().timeIntervalSince1970 }
+            }
+            .onChange(of: updater.lastUpdated) { if navigator.tab == .updates { lastSeen = Date().timeIntervalSince1970 } }
         }
     }
 

@@ -123,7 +123,16 @@ struct RootView: View {
                 }
                 .navigationTitle(AppInfo.name)
             } detail: {
-                screen(navigator.tab)
+                // Every screen stays alive, as in a TabView, so coming back shows where the person left it.
+                ZStack {
+                    ForEach(AppTab.allCases, id: \.self) { tab in
+                        let shown = tab == navigator.tab
+                        screen(tab)
+                            .opacity(shown ? 1 : 0)
+                            .allowsHitTesting(shown)
+                            .accessibilityHidden(!shown)
+                    }
+                }
             }
         } else {
             TabView(selection: $navigator.tab) {

@@ -70,7 +70,9 @@ struct HistoryView: View {
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
             .onChange(of: navigator.reader?.id) { _, open in if open == nil { reload() } }
             // Reading from another tab changes history; reload whenever this tab shows.
+            // On iPad a hidden tab never disappears, so selecting it counts as showing.
             .onAppear(perform: reload)
+            .onChange(of: navigator.tab) { _, tab in if tab == .history { reload() } }
         }
     }
 
