@@ -26,7 +26,7 @@ private struct GlobalSearchScreen: View {
     private let migrating: MangaRef?
     /// The result picked to migrate to.
     @State private var pick: MigrationPick?
-    /// A result was picked but the entry being migrated has left the database.
+    /// A result was picked but the entry being migrated has left the database or the library.
     @State private var oldGone = false
 
     init(initialQuery: String, migrating: MangaRef?, makeSearch: @autoclosure @escaping () -> GlobalSearch) {

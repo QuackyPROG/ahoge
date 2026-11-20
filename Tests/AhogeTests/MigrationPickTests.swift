@@ -19,4 +19,11 @@ final class MigrationPickTests: XCTestCase {
         let gone = MangaRef(sourceId: "en.demo", url: "/m/gone", title: "Gone", cover: "")
         XCTAssertNil(MigrationPick.make(migrating: gone, target: target, repo: repo))
     }
+
+    func testPickingAResultForAnEntryNoLongerInTheLibraryGivesNothing() throws {
+        let repo = try LibraryRepository.inMemory()
+        let old = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        repo.setInLibrary(old, false)
+        XCTAssertNil(MigrationPick.make(migrating: old.ref, target: target, repo: repo))
+    }
 }

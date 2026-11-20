@@ -109,9 +109,11 @@ struct MigrationPick: Identifiable {
     let target: MangaRef
     var id: String { target.sourceId + "\n" + target.url }
 
-    /// nil when the old entry is gone (for example after Clear database), so no empty sheet opens.
+    /// nil when the old entry is gone (for example after Clear database) or no longer in the library,
+    /// so no empty sheet opens and a stale search cannot add a second copy.
     @MainActor static func make(migrating: MangaRef, target: MangaRef, repo: LibraryRepository) -> MigrationPick? {
-        repo.manga(sourceId: migrating.sourceId, url: migrating.url).map { MigrationPick(old: $0, target: target) }
+        guard let old = repo.manga(sourceId: migrating.sourceId, url: migrating.url), old.inLibrary else { return nil }
+        return MigrationPick(old: old, target: target)
     }
 }
 
