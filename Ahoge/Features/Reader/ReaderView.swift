@@ -223,7 +223,8 @@ struct ReaderView: View {
             dualPage: dualActive,
             rightToLeft: mode == .rightToLeft,
             shiftSpreads: shiftSpreads,
-            alwaysShowTransition: alwaysShowTransition
+            alwaysShowTransition: alwaysShowTransition,
+            sliceTall: mode == .webtoon
         )
     }
 
@@ -303,7 +304,10 @@ struct ReaderView: View {
         GeometryReader { geometry in
             ScrollView {
                 LazyVStack(spacing: webtoonGap ? 12 : 0) {
-                    ForEach(model.items) { item(for: $0, paged: false) }
+                    ForEach(model.items) { item in
+                        // The gap goes between pages: slices of one page meet.
+                        self.item(for: item, paged: false).padding(.top, webtoonGap && (item.slice ?? 0) > 0 ? -12 : 0)
+                    }
                 }
                 .padding(.horizontal, geometry.size.width * webtoonPadding)
                 .background {
@@ -367,7 +371,7 @@ struct ReaderView: View {
             if item.spread.isEmpty {
                 ReaderPageView(
                     page: page, index: index, paged: paged, foreground: background.foreground,
-                    transform: pageTransform(paged: paged, half: item.half), zoom: zoomOptions(),
+                    transform: pageTransform(paged: paged, half: item.half), slice: item.slice, zoom: zoomOptions(),
                     onTap: pagedTap, onSize: sizeReporter(item.chapter, index), onSetCover: setCoverAction
                 )
             } else {

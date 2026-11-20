@@ -103,6 +103,21 @@ final class ReaderModelTests: XCTestCase {
         XCTAssertEqual(history[two.key]?.timeRead, 30)
     }
 
+    func testTallPageBecomesSliceItemsInWebtoonMode() async throws {
+        let reader = try reader(chapters: 1, start: 1)
+        let model = reader.model
+        model.layout = ReaderModel.Layout(sliceTall: true)
+        await model.open(reader.manga.chapter(1), provider: reader.provider, repo: reader.repo)
+        let page = ReaderModel.pageID("/c/1", 0)
+        model.learnSize(CGSize(width: 800, height: 20000), of: page)
+        let slices = model.items.filter { item in
+            if case .page(_, let index, _) = item.kind { return index == 0 }
+            return false
+        }
+        XCTAssertEqual(slices.map(\.slice), [0, 1, 2, 3, 4])
+        XCTAssertEqual(model.itemID(containing: page), slices.first?.id)
+    }
+
     func testOnlyThePreviousCurrentAndNextChapterStayLoaded() async throws {
         let reader = try reader(chapters: 5, pageCount: 3, start: 1)
         let model = reader.model

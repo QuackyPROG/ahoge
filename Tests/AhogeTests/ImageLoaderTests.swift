@@ -19,9 +19,24 @@ final class ImageLoaderTests: XCTestCase {
         XCTAssertEqual(image.cgImage?.height, 200)
     }
 
-    func testTallStripKeepsItsWidthLimit() throws {
-        let image = try XCTUnwrap(ImageLoader.decode(png(width: 3000, height: 9000), maxPixelWidth: 2048))
-        XCTAssertEqual(image.cgImage?.width, 2048)
+    func testTallStripIsCappedAt4096PixelsLong() throws {
+        let image = try XCTUnwrap(ImageLoader.decode(png(width: 800, height: 20000), maxPixelWidth: 2048))
+        XCTAssertEqual(image.cgImage?.height, 4096)
+    }
+
+    func testTallStripSlicesAre4096PixelsLongAtMost() throws {
+        let slices = ImageLoader.slices(png(width: 800, height: 20000), maxPixelWidth: 2048)
+        XCTAssertEqual(slices.map { $0.cgImage?.width }, [800, 800, 800, 800, 800])
+        XCTAssertEqual(slices.map { $0.cgImage?.height }, [4096, 4096, 4096, 4096, 3616])
+    }
+
+    func testHugeStripSlicesKeepTheWidthLimit() throws {
+        let slices = autoreleasepool { ImageLoader.slices(png(width: 4000, height: 60000), maxPixelWidth: 2048) }
+        XCTAssertEqual(slices.count, 8)
+        for slice in slices {
+            XCTAssertLessThanOrEqual(slice.cgImage?.width ?? .max, 2048)
+            XCTAssertLessThanOrEqual(slice.cgImage?.height ?? .max, 4096)
+        }
     }
 
     func testSmallImageIsNotScaled() throws {

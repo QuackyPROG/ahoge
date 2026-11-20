@@ -14,6 +14,8 @@ struct ReaderPageView: View {
     let paged: Bool
     let foreground: Color
     let transform: ImageTransform
+    /// The slice of a tall page this view shows (webtoon mode), or nil for the whole page.
+    let slice: Int?
     let zoom: ZoomOptions
     var onTap: (CGPoint) -> Void = { _ in }
     /// Told the page's untransformed size once known, so wide pages can be split or kept alone.
@@ -30,7 +32,7 @@ struct ReaderPageView: View {
 
     init(
         page: SourcePage, index: Int, paged: Bool, foreground: Color,
-        transform: ImageTransform = .plain, zoom: ZoomOptions = ZoomOptions(),
+        transform: ImageTransform = .plain, slice: Int? = nil, zoom: ZoomOptions = ZoomOptions(),
         onTap: @escaping (CGPoint) -> Void = { _ in }, onSize: @escaping (CGSize) -> Void = { _ in },
         onSetCover: ((UIImage) -> Void)? = nil
     ) {
@@ -39,19 +41,24 @@ struct ReaderPageView: View {
         self.paged = paged
         self.foreground = foreground
         self.transform = transform
+        self.slice = slice
         self.zoom = zoom
         self.onTap = onTap
         self.onSize = onSize
         self.onSetCover = onSetCover
         // A page already in memory draws on its first frame, without a placeholder or fade.
-        let key = ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
+        let key = Self.cacheKey(page.url, transform: transform, slice: slice)
         let cached = ImageMemoryCache.shared[key]
         _image = State(initialValue: cached)
         _loadedKey = State(initialValue: cached == nil ? nil : key)
         _shown = State(initialValue: cached != nil)
     }
 
-    private var cacheKey: String { ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform) }
+    private var cacheKey: String { Self.cacheKey(page.url, transform: transform, slice: slice) }
+
+    private static func cacheKey(_ url: String, transform: ImageTransform, slice: Int?) -> String {
+        slice.map { ImageLoader.sliceKey(url, $0, transform: transform) } ?? ImageLoader.cacheKey(url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
+    }
 
     var body: some View {
         Group {
@@ -84,7 +91,11 @@ struct ReaderPageView: View {
             guard image == nil || loadedKey != key else { return }
             failed = false
             do {
-                let loaded = try await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform)
+                let loaded = if let slice {
+                    try await ImageLoader.shared.slice(slice, of: page.url, headers: page.headers, transform: transform)
+                } else {
+                    try await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform)
+                }
                 if loaded.size.height > 0 { PageAspect.known[key] = loaded.size.width / loaded.size.height }
                 if let size = ImageMemoryCache.shared.size(of: page.url) { onSize(size) }
                 image = loaded

@@ -59,6 +59,14 @@ enum PageGeometry {
     /// A double-page spread: wider than tall.
     static func isWide(_ size: CGSize) -> Bool { size.width > size.height }
 
+    /// How many slices a webtoon page of `size` is shown as: its height at the reader's width limit,
+    /// in pieces at most `ImageLoader.maxPixelLength` long. 1 for most pages.
+    static func sliceCount(_ size: CGSize) -> Int {
+        guard size.width > 0, size.height > 0 else { return 1 }
+        let height = size.height * min(1, ImageLoader.maxPixelWidth / size.width)
+        return max(1, Int((height / ImageLoader.maxPixelLength).rounded(.up)))
+    }
+
     /// The two halves of a spread in reading order: left then right, or right then left.
     static func split(_ image: CGImage, rightToLeft: Bool) -> (first: CGImage, second: CGImage) {
         let half = image.width / 2

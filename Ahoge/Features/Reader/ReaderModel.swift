@@ -19,6 +19,8 @@ final class ReaderModel: ObservableObject {
         var shiftSpreads = false
         /// Off: the card between two loaded chapters shows only when chapters are missing in between.
         var alwaysShowTransition = true
+        /// Tall pages become slices at most `ImageLoader.maxPixelLength` long (webtoon mode).
+        var sliceTall = false
     }
 
     /// One page of a spread, in screen order.
@@ -44,6 +46,8 @@ final class ReaderModel: ObservableObject {
         let kind: Kind
         /// Which half of a split wide page this item shows.
         var half: ImageTransform.Half? = nil
+        /// Which slice of a tall page this item shows, top to bottom.
+        var slice: Int? = nil
         /// Both pages of a two-page spread, left to right on screen; empty for a single page.
         var spread: [SpreadPage] = []
         /// The page ids this item shows, so a page can be found again after pages are re-paired.
@@ -156,11 +160,13 @@ final class ReaderModel: ObservableObject {
     }
 
     /// A page's size became known (decoded on screen or prefetched). Only a page turning out wide
-    /// changes the items, and only while wide pages split or spreads are paired.
+    /// (while wide pages split or spreads are paired) or tall (while tall pages are sliced) changes the items.
     func learnSize(_ size: CGSize, of pageID: String) {
-        let wasWide = pageSizes[pageID].map(PageGeometry.isWide) ?? false
+        let old = pageSizes[pageID]
         pageSizes[pageID] = size
-        guard PageGeometry.isWide(size) != wasWide, layout.splitWide || layout.dualPage else { return }
+        let wideChanged = PageGeometry.isWide(size) != (old.map(PageGeometry.isWide) ?? false)
+        let slicesChanged = PageGeometry.sliceCount(size) != (old.map(PageGeometry.sliceCount) ?? 1)
+        guard (wideChanged && (layout.splitWide || layout.dualPage)) || (slicesChanged && layout.sliceTall) else { return }
         rebuildItems()
     }
 
@@ -180,7 +186,7 @@ final class ReaderModel: ObservableObject {
             // "Preload only on Wi-Fi": on cellular, only the next page.
             let ahead = Pref.readerPreloadOnlyOnWiFi.value() && provider.downloads.isOnExpensiveNetwork ? 1 : 5
             for next in items.dropFirst(index + 1).prefix(ahead) {
-                for (page, id) in Self.pages(of: next) { prefetch(page, id: id) }
+                for (page, id) in Self.pages(of: next) { prefetch(page, id: id, slice: next.slice) }
             }
             // Mihon starts on the next chapter a few pages before the end, so it is there when reached.
             if count - page <= 3 { loadNext(after: item.chapter, provider: provider) }
@@ -271,13 +277,19 @@ final class ReaderModel: ObservableObject {
     }
 
     /// Loads a page below the one on screen, as it will be shown, and notes its untransformed size.
-    private func prefetch(_ page: SourcePage, id: String) {
+    private func prefetch(_ page: SourcePage, id: String, slice: Int? = nil) {
         let transform = transform
-        let key = ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
+        let key = slice.map { ImageLoader.sliceKey(page.url, $0, transform: transform) }
+            ?? ImageLoader.cacheKey(page.url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: transform)
         Task {
             await PrefetchLimiter.shared.enqueue(key) { [weak self] in
-                guard (try? await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform, priority: .utility)) != nil,
-                      let size = ImageMemoryCache.shared.size(of: page.url) else { return }
+                let loaded: Bool
+                if let slice {
+                    loaded = (try? await ImageLoader.shared.slice(slice, of: page.url, headers: page.headers, transform: transform, priority: .utility)) != nil
+                } else {
+                    loaded = (try? await ImageLoader.shared.image(page.url, headers: page.headers, transform: transform, priority: .utility)) != nil
+                }
+                guard loaded, let size = ImageMemoryCache.shared.size(of: page.url) else { return }
                 await self?.learnSize(size, of: id)
             }
         }
@@ -299,12 +311,14 @@ final class ReaderModel: ObservableObject {
         items = buildItems()
         // A page that joined or left a spread (or a half that is whole again) now has another item: follow it.
         if let position, !items.contains(where: { $0.id == position }) {
-            let page = position.replacingOccurrences(of: Self.secondHalfSuffix, with: "")
+            var page = position.replacingOccurrences(of: Self.secondHalfSuffix, with: "")
+            if let slice = page.range(of: Self.sliceSuffix) { page = String(page[..<slice.lowerBound]) }
             if let owner = itemID(containing: page) { self.position = owner }
         }
     }
 
     private static let secondHalfSuffix = "\nsecond"
+    private static let sliceSuffix = "\nslice"
 
     private func buildItems() -> [Item] {
         guard let first = sections.first else { return [] }
@@ -357,9 +371,20 @@ final class ReaderModel: ObservableObject {
         }
         var items: [Item] = []
         for index in 0..<count {
-            if layout.splitWide, let size = pageSizes[ids[index]], PageGeometry.isWide(size) {
+            let size = pageSizes[ids[index]]
+            if layout.splitWide, let size, PageGeometry.isWide(size) {
                 items.append(single(index, half: .first))
                 items.append(single(index, half: .second))
+            } else if layout.sliceTall, let size, PageGeometry.sliceCount(size) > 1 {
+                // Like the halves: the first slice keeps the page's id and stands for the page.
+                for slice in 0..<PageGeometry.sliceCount(size) {
+                    var item = single(index)
+                    if slice > 0 {
+                        item = Item(id: ids[index] + Self.sliceSuffix + "\(slice)", chapter: section.chapter, kind: item.kind)
+                    }
+                    item.slice = slice
+                    items.append(item)
+                }
             } else {
                 items.append(single(index))
             }
