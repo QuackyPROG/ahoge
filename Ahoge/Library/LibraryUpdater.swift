@@ -61,9 +61,10 @@ final class LibraryUpdater: ObservableObject {
                         repo.upsert(sourceId: title.sourceId, url: title.url, details: details, keepTitle: !matchTitles)
                     }
                     let before = Set(title.chapters.map(\.key))
-                    repo.applyChapters(try await source.chapters(url: title.url), to: title)
+                    // A chapter whose URL changed is not new either.
+                    let carried = Set(repo.applyChapters(try await source.chapters(url: title.url), to: title).values)
                     // A title's first fetch is not "new chapters".
-                    let found = before.isEmpty ? [] : title.chapters.filter { !before.contains($0.key) }
+                    let found = before.isEmpty ? [] : title.chapters.filter { !before.contains($0.key) && !carried.contains($0.key) }
                     if !found.isEmpty {
                         self.downloads?.chaptersFound(found, in: title)
                         withNew.append((title, found))

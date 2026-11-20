@@ -109,6 +109,28 @@ final class LibraryRepositoryTests: XCTestCase {
         XCTAssertEqual(manga.unreadCount, 1)
     }
 
+    func testChangedChapterURLsKeepReadStateBookmarkAndHistory() throws {
+        let repo = try repository()
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        repo.applyChapters([chapter("/old/2", 2), chapter("/old/1", 1)], to: manga)
+        repo.setRead([try XCTUnwrap(manga.chapters.first { $0.url == "/old/1" })], true)
+        let two = try XCTUnwrap(manga.chapters.first { $0.url == "/old/2" })
+        repo.setBookmark([two], true)
+        repo.saveProgress(two, page: 4, pageCount: 10)
+
+        let carried = repo.applyChapters([chapter("/new/2", 2), chapter("/new/1", 1)], to: manga)
+
+        XCTAssertEqual(carried, ["en.demo\n/old/1": "en.demo\n/new/1", "en.demo\n/old/2": "en.demo\n/new/2"])
+        let rows = try repo.db.read { try Row.fetchAll($0, sql: "SELECT url, read, bookmark, lastPageRead FROM chapter ORDER BY url") }
+        XCTAssertEqual(rows.map { $0["url"] as String }, ["/new/1", "/new/2"])
+        XCTAssertEqual(rows.map { $0["read"] as Bool }, [true, false])
+        XCTAssertEqual(rows.map { $0["bookmark"] as Bool }, [false, true])
+        XCTAssertEqual(rows.map { $0["lastPageRead"] as Int }, [0, 4])
+        XCTAssertEqual(manga.sortedChapters.map(\.bookmark), [true, false])
+        XCTAssertEqual(try repo.db.read { try String.fetchAll($0, sql: "SELECT chapterKey FROM history") }, ["en.demo\n/new/2"])
+        XCTAssertEqual(repo.history().first?.chapter.url, "/new/2")
+    }
+
     func testV3MigrationKeepsExistingRowsWithDefaults() throws {
         let queue = try DatabaseQueue()
         try LibraryRepository.migrator.migrate(queue, upTo: "v2")

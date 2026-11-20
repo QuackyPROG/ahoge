@@ -34,6 +34,17 @@ final class UpdatesHistoryTests: XCTestCase {
         XCTAssertTrue(repo.updates(since: .distantPast).isEmpty)
     }
 
+    func testChangedChapterURLsAreNotNewUpdates() throws {
+        let repo = try LibraryRepository.inMemory()
+        let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        repo.applyChapters([chapter("/old/1", 1)], to: manga)
+        repo.setInLibrary(manga, true)
+        repo.applyChapters([chapter("/old/2", 2), chapter("/old/1", 1)], to: manga)
+
+        repo.applyChapters([chapter("/new/3", 3), chapter("/new/2", 2), chapter("/new/1", 1)], to: manga)
+        XCTAssertEqual(repo.updates(since: .distantPast).map(\.chapter.url), ["/new/3", "/new/2"])
+    }
+
     func testUpdatesSkipTitlesOutsideTheLibrary() throws {
         let repo = try LibraryRepository.inMemory()
         let manga = repo.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")

@@ -195,10 +195,12 @@ final class LibraryRepository: ObservableObject {
         return manga
     }
 
-    func applyChapters(_ fetched: [SourceChapter], to manga: LibraryManga) {
+    /// Returns the chapters whose URL changed and kept their state: old chapter key → new chapter key.
+    @discardableResult
+    func applyChapters(_ fetched: [SourceChapter], to manga: LibraryManga) -> [String: String] {
         // An empty list from a manga that had chapters is a source failure (Mihon treats it as an
         // error); applying it would delete every chapter, its read state and its history.
-        if fetched.isEmpty && !manga.chapters.isEmpty { return }
+        if fetched.isEmpty && !manga.chapters.isEmpty { return [:] }
         updatesCache = nil
         objectWillChange.send()
         let existing = manga.chapters
@@ -208,6 +210,10 @@ final class LibraryRepository: ObservableObject {
         let readNumbers = Set(existing.filter(\.read).map(\.number))
         let keep = Set(merged.map(\.url))
         let removed = existing.filter { !keep.contains($0.url) }
+        let carriedFrom = Dictionary(ChapterMerge.carries(existing: existing.map(\.state), fetched: fetched).compactMap { old, new in
+            byURL[old].map { (new, $0) }
+        }, uniquingKeysWith: { first, _ in first })
+        var carried: [String: String] = [:]
         manga.chapters = merged.map { state in
             if let record = byURL[state.url] {
                 record.objectWillChange.send()
@@ -215,8 +221,13 @@ final class LibraryRepository: ObservableObject {
                 return record
             }
             let record = ChapterRecord(manga: manga, state: state)
-            // The same chapter from another group: already read once (Mihon's "mark duplicate chapters read").
-            if markDuplicates, record.number >= 0, readNumbers.contains(record.number) { record.read = true }
+            if let old = carriedFrom[state.url] {
+                record.bookmark = old.bookmark
+                carried[old.key] = record.key
+            } else if markDuplicates, record.number >= 0, readNumbers.contains(record.number) {
+                // The same chapter from another group: already read once (Mihon's "mark duplicate chapters read").
+                record.read = true
+            }
             return record
         }
         let now = Date()
@@ -224,11 +235,14 @@ final class LibraryRepository: ObservableObject {
         manga.nextUpdate = ReleasePredictor.nextUpdate(for: manga, lastFetch: now)
         manga.refreshUnreadCount()
         write { db in
-            for record in removed { try record.delete(db) }
             // upsert: a chapter key already stored under another manga moves here, as SwiftData's unique key did.
             for record in manga.chapters { try record.upsert(db) }
+            // Before the old rows go, or their history cascades with them.
+            for (old, new) in carried { try db.execute(sql: "UPDATE history SET chapterKey = ? WHERE chapterKey = ?", arguments: [new, old]) }
+            for record in removed { try record.delete(db) }
             try manga.update(db)
         }
+        return carried
     }
 
     func setInLibrary(_ manga: LibraryManga, _ value: Bool) {
