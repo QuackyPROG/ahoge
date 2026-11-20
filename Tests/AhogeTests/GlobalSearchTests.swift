@@ -77,6 +77,15 @@ final class GlobalSearchTests: XCTestCase {
         XCTAssertEqual(search.results.map(\.state), [.loading, .loading, .loading])
     }
 
+    func testASourceListingATitleTwiceShowsItOnce() async {
+        let search = GlobalSearch { _, _ in self.page(["/a", "/b", "/a"]) }
+        search.run("x", sources: [source("a")])
+        await search.finished()
+        XCTAssertEqual(search.results.map(\.state), [
+            .done([MangaStub(url: "/a", title: "/a", cover: ""), MangaStub(url: "/b", title: "/b", cover: "")]),
+        ])
+    }
+
     func testAnEmptyQuerySearchesNothing() async {
         var calls = 0
         let search = GlobalSearch { _, _ in
