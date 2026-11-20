@@ -6,6 +6,7 @@ struct MangaDetailView: View {
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var downloads: DownloadManager
+    @EnvironmentObject private var navigator: AppNavigator
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var isLoading = false
@@ -26,10 +27,6 @@ struct MangaDetailView: View {
     @State private var filteringScanlators = false
     @State private var editingNotes = false
     @State private var choosingDefault = false
-    /// A genre long-pressed for a search across sources.
-    @State private var globalQuery: String?
-    /// This entry, pushed as the migration search.
-    @State private var migrating: MangaRef?
     /// Library entries that look like this title, found when adding it.
     @State private var duplicates: [LibraryManga] = []
     /// A duplicate to migrate to this title, opened once the duplicates sheet has closed.
@@ -96,8 +93,6 @@ struct MangaDetailView: View {
         .sheet(isPresented: $editingNotes) {
             if let manga { NotesSheet(notes: manga.notes) { repo.setNotes($0, for: manga) } }
         }
-        .navigationDestination(item: $globalQuery) { RouteView(route: .globalSearch($0)) }
-        .navigationDestination(item: $migrating) { RouteView(route: .migrate($0)) }
         .confirmationDialog("Use these chapter settings as the default?", isPresented: $choosingDefault, titleVisibility: .visible) {
             Button("For new entries") { display.saveAsDefault() }
             Button("For all entries in my library") {
@@ -258,7 +253,7 @@ struct MangaDetailView: View {
                 ActionButton(title: "Notes", icon: manga?.notes.isEmpty == false ? "note.text" : "note.text.badge.plus", active: manga?.notes.isEmpty == false) { editingNotes = true }
             }
             if inLibrary, let manga {
-                ActionButton(title: "Migrate", icon: "arrow.left.arrow.right") { migrating = manga.ref }
+                ActionButton(title: "Migrate", icon: "arrow.left.arrow.right") { navigator.push(.migrate(manga.ref)) }
             }
             if let webURL {
                 ActionButton(title: "WebView", icon: "globe") { webTarget = WebTarget(url: webURL) }
@@ -300,7 +295,7 @@ struct MangaDetailView: View {
             }
             .buttonStyle(.plain)
             .contextMenu {
-                Button("Search all sources", systemImage: "magnifyingglass") { globalQuery = genre }
+                Button("Search all sources", systemImage: "magnifyingglass") { navigator.push(.globalSearch(genre)) }
                 Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = genre }
             }
         }
