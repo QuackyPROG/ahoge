@@ -64,7 +64,8 @@ final class DownloadManagerTests: XCTestCase {
 
         XCTAssertTrue(downloads.isDownloaded(manga.chapter(1).key))
         XCTAssertFalse(downloads.isDownloaded(manga.chapter(2).key))
-        XCTAssertEqual(downloads.localPages(manga.chapter(1).key)?.map(\.lastPathComponent), ["001.jpg", "002.jpg", "003.jpg"])
+        let pages = await downloads.localPages(manga.chapter(1).key)
+        XCTAssertEqual(pages?.map(\.lastPathComponent), ["001.jpg", "002.jpg", "003.jpg"])
         XCTAssertEqual(downloads.downloadedCount(mangaKey: manga.key), 1)
         XCTAssertTrue(downloads.queue.isEmpty)
         XCTAssertEqual(try rowCount(repo, state: 1), 1)
@@ -160,7 +161,8 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertTrue(downloads.isDownloaded(manga.chapter(1).key))
         XCTAssertFalse(downloads.isDownloaded(manga.chapter(2).key))
         XCTAssertEqual(try rowCount(repo, state: 1), 1)
-        XCTAssertEqual(downloads.localPages(manga.chapter(1).key)?.count, 3)
+        let pages = await downloads.localPages(manga.chapter(1).key)
+        XCTAssertEqual(pages?.count, 3)
     }
 
     func testReindexDeletesFoldersAndArchivesWithNoChapter() async throws {
@@ -198,7 +200,8 @@ final class DownloadManagerTests: XCTestCase {
 
         downloads.delete([manga.chapter(1)])
         XCTAssertFalse(downloads.isDownloaded(manga.chapter(1).key))
-        XCTAssertNil(downloads.localPages(manga.chapter(1).key))
+        let pages = await downloads.localPages(manga.chapter(1).key)
+        XCTAssertNil(pages)
         XCTAssertEqual(filesOnDisk(), [])
         XCTAssertEqual(try rowCount(repo, state: 1), 0)
         XCTAssertEqual(downloads.downloadedCount(mangaKey: manga.key), 0)
@@ -233,7 +236,8 @@ final class DownloadManagerTests: XCTestCase {
         let newKey = LibraryManga.makeKey(sourceId: SourceFixture.sourceId, url: "/n/1")
         XCTAssertTrue(downloads.isDownloaded(newKey))
         XCTAssertFalse(downloads.isDownloaded(one.key))
-        XCTAssertEqual(downloads.localPages(newKey)?.map(\.lastPathComponent), ["001.jpg", "002.jpg", "003.jpg"])
+        let pages = await downloads.localPages(newKey)
+        XCTAssertEqual(pages?.map(\.lastPathComponent), ["001.jpg", "002.jpg", "003.jpg"])
         let mangaFolder = root.appendingPathComponent(SourceFixture.sourceId).appendingPathComponent(DownloadStore.hash(manga.key))
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: mangaFolder.path), [DownloadStore.hash(newKey)])
         XCTAssertFalse(downloads.isDownloaded(two.key))
@@ -266,9 +270,28 @@ final class DownloadManagerTests: XCTestCase {
 
         XCTAssertEqual(filesOnDisk().count, 1)
         XCTAssertEqual(filesOnDisk().first.map { ($0 as NSString).pathExtension }, "cbz")
-        let pages = try XCTUnwrap(downloads.localPages(manga.chapter(1).key))
+        let local = await downloads.localPages(manga.chapter(1).key)
+        let pages = try XCTUnwrap(local)
         XCTAssertEqual(pages.map(\.lastPathComponent), ["001.jpg", "002.jpg", "003.jpg"])
         XCTAssertEqual(try Data(contentsOf: pages[0]), jpeg)
         XCTAssertGreaterThan(downloads.chapterCacheSize(), 0)
+    }
+
+    func testCBZChapterUnpacksOffTheMainThread() async throws {
+        Pref.saveAsCBZ.set(true, in: defaults)
+        let repo = try LibraryRepository.inMemory()
+        let manga = SourceFixture.manga(in: repo, chapters: 1)
+        let sources = SourceManager(extensions: try SourceFixture.extensions())
+        let downloads = manager(repo, sources, transport())
+        downloads.enqueue([manga.chapter(1)])
+        await downloads.waitUntilIdle()
+        downloads.clearChapterCache()
+        DownloadStore.lastUnpackOnMainThread = nil
+
+        let pages = try await PageProvider(sources: sources, downloads: downloads).pages(for: manga.chapter(1))
+
+        XCTAssertEqual(pages.count, 3)
+        XCTAssertTrue(pages.allSatisfy { if case .local = $0 { true } else { false } })
+        XCTAssertEqual(DownloadStore.lastUnpackOnMainThread, false)
     }
 }

@@ -22,7 +22,7 @@ struct PageProvider {
     let downloads: DownloadManager
 
     func pages(for chapter: ChapterRecord) async throws -> [ReaderPage] {
-        if let files = downloads.localPages(chapter.key) { return files.map(ReaderPage.local) }
+        if let files = await downloads.localPages(chapter.key) { return files.map(ReaderPage.local) }
         return try await sources.source(chapter.sourceId).pages(url: chapter.url).map(ReaderPage.remote)
     }
 }

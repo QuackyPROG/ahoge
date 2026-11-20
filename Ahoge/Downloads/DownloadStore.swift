@@ -18,6 +18,8 @@ struct DownloadStore: Sendable {
     let cache: URL
 
     static let partialMarker = ".partial"
+    /// Test probe: whether the last CBZ unpack ran on the main thread.
+    nonisolated(unsafe) static var lastUnpackOnMainThread: Bool?
 
     /// Keys hold URLs, which are no good as file names; a short hash is.
     static func hash(_ key: String) -> String { String(Data(key.utf8).sha256Hex.prefix(24)) }
@@ -149,6 +151,7 @@ struct DownloadStore: Sendable {
             try fm.createDirectory(at: target, withIntermediateDirectories: true)
             let marker = target.appendingPathComponent(Self.partialMarker)
             try Data().write(to: marker)
+            Self.lastUnpackOnMainThread = Thread.isMainThread
             try ZipArchive.extractAll(from: archive, to: target)
             try fm.removeItem(at: marker)
         } catch {

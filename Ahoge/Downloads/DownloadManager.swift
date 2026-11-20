@@ -222,10 +222,13 @@ final class DownloadManager: ObservableObject {
     /// How many chapters of a manga are downloaded.
     func downloadedCount(mangaKey: String) -> Int { countsByManga[mangaKey] ?? 0 }
 
-    /// The page files of a downloaded chapter in order, or nil when it is not downloaded.
-    func localPages(_ chapterKey: String) -> [URL]? {
+    /// The page files of a downloaded chapter in order, or nil when it is not downloaded. A CBZ is
+    /// unpacked off the main thread; that can take seconds.
+    func localPages(_ chapterKey: String) async -> [URL]? {
         guard let mangaKey = downloaded[chapterKey] else { return nil }
-        return store.localPages(DownloadStore.Location(sourceId: ChapterRecord.sourceId(ofKey: chapterKey), mangaKey: mangaKey, chapterKey: chapterKey))
+        let location = DownloadStore.Location(sourceId: ChapterRecord.sourceId(ofKey: chapterKey), mangaKey: mangaKey, chapterKey: chapterKey)
+        let store = self.store
+        return await Task.detached(priority: .userInitiated) { store.localPages(location) }.value
     }
 
     /// Rebuilds the downloaded rows from what is on disk (Mihon's "Reindex downloads"), and deletes
