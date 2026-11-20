@@ -138,6 +138,38 @@ final class MihonBackupImporterTests: XCTestCase {
         XCTAssertNil(MihonBackupImporter.find("Other", in: sources))
     }
 
+    // Expected ids from Mihon's formula, computed with:
+    // python -c "import hashlib;[print(l, int.from_bytes(hashlib.md5(f'mangadex/{l}/1'.encode()).digest()[:8],'big') & 0x7fffffffffffffff) for l in ('en','fr')]"
+    private let mangaDexEn: Int64 = 2_499_283_573_021_220_255
+    private let mangaDexFr: Int64 = 4_505_830_566_611_664_829
+
+    func testGenerateIdMatchesMihon() {
+        XCTAssertEqual(MihonBackupImporter.generateId(name: "MangaDex", lang: "en"), mangaDexEn)
+        XCTAssertEqual(MihonBackupImporter.generateId(name: "MangaDex", lang: "fr"), mangaDexFr)
+    }
+
+    func testSourceIdPicksTheLanguage() {
+        let sources = [source("en.mangadex", "MangaDex"), source("fr.mangadex", "MangaDex", lang: "fr")]
+        XCTAssertEqual(MihonBackupImporter.find("MangaDex", id: mangaDexFr, in: sources)?.id, "fr.mangadex")
+        XCTAssertEqual(MihonBackupImporter.find("MangaDex", id: 42, in: Array(sources.reversed()))?.id, "en.mangadex")
+    }
+
+    func testDecodeMapsAFrenchTitleToTheFrenchSource() throws {
+        var backup = ProtoWriter()
+        backup.message(1) { manga in
+            manga.int(1, self.mangaDexFr)
+            manga.string(2, "/m/fr")
+            manga.string(3, "Un")
+        }
+        backup.message(101) { source in
+            source.string(1, "MangaDex")
+            source.int(2, self.mangaDexFr)
+        }
+        let sources = [source("en.mangadex", "MangaDex"), source("fr.mangadex", "MangaDex", lang: "fr")]
+        let result = try MihonBackupImporter.decode(Data(backup.bytes), sources: sources)
+        XCTAssertEqual(result.backup.manga.map(\.sourceId), ["fr.mangadex"])
+    }
+
     func testGarbageIsNotABackup() {
         XCTAssertThrowsError(try MihonBackupImporter.decode(Data(), sources: [])) { XCTAssertEqual($0 as? BackupError, .notABackup) }
         XCTAssertThrowsError(try MihonBackupImporter.decode(Data([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 0xff, 1, 2, 3]), sources: [])) {
