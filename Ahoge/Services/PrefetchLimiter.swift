@@ -26,6 +26,9 @@ actor PrefetchLimiter {
     /// Drops the jobs that have not started; running ones finish.
     func cancelAll() { waiting.removeAll() }
 
+    /// Drops the waiting jobs of `keys`.
+    func cancel(_ keys: Set<String>) { waiting.removeAll { keys.contains($0.key) } }
+
     private func startWaiting() {
         while running.count < limit, !waiting.isEmpty {
             let next = waiting.removeFirst()
