@@ -4,7 +4,7 @@ import SwiftUI
 struct ClearDatabaseView: View {
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var extensions: ExtensionStore
-    @State private var keepRead = true
+    @State private var keepStarted = true
     @State private var counts: [String: Int] = [:]
     @State private var selected: Set<String> = []
     @State private var confirming = false
@@ -13,7 +13,7 @@ struct ClearDatabaseView: View {
     var body: some View {
         List {
             Section {
-                Toggle("Keep titles with read chapters", isOn: $keepRead)
+                Toggle("Keep titles with progress or history", isOn: $keepStarted)
             } footer: {
                 Text("Titles in your library and titles with downloads are never removed.")
             }
@@ -49,14 +49,14 @@ struct ClearDatabaseView: View {
         .navigationBarTitleDisplayMode(.inline)
         .themedScreen()
         .onAppear(perform: reload)
-        .onChange(of: keepRead) { reload() }
+        .onChange(of: keepStarted) { reload() }
         .confirmationDialog("Remove \(total) title\(total == 1 ? "" : "s")?", isPresented: $confirming, titleVisibility: .visible) {
             Button("Clear", role: .destructive) {
-                cleared = repo.clearNonLibrary(sources: selected, keepRead: keepRead)
+                cleared = repo.clearNonLibrary(sources: selected, keepStarted: keepStarted)
                 reload()
             }
         } message: {
-            Text("Their chapters and history go too. This cannot be undone.")
+            Text(keepStarted ? "Their chapters and history go too. This cannot be undone." : "Their chapters, read progress, bookmarks and history go too. This cannot be undone.")
         }
         .alert("Cleared \(cleared ?? 0) title\(cleared == 1 ? "" : "s")", isPresented: Binding(get: { cleared != nil }, set: { if !$0 { cleared = nil } })) {
             Button("OK", role: .cancel) {}
@@ -66,7 +66,7 @@ struct ClearDatabaseView: View {
     private var total: Int { selected.reduce(0) { $0 + (counts[$1] ?? 0) } }
 
     private func reload() {
-        counts = repo.nonLibraryCounts(keepRead: keepRead)
+        counts = repo.nonLibraryCounts(keepStarted: keepStarted)
         selected = Set(counts.keys)
     }
 

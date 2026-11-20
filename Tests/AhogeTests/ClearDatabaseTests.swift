@@ -1,3 +1,5 @@
+import GRDB
+import UIKit
 import XCTest
 @testable import Ahoge
 
@@ -16,7 +18,7 @@ final class ClearDatabaseTests: XCTestCase {
         add(repo, source: "en.a", url: "/opened")
         add(repo, source: "en.b", url: "/other-source")
 
-        let removed = repo.clearNonLibrary(sources: ["en.a"], keepRead: false)
+        let removed = repo.clearNonLibrary(sources: ["en.a"], keepStarted: false)
 
         XCTAssertEqual(removed, 1)
         XCTAssertNotNil(repo.manga(sourceId: "en.a", url: "/saved"))
@@ -25,14 +27,14 @@ final class ClearDatabaseTests: XCTestCase {
         XCTAssertEqual(try repo.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM chapter") }, 2)
     }
 
-    func testKeepReadSparesTitlesWithReadChapters() throws {
+    func testKeepStartedSparesTitlesWithReadChapters() throws {
         let repo = try LibraryRepository.inMemory()
         add(repo, source: "en.a", url: "/read", read: true)
         add(repo, source: "en.a", url: "/unread")
 
-        XCTAssertEqual(repo.nonLibraryCounts(keepRead: true), ["en.a": 1])
-        XCTAssertEqual(repo.nonLibraryCounts(keepRead: false), ["en.a": 2])
-        XCTAssertEqual(repo.clearNonLibrary(sources: ["en.a"], keepRead: true), 1)
+        XCTAssertEqual(repo.nonLibraryCounts(keepStarted: true), ["en.a": 1])
+        XCTAssertEqual(repo.nonLibraryCounts(keepStarted: false), ["en.a": 2])
+        XCTAssertEqual(repo.clearNonLibrary(sources: ["en.a"], keepStarted: true), 1)
         XCTAssertNotNil(repo.manga(sourceId: "en.a", url: "/read"))
         XCTAssertNil(repo.manga(sourceId: "en.a", url: "/unread"))
     }
@@ -46,7 +48,70 @@ final class ClearDatabaseTests: XCTestCase {
             try db.execute(sql: "INSERT INTO download (chapterKey, mangaKey, state, pageCount, bytes, dateAdded) VALUES (?, ?, 2, 3, 100, '2026-01-01 00:00:00')", arguments: [chapter.key, manga.key])
         }
 
-        XCTAssertEqual(repo.clearNonLibrary(sources: ["en.a"], keepRead: false), 0)
+        XCTAssertEqual(repo.clearNonLibrary(sources: ["en.a"], keepStarted: false), 0)
         XCTAssertNotNil(repo.manga(sourceId: "en.a", url: "/downloaded"))
+    }
+
+    func testKeepStartedSparesTitlesWithProgressBookmarksOrHistory() throws {
+        func started(_ repo: LibraryRepository) throws {
+            add(repo, source: "en.a", url: "/read", read: true)
+            add(repo, source: "en.a", url: "/page")
+            add(repo, source: "en.a", url: "/bookmark")
+            add(repo, source: "en.a", url: "/history")
+            add(repo, source: "en.a", url: "/untouched")
+            let page = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/page")?.chapters.first)
+            page.lastPageRead = 3
+            let bookmark = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/bookmark")?.chapters.first)
+            bookmark.bookmark = true
+            repo.write { try page.update($0); try bookmark.update($0) }
+            let history = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/history")?.chapters.first)
+            repo.write { try LibraryRepository.upsertHistory(history, at: Date(timeIntervalSince1970: 1000), $0) }
+        }
+
+        let kept = try LibraryRepository.inMemory()
+        try started(kept)
+        XCTAssertEqual(kept.clearNonLibrary(sources: ["en.a"], keepStarted: true), 1)
+        XCTAssertNil(kept.manga(sourceId: "en.a", url: "/untouched"))
+        for url in ["/read", "/page", "/bookmark", "/history"] {
+            XCTAssertNotNil(kept.manga(sourceId: "en.a", url: url), url)
+        }
+
+        let all = try LibraryRepository.inMemory()
+        try started(all)
+        XCTAssertEqual(all.clearNonLibrary(sources: ["en.a"], keepStarted: false), 5)
+    }
+
+    private func image(width: CGFloat, color: UIColor) throws -> Data {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: width, height: width + 2)).image { context in
+            color.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: width + 2))
+        }
+        return try XCTUnwrap(image.pngData())
+    }
+
+    func testClearingRemovesCoversAndSettingsOnlyTheClearedTitlesUsed() throws {
+        let repo = try LibraryRepository.inMemory()
+        let suite = UserDefaults(suiteName: "clear-tests-\(UUID().uuidString)")!
+        repo.preferences = suite
+        add(repo, source: "en.a", url: "/opened")
+        add(repo, source: "en.a", url: "/sharing")
+        add(repo, source: "en.a", url: "/saved", inLibrary: true)
+        let opened = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/opened"))
+        let sharing = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/sharing"))
+        let saved = try XCTUnwrap(repo.manga(sourceId: "en.a", url: "/saved"))
+        XCTAssertTrue(repo.setCustomCover(try image(width: 3, color: .green), for: opened))
+        XCTAssertTrue(repo.setCustomCover(try image(width: 5, color: .blue), for: sharing))
+        XCTAssertTrue(repo.setCustomCover(try image(width: 5, color: .blue), for: saved))
+        let own = try XCTUnwrap(opened.customCover)
+        let shared = try XCTUnwrap(saved.customCover)
+        XCTAssertEqual(sharing.customCover, shared, "equal pictures share one file")
+        addTeardownBlock { CoverStore.delete(own); CoverStore.delete(shared) }
+        ReadingMode.rightToLeft.save(for: opened.key, to: suite)
+
+        XCTAssertEqual(repo.clearNonLibrary(sources: ["en.a"], keepStarted: false), 2)
+
+        XCTAssertFalse(CoverStore.exists(own))
+        XCTAssertTrue(CoverStore.exists(shared), "still used by a library title")
+        XCTAssertNil(ReadingMode.stored(for: opened.key, from: suite))
     }
 }

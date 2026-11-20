@@ -19,11 +19,13 @@ extension LibraryRepository {
         let old = manga.customCover
         manga.customCover = name
         write { try manga.update($0) }
-        // Equal pictures share one file, so keep it while another title still uses it.
-        if let old, old != name {
-            let shared = (try? db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM manga WHERE customCover = ?", arguments: [old]) }) ?? 0
-            if shared == 0 { CoverStore.delete(old) }
-        }
+        if let old, old != name { deleteCoverFileIfUnused(old) }
+    }
+
+    /// Equal pictures share one file, so it goes only when no title uses it any more.
+    func deleteCoverFileIfUnused(_ name: String) {
+        let shared = (try? db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM manga WHERE customCover = ?", arguments: [name]) }) ?? 0
+        if shared == 0 { CoverStore.delete(name) }
     }
 }
 

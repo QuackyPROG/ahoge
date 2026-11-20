@@ -1,3 +1,4 @@
+import GRDB
 import XCTest
 @testable import Ahoge
 
@@ -110,5 +111,82 @@ final class MigrateTests: XCTestCase {
         XCTAssertEqual(saved.chapters.filter(\.read).count, 0)
         XCTAssertEqual(saved.notes, "")
         XCTAssertEqual(fresh.categoryIds(of: saved), [])
+    }
+
+    private func history(_ repo: LibraryRepository, _ chapter: ChapterRecord) throws -> Row? {
+        try repo.db.read { try Row.fetchOne($0, sql: "SELECT mangaKey, lastRead, timeRead FROM history WHERE chapterKey = ?", arguments: [chapter.key]) }
+    }
+
+    private func addHistory(_ repo: LibraryRepository, _ chapter: ChapterRecord, at seconds: Double, timeRead: Int) {
+        repo.write {
+            try $0.execute(
+                sql: "INSERT INTO history (chapterKey, mangaKey, lastRead, timeRead) VALUES (?, ?, ?, ?)",
+                arguments: [chapter.key, chapter.mangaKey, Date(timeIntervalSince1970: seconds), timeRead]
+            )
+        }
+    }
+
+    func testProgressAndHistoryCarryOver() throws {
+        let repo = try LibraryRepository.inMemory()
+        let (old, new) = pair(repo)
+        let old3 = try XCTUnwrap(old.chapters.first { $0.number == 3 })
+        let old2 = try XCTUnwrap(old.chapters.first { $0.number == 2 })
+        let new2 = try XCTUnwrap(new.chapters.first { $0.number == 2 })
+        old3.lastPageRead = 5
+        repo.write { try old3.update($0) }
+        addHistory(repo, old3, at: 1000, timeRead: 120)
+        addHistory(repo, old2, at: 1000, timeRead: 60)
+        addHistory(repo, new2, at: 3000, timeRead: 30)
+
+        repo.migrate(old, to: new, options: MigrateOptions())
+
+        let saved = try reloaded(repo, key: new.key)
+        let new3 = try XCTUnwrap(saved.chapters.first { $0.number == 3 })
+        XCTAssertEqual(new3.lastPageRead, 5)
+        let carried = try XCTUnwrap(try history(repo, new3))
+        XCTAssertEqual(carried["mangaKey"] as String, new.key)
+        XCTAssertEqual(carried["lastRead"] as Date, Date(timeIntervalSince1970: 1000))
+        XCTAssertEqual(carried["timeRead"] as Int, 120)
+        let newer = try XCTUnwrap(try history(repo, new2))
+        XCTAssertEqual(newer["lastRead"] as Date, Date(timeIntervalSince1970: 3000), "the newer date stays")
+        XCTAssertNotNil(try history(repo, old3), "the old entry's history stays")
+    }
+
+    func testProgressAndHistoryStayWhenChaptersAreOff() throws {
+        let repo = try LibraryRepository.inMemory()
+        let (old, new) = pair(repo)
+        let old3 = try XCTUnwrap(old.chapters.first { $0.number == 3 })
+        old3.lastPageRead = 5
+        repo.write { try old3.update($0) }
+        addHistory(repo, old3, at: 1000, timeRead: 120)
+        var options = MigrateOptions()
+        options.chapters = false
+
+        repo.migrate(old, to: new, options: options)
+
+        let saved = try reloaded(repo, key: new.key)
+        let new3 = try XCTUnwrap(saved.chapters.first { $0.number == 3 })
+        XCTAssertEqual(new3.lastPageRead, 0)
+        XCTAssertNil(try history(repo, new3))
+    }
+
+    func testPerSeriesSettingsReplaceTheNewEntrysAndStayOnTheOld() throws {
+        let repo = try LibraryRepository.inMemory()
+        let suite = UserDefaults(suiteName: "migrate-tests-\(UUID().uuidString)")!
+        repo.preferences = suite
+        let (old, new) = pair(repo)
+        ReadingMode.rightToLeft.save(for: old.key, to: suite)
+        ReaderOrientation.portrait.save(for: old.key, to: suite)
+        ReadingMode.vertical.save(for: new.key, to: suite)
+        var display = ChapterDisplay()
+        display.filter = .unread
+        display.save(for: new.key, to: suite)
+        let options = MigrateOptions(chapters: false, categories: false, notes: false, customCover: false, deleteDownloads: false, removeOld: true)
+
+        repo.migrate(old, to: new, options: options)
+
+        let moved = PerSeriesReaderSettings.Values(mode: .rightToLeft, orientation: .portrait, chapterDisplay: nil)
+        XCTAssertEqual(PerSeriesReaderSettings.values(for: new.key, in: suite), moved)
+        XCTAssertEqual(PerSeriesReaderSettings.values(for: old.key, in: suite), moved)
     }
 }

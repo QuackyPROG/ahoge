@@ -45,7 +45,7 @@ extension LibraryRepository {
     @discardableResult
     func categoryId(named name: String, creating template: BackupCategory? = nil) -> Int64? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let existing = categories.first(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) { return existing.id }
+        if let existing = existingCategoryId(named: trimmed) { return existing }
         guard let created = createCategory(named: trimmed), let index = categories.firstIndex(where: { $0.id == created.id }) else { return nil }
         if let template {
             categories[index].flags = template.flags
@@ -54,6 +54,12 @@ extension LibraryRepository {
             write { try category.update($0) }
         }
         return created.id
+    }
+
+    /// The id of the category with this name, ignoring case and surrounding spaces; nil when there is none.
+    private func existingCategoryId(named name: String) -> Int64? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return categories.first { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }?.id
     }
 
     /// Merges one backed-up title into the database: a chapter is read if it is read on either side,
@@ -70,9 +76,9 @@ extension LibraryRepository {
             manga.summary = item.summary
             manga.genres = item.genres
             manga.status = item.status
+            manga.updateInterval = item.updateInterval
         }
         if manga.notes.isEmpty { manga.notes = item.notes }
-        if manga.updateInterval == nil { manga.updateInterval = item.updateInterval }
         if manga.customCover == nil, let encoded = item.customCoverData, let data = Data(base64Encoded: encoded) {
             setCustomCover(data, for: manga)
         }
@@ -81,6 +87,8 @@ extension LibraryRepository {
             if let added = item.dateAdded { manga.dateAdded = added }
         }
 
+        let localOrder = manga.sortedChapters
+        var added: [ChapterRecord] = []
         var local = Dictionary(manga.chapters.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
         var changed: [ChapterRecord] = []
         for source in item.chapters {
@@ -104,6 +112,15 @@ extension LibraryRepository {
                 manga.chapters.append(record)
                 local[source.url] = record
                 changed.append(record)
+                added.append(record)
+            }
+        }
+        let duplicateOrders = Set(added.map(\.sourceOrder)).count < added.count
+        if !added.isEmpty, !localOrder.isEmpty || duplicateOrders {
+            for (order, record) in Self.restoredOrder(local: localOrder, added: added).enumerated() where record.sourceOrder != order {
+                record.objectWillChange.send()
+                record.sourceOrder = order
+                if !changed.contains(where: { $0 === record }) { changed.append(record) }
             }
         }
         manga.refreshUnreadCount()
@@ -133,9 +150,23 @@ extension LibraryRepository {
             let current = categoryIds(of: manga)
             var ids = current
             for name in item.categories {
-                if let category = categories.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) { ids.insert(category.id) }
+                if let id = existingCategoryId(named: name) { ids.insert(id) }
             }
             if ids != current { setCategories(ids, for: manga) }
         }
+    }
+
+    /// Reading order after a restore (`sourceOrder` 0 is newest): local chapters keep their order,
+    /// backup-only chapters with a number go in by number, those without one go last in backup order.
+    private static func restoredOrder(local: [ChapterRecord], added: [ChapterRecord]) -> [ChapterRecord] {
+        let added = added.enumerated()
+            .sorted { ($0.element.sourceOrder, $0.offset) < ($1.element.sourceOrder, $1.offset) }
+            .map(\.element)
+        var result = local
+        for record in added where record.number >= 0 {
+            let index = result.firstIndex { $0.number >= 0 && $0.number < record.number } ?? result.count
+            result.insert(record, at: index)
+        }
+        return result + added.filter { $0.number < 0 }
     }
 }

@@ -60,6 +60,9 @@ final class BackupCodecTests: XCTestCase {
         XCTAssertEqual(manga.categories, ["Reading"])
         XCTAssertEqual(manga.excludedScanlators, ["Slow Group"])
         XCTAssertEqual(manga.dateAdded, Date(timeIntervalSince1970: 1_793_600_000))
+        XCTAssertNil(manga.readerMode, "absent in version 1 backups")
+        XCTAssertNil(manga.readerOrientation)
+        XCTAssertNil(manga.chapterDisplay)
         XCTAssertEqual(manga.chapters.count, 2)
         let read = manga.chapters[0]
         XCTAssertEqual(read.url, "/c/2")

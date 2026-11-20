@@ -46,7 +46,7 @@ final class BackupServiceTests: XCTestCase {
 
         let target = try LibraryRepository.inMemory()
         let targetDefaults = defaults()
-        let report = await BackupService.restore(backup, into: target, store: store(), defaults: targetDefaults)
+        let report = await BackupService.restore(backup, into: target, store: store(), defaults: targetDefaults, includingSettings: true)
 
         XCTAssertEqual(report.restoredManga, 1)
         XCTAssertEqual(target.library.map(\.title), ["One"])
@@ -96,7 +96,7 @@ final class BackupServiceTests: XCTestCase {
             )],
             categories: [BackupCategory(name: "Reading", sort: 0)]
         )
-        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults())
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
 
         let merged = try XCTUnwrap(target.manga(sourceId: "en.demo", url: "/m/1"))
         let c1 = try XCTUnwrap(merged.chapters.first { $0.url == "/c/1" })
@@ -127,7 +127,7 @@ final class BackupServiceTests: XCTestCase {
                 BackupManga(sourceId: "en.other", url: "/m/2", title: "Two"),
             ]
         )
-        let report = await BackupService.restore(backup, into: target, store: store(), defaults: defaults())
+        let report = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
 
         XCTAssertEqual(report.restoredManga, 2)
         XCTAssertEqual(report.missingSources, ["en.other", "Gone Source"])
@@ -137,7 +137,7 @@ final class BackupServiceTests: XCTestCase {
     func testRepositoryThatCannotBeReachedIsReported() async throws {
         let target = try LibraryRepository.inMemory()
         let backup = Backup(createdAt: Date(timeIntervalSince1970: 5000), repos: ["https://repo.test/index.json"])
-        let report = await BackupService.restore(backup, into: target, store: store(), defaults: defaults())
+        let report = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
         XCTAssertEqual(report.failedRepos, ["https://repo.test/index.json"])
     }
 
@@ -148,8 +148,114 @@ final class BackupServiceTests: XCTestCase {
             preferences: ["reader.brightness": .int(-30), "not.a.pref": .string("x")]
         )
         let restoredDefaults = defaults()
-        _ = await BackupService.restore(backup, into: target, store: store(), defaults: restoredDefaults)
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: restoredDefaults, includingSettings: true)
         XCTAssertEqual(Pref.readerBrightness.value(in: restoredDefaults), -30)
         XCTAssertNil(restoredDefaults.object(forKey: "not.a.pref"))
+    }
+
+    func testRestoreLeavesSettingsAloneUnlessAsked() async throws {
+        let backup = Backup(
+            createdAt: Date(timeIntervalSince1970: 5000),
+            manga: [BackupManga(sourceId: "en.demo", url: "/m/1", title: "One", inLibrary: true)],
+            preferences: [Pref.incognitoSources.name: .strings(["x"])]
+        )
+
+        let libraryOnly = try LibraryRepository.inMemory()
+        let libraryOnlyDefaults = defaults()
+        _ = await BackupService.restore(backup, into: libraryOnly, store: store(), defaults: libraryOnlyDefaults, includingSettings: false)
+        XCTAssertNil(libraryOnlyDefaults.object(forKey: Pref.incognitoSources.name))
+        XCTAssertEqual(libraryOnly.library.map(\.title), ["One"])
+
+        let withSettings = try LibraryRepository.inMemory()
+        let withSettingsDefaults = defaults()
+        _ = await BackupService.restore(backup, into: withSettings, store: store(), defaults: withSettingsDefaults, includingSettings: true)
+        XCTAssertEqual(Pref.incognitoSources.value(in: withSettingsDefaults), ["x"])
+        XCTAssertEqual(withSettings.library.map(\.title), ["One"])
+    }
+
+    func testRestoredChaptersGetUniqueSourceOrderInReadingOrder() async throws {
+        let target = try LibraryRepository.inMemory()
+        let one = target.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        target.setInLibrary(one, true)
+        target.applyChapters([chapter("/c/10", 10), chapter("/c/9", 9), chapter("/c/8", 8)], to: one)
+
+        let backup = Backup(
+            createdAt: Date(timeIntervalSince1970: 5000),
+            manga: [BackupManga(
+                sourceId: "en.demo", url: "/m/1", title: "One",
+                chapters: [
+                    BackupChapter(url: "/c/11", name: "Ch 11", number: 11, sourceOrder: 0),
+                    BackupChapter(url: "/c/8.5", name: "Ch 8.5", number: 8.5, sourceOrder: 1),
+                ]
+            )]
+        )
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
+
+        let merged = try XCTUnwrap(target.manga(sourceId: "en.demo", url: "/m/1"))
+        XCTAssertEqual(merged.sortedChapters.map(\.number), [11, 10, 9, 8.5, 8])
+        XCTAssertEqual(merged.sortedChapters.map(\.sourceOrder), [0, 1, 2, 3, 4])
+        let reloaded = try LibraryRepository(db: target.db)
+        XCTAssertEqual(reloaded.manga(sourceId: "en.demo", url: "/m/1")?.sortedChapters.map(\.number), [11, 10, 9, 8.5, 8], "saved, not only in memory")
+
+        let nine = try XCTUnwrap(merged.chapters.first { $0.number == 9 })
+        target.markPreviousRead(nine, in: merged)
+        XCTAssertEqual(merged.chapters.filter(\.read).map(\.number).sorted(), [8, 8.5, 9])
+    }
+
+    func testTitleInACategoryWithStraySpacesLandsInThatCategory() async throws {
+        let target = try LibraryRepository.inMemory()
+        let backup = Backup(
+            createdAt: Date(timeIntervalSince1970: 5000),
+            manga: [BackupManga(sourceId: "en.demo", url: "/m/1", title: "One", categories: ["Reading "])],
+            categories: [BackupCategory(name: "Reading ", sort: 0)]
+        )
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
+
+        let reading = try XCTUnwrap(target.categories.first { $0.name == "Reading" })
+        let restored = try XCTUnwrap(target.manga(sourceId: "en.demo", url: "/m/1"))
+        XCTAssertEqual(target.categoryIds(of: restored), [reading.id])
+    }
+
+    func testRestoreKeepsAnExistingTitlesSmartInterval() async throws {
+        let target = try LibraryRepository.inMemory()
+        let existing = target.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        target.setInLibrary(existing, true)
+        XCTAssertNil(existing.updateInterval)
+
+        let backup = Backup(
+            createdAt: Date(timeIntervalSince1970: 5000),
+            manga: [
+                BackupManga(sourceId: "en.demo", url: "/m/1", title: "One", updateInterval: 7),
+                BackupManga(sourceId: "en.demo", url: "/m/2", title: "Two", updateInterval: 7),
+            ]
+        )
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
+
+        XCTAssertNil(target.manga(sourceId: "en.demo", url: "/m/1")?.updateInterval, "Smart stays Smart")
+        XCTAssertEqual(target.manga(sourceId: "en.demo", url: "/m/2")?.updateInterval, 7, "new to the device")
+    }
+
+    func testPerSeriesSettingsRoundTripThroughABackup() async throws {
+        let source = try LibraryRepository.inMemory()
+        let one = source.upsert(sourceId: "en.demo", url: "/m/1", title: "One", cover: "")
+        source.setInLibrary(one, true)
+        let sourceDefaults = defaults()
+        var display = ChapterDisplay()
+        display.sort = .number
+        display.ascending = true
+        ReadingMode.rightToLeft.save(for: one.key, to: sourceDefaults)
+        ReaderOrientation.portrait.save(for: one.key, to: sourceDefaults)
+        display.save(for: one.key, to: sourceDefaults)
+
+        let data = try BackupCodec.encode(BackupService.snapshot(of: source, store: store(), defaults: sourceDefaults))
+        let target = try LibraryRepository.inMemory()
+        let targetDefaults = defaults()
+        _ = await BackupService.restore(try BackupCodec.decode(data), into: target, store: store(), defaults: targetDefaults, includingSettings: false)
+
+        XCTAssertEqual(
+            PerSeriesReaderSettings.values(for: one.key, in: targetDefaults),
+            PerSeriesReaderSettings.Values(mode: .rightToLeft, orientation: .portrait, chapterDisplay: display)
+        )
+        XCTAssertEqual(ChapterDisplay.load(for: one.key, from: targetDefaults), display)
     }
 }
