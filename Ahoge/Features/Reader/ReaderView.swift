@@ -5,6 +5,7 @@ struct ReaderView: View {
     @EnvironmentObject private var sources: SourceManager
     @EnvironmentObject private var repo: LibraryRepository
     @EnvironmentObject private var downloads: DownloadManager
+    @EnvironmentObject private var navigator: AppNavigator
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
@@ -56,9 +57,12 @@ struct ReaderView: View {
     @AppStorage(Pref.readerInvertColors.name) private var invertColors = false
     @AppStorage(Pref.readerAlwaysShowTransition.name) private var alwaysShowTransition = true
     private let start: ChapterRecord
+    /// A page restored on a cold launch; nil opens at the chapter's saved page.
+    private let startPage: Int?
 
-    init(sourceId: String, manga: LibraryManga, chapter: ChapterRecord) {
+    init(sourceId: String, manga: LibraryManga, chapter: ChapterRecord, page: Int? = nil) {
         start = chapter
+        startPage = page
         _model = StateObject(wrappedValue: ReaderModel(sourceId: sourceId, manga: manga, start: chapter))
         _mode = State(initialValue: ReadingMode.load(for: manga.key))
         _orientation = State(initialValue: ReaderOrientation.load(for: manga.key))
@@ -121,7 +125,7 @@ struct ReaderView: View {
         .preferredColorScheme(.dark)
         .task {
             guard model.sections.isEmpty else { return }
-            await model.open(start, provider: pages)
+            await model.open(start, page: startPage, provider: pages)
         }
         .task { await flashHints(tapZones: true) }
         .onChange(of: model.position) { model.positionChanged(repo: repo, provider: pages) }
@@ -135,6 +139,9 @@ struct ReaderView: View {
             if phase == .active { model.startClock() } else { model.stopClock(repo: repo) }
         }
         .onChange(of: model.currentPage) { _, page in if !scrubbing { sliderPage = page } }
+        // Saved for a cold launch; the chapter changes too when reading on into the next.
+        .onChange(of: model.currentPage) { navigator.readerMoved(to: model.currentChapter, page: model.currentPage) }
+        .onChange(of: model.currentChapter.key) { navigator.readerMoved(to: model.currentChapter, page: model.currentPage) }
         .onChange(of: sliderPage) { _, page in
             // Paged modes follow the slider live; a webtoon jumps when it is let go.
             if scrubbing, mode.isPaged { model.jump(to: page) }

@@ -22,6 +22,7 @@ struct AhogeApp: App {
             fatalError("Could not open the library database: \(error)")
         }
         _library = StateObject(wrappedValue: library)
+        AppNavigator.shared.restore(repo: library)
         if Pref.clearChapterCacheOnLaunch.value() {
             try? FileManager.default.removeItem(at: DownloadManager.defaultCache())
         }

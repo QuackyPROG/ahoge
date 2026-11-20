@@ -65,4 +65,65 @@ final class AppNavigatorTests: XCTestCase {
         XCTAssertNotNil(held)
         XCTAssertEqual(navigator.reader?.manga.title, "One")
     }
+    // MARK: Restore on a cold launch
+    private func suite() -> UserDefaults {
+        UserDefaults(suiteName: "app-navigator-tests-\(UUID().uuidString)")!
+    }
+    /// Leaves Browse on a source, then a title, with chapter 2 open at page 7.
+    private func leaveState(defaults: UserDefaults, repo: LibraryRepository, manga: LibraryManga) {
+        let navigator = AppNavigator()
+        navigator.restore(from: defaults, repo: repo)
+        navigator.tab = .browse
+        navigator.push(.source("s"))
+        navigator.push(.manga(manga.ref))
+        navigator.read(manga.chapter(2), in: manga)
+        navigator.readerMoved(to: manga.chapter(2), page: 7)
+    }
+    func testAColdLaunchRestoresTheTabTheTopTitleAndTheReaderPage() throws {
+        let defaults = suite()
+        let repo = try LibraryRepository.inMemory()
+        repo.preferences = defaults
+        let manga = SourceFixture.manga(in: repo, chapters: 3)
+        leaveState(defaults: defaults, repo: repo, manga: manga)
+        let launched = AppNavigator()
+        launched.restore(from: defaults, repo: repo)
+        XCTAssertEqual(launched.tab, .browse)
+        XCTAssertEqual(launched.path(for: .browse), [.manga(manga.ref)])
+        XCTAssertEqual(launched.reader?.chapter.key, manga.chapter(2).key)
+        XCTAssertEqual(launched.reader?.manga.key, manga.key)
+        XCTAssertEqual(launched.reader?.page, 7)
+    }
+    func testASavedTitleThatIsGoneRestoresTheTabOnly() throws {
+        let defaults = suite()
+        let repo = try LibraryRepository.inMemory()
+        repo.preferences = defaults
+        leaveState(defaults: defaults, repo: repo, manga: SourceFixture.manga(in: repo, chapters: 3))
+        let empty = try LibraryRepository.inMemory()
+        empty.preferences = defaults
+        let launched = AppNavigator()
+        launched.restore(from: defaults, repo: empty)
+        XCTAssertEqual(launched.tab, .browse)
+        XCTAssertEqual(launched.path(for: .browse), [])
+        XCTAssertNil(launched.reader)
+    }
+    func testGlobalIncognitoSavesTheTabOnly() throws {
+        let defaults = suite()
+        Pref.incognito.set(true, in: defaults)
+        try assertOnlyTheTabIsSaved(defaults: defaults)
+    }
+    func testAnIncognitoSourceSavesTheTabOnly() throws {
+        let defaults = suite()
+        Pref.incognitoSources.set([SourceFixture.sourceId], in: defaults)
+        try assertOnlyTheTabIsSaved(defaults: defaults)
+    }
+    private func assertOnlyTheTabIsSaved(defaults: UserDefaults, file: StaticString = #filePath, line: UInt = #line) throws {
+        let repo = try LibraryRepository.inMemory()
+        repo.preferences = defaults
+        leaveState(defaults: defaults, repo: repo, manga: SourceFixture.manga(in: repo, chapters: 3))
+        let launched = AppNavigator()
+        launched.restore(from: defaults, repo: repo)
+        XCTAssertEqual(launched.tab, .browse, file: file, line: line)
+        XCTAssertEqual(launched.path(for: .browse), [], file: file, line: line)
+        XCTAssertNil(launched.reader, file: file, line: line)
+    }
 }

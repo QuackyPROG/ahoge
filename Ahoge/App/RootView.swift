@@ -24,7 +24,7 @@ struct RootView: View {
         let unseen = repo.updates(since: max(Date(timeIntervalSince1970: lastSeen), UpdatesPrefs.cutoff)).count
         let badge = updatesBadge ? unseen : 0
         tabs(badge: badge)
-        .fullScreenCover(item: $navigator.reader) { ReaderView(sourceId: $0.sourceId, manga: $0.manga, chapter: $0.chapter) }
+        .fullScreenCover(item: $navigator.reader) { ReaderView(sourceId: $0.sourceId, manga: $0.manga, chapter: $0.chapter, page: $0.page) }
         .safeAreaInset(edge: .top, spacing: 0) {
             // Mihon's banners while Downloaded only or Incognito mode is on.
             VStack(spacing: 0) {

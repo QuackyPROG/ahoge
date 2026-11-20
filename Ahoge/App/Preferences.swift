@@ -211,6 +211,8 @@ extension Pref {
     // MARK: Onboarding
     /// The welcome guide was shown (or skipped). Device state, not backed up.
     static let onboarded = Key("app.onboarded", false)
+    /// A `NavigationSnapshot` (JSON): where the app was, reopened on a cold launch. Device state, not backed up.
+    static let navigationSnapshot = Key<Data?>("app.navigationSnapshot", nil)
 }
 
 extension Pref {
