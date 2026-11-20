@@ -112,16 +112,17 @@ actor ImageLoader {
     }
 
     /// The cache key of slice `index` of a tall page (see `slices`).
-    nonisolated static func sliceKey(_ url: String, _ index: Int, transform: ImageTransform = .plain) -> String {
+    nonisolated static func sliceKey(_ url: String, _ index: Int, maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth, transform: ImageTransform = .plain) -> String {
         cacheKey(url, maxPixelWidth: maxPixelWidth, transform: transform) + "#s\(index)"
     }
 
     /// Slice `index` of a tall webtoon page. The page is decoded once for all its slices, each cached
-    /// under its own key; the whole strip is not kept.
-    func slice(_ index: Int, of url: String, headers: [String: String] = [:], transform: ImageTransform = .plain, priority: TaskPriority = .userInitiated) async throws -> UIImage {
-        let key = Self.sliceKey(url, index, transform: transform)
+    /// under its own key; the whole strip is not kept. The page's size is recorded at the full
+    /// width limit, as `image` does, whatever width the slices are decoded at.
+    func slice(_ index: Int, of url: String, headers: [String: String] = [:], maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth, transform: ImageTransform = .plain, priority: TaskPriority = .userInitiated) async throws -> UIImage {
+        let key = Self.sliceKey(url, index, maxPixelWidth: maxPixelWidth, transform: transform)
         if let hit = ImageMemoryCache.shared[key] { return hit }
-        let pageKey = Self.cacheKey(url, maxPixelWidth: Self.maxPixelWidth, transform: transform)
+        let pageKey = Self.cacheKey(url, maxPixelWidth: maxPixelWidth, transform: transform)
         let slices: [UIImage]
         if let running = slicing[pageKey] {
             slices = try await running.value
@@ -129,15 +130,16 @@ actor ImageLoader {
             let session = session
             let task = Task.detached(priority: priority) { () throws -> [UIImage] in
                 let data = try await Self.data(url, headers: headers, session: session)
-                let pieces = Self.slices(data, maxPixelWidth: Self.maxPixelWidth, transform: transform)
+                let pieces = Self.slices(data, maxPixelWidth: maxPixelWidth, transform: transform)
                 guard !pieces.isEmpty else { throw URLError(.cannotDecodeContentData) }
+                if let size = Self.pixelSize(data, maxPixelWidth: Self.maxPixelWidth) { ImageMemoryCache.shared.recordSize(size, for: url) }
                 return pieces
             }
             slicing[pageKey] = task
             defer { slicing[pageKey] = nil }
             slices = try await task.value
             for (number, slice) in slices.enumerated() {
-                ImageMemoryCache.shared.insert(slice, for: Self.sliceKey(url, number, transform: transform))
+                ImageMemoryCache.shared.insert(slice, for: Self.sliceKey(url, number, maxPixelWidth: maxPixelWidth, transform: transform))
             }
         }
         guard slices.indices.contains(index) else { throw URLError(.cannotDecodeContentData) }
@@ -234,6 +236,8 @@ actor ImageLoader {
         var rest = transform
         rest.cropBorders = false
         let rows = Int(maxPixelLength)
+        // A strip that is already one slice is not copied.
+        if !transform.cropBorders, strip.height <= rows { return [rest.apply(to: UIImage(cgImage: strip))] }
         var slices: [UIImage] = []
         for top in stride(from: 0, to: strip.height, by: rows) {
             let rect = CGRect(x: columns.minX, y: CGFloat(top), width: columns.width, height: CGFloat(min(rows, strip.height - top)))

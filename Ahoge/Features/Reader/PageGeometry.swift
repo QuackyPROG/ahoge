@@ -59,11 +59,11 @@ enum PageGeometry {
     /// A double-page spread: wider than tall.
     static func isWide(_ size: CGSize) -> Bool { size.width > size.height }
 
-    /// How many slices a webtoon page of `size` is shown as: its height at the reader's width limit,
+    /// How many slices a webtoon page of `size` is shown as: its height at `maxPixelWidth` across,
     /// in pieces at most `ImageLoader.maxPixelLength` long. 1 for most pages.
-    static func sliceCount(_ size: CGSize) -> Int {
+    static func sliceCount(_ size: CGSize, maxPixelWidth: CGFloat = ImageLoader.maxPixelWidth) -> Int {
         guard size.width > 0, size.height > 0 else { return 1 }
-        let height = size.height * min(1, ImageLoader.maxPixelWidth / size.width)
+        let height = size.height * min(1, maxPixelWidth / size.width)
         return max(1, Int((height / ImageLoader.maxPixelLength).rounded(.up)))
     }
 

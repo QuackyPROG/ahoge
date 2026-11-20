@@ -23,6 +23,9 @@ struct ReaderView: View {
     @State private var showModeToast = false
     @State private var showTapHint = false
     @State private var isLandscape = false
+    /// The reader's width in points, for the webtoon decode width.
+    @State private var readerWidth: CGFloat = 0
+    @Environment(\.displayScale) private var displayScale
     /// Mihon's "shift": spreads start one page later, for books whose spreads are offset.
     @State private var shiftSpreads = false
     /// The screen's brightness before the reader changed it.
@@ -94,8 +97,14 @@ struct ReaderView: View {
         .background {
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear { isLandscape = proxy.size.width > proxy.size.height }
-                    .onChange(of: proxy.size) { _, size in isLandscape = size.width > size.height }
+                    .onAppear {
+                        isLandscape = proxy.size.width > proxy.size.height
+                        readerWidth = proxy.size.width
+                    }
+                    .onChange(of: proxy.size) { _, size in
+                        isLandscape = size.width > size.height
+                        readerWidth = size.width
+                    }
             }
         }
         .overlay(alignment: .bottom) {
@@ -231,8 +240,15 @@ struct ReaderView: View {
             rightToLeft: mode == .rightToLeft,
             shiftSpreads: shiftSpreads,
             alwaysShowTransition: alwaysShowTransition,
-            sliceTall: mode == .webtoon
+            sliceTall: mode == .webtoon,
+            webtoonWidth: webtoonWidth
         )
+    }
+
+    /// Pixels across a webtoon page is decoded at: the screen's width, at most the decode limit.
+    private var webtoonWidth: CGFloat {
+        guard mode == .webtoon, readerWidth > 0 else { return ImageLoader.maxPixelWidth }
+        return min(ImageLoader.maxPixelWidth, (readerWidth * displayScale).rounded(.up))
     }
 
     private func pageTransform(paged: Bool, half: ImageTransform.Half? = nil) -> ImageTransform {
@@ -378,7 +394,7 @@ struct ReaderView: View {
             if item.spread.isEmpty {
                 ReaderPageView(
                     page: page, index: index, paged: paged, foreground: background.foreground,
-                    transform: pageTransform(paged: paged, half: item.half), slice: item.slice, zoom: zoomOptions(),
+                    transform: pageTransform(paged: paged, half: item.half), slice: item.slice, decodeWidth: webtoonWidth, zoom: zoomOptions(),
                     onTap: pagedTap, onSize: sizeReporter(item.chapter, index), onSetCover: setCoverAction
                 )
             } else {
@@ -503,6 +519,9 @@ struct ReaderView: View {
         guard let pages = model.currentSection?.pages, pages.indices.contains(model.currentPage) else { return nil }
         // With a transform on, only the transformed copy is cached.
         let url = pages[model.currentPage].url
+        let transform = pageTransform(paged: mode.isPaged)
+        // Webtoon pages are always slices; the first one stands for the page.
+        if mode == .webtoon, let slice = ImageMemoryCache.shared[ImageLoader.sliceKey(url, 0, maxPixelWidth: webtoonWidth, transform: transform)] { return slice }
         return ImageMemoryCache.shared[ImageLoader.cacheKey(url, maxPixelWidth: ImageLoader.maxPixelWidth, transform: pageTransform(paged: mode.isPaged))]
             ?? ImageMemoryCache.shared[url]
     }

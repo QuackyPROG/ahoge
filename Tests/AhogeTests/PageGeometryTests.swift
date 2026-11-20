@@ -79,6 +79,12 @@ final class PageGeometryTests: XCTestCase {
         XCTAssertEqual(turned.height, 200)
     }
 
+    func testSliceCountFollowsTheDecodeWidth() {
+        XCTAssertEqual(PageGeometry.sliceCount(CGSize(width: 800, height: 20000)), 5)
+        XCTAssertEqual(PageGeometry.sliceCount(CGSize(width: 2048, height: 20000), maxPixelWidth: 1179), 3)
+        XCTAssertEqual(PageGeometry.sliceCount(CGSize(width: 800, height: 3000), maxPixelWidth: 1179), 1)
+    }
+
     func testTransformKeysAndHalves() throws {
         XCTAssertEqual(ImageLoader.cacheKey("https://x/p.jpg", maxPixelWidth: ImageLoader.maxPixelWidth, transform: ImageTransform()), "https://x/p.jpg")
         XCTAssertEqual(ImageLoader.cacheKey("https://x/p.jpg", maxPixelWidth: ImageLoader.maxPixelWidth, transform: ImageTransform(cropBorders: true, grayscale: true)), "https://x/p.jpg#tcg")

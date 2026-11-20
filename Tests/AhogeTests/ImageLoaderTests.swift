@@ -73,6 +73,41 @@ final class ImageLoaderTests: XCTestCase {
         XCTAssertEqual(ImageMemoryCache.shared.size(of: url), CGSize(width: 300, height: 450))
     }
 
+    func testSliceKeyKeepsTodaysKeyAtTheLimitAndChangesWithWidth() {
+        let url = "https://x/p.jpg"
+        let today = ImageLoader.cacheKey(url, maxPixelWidth: 2048) + "#s0"
+        XCTAssertEqual(ImageLoader.sliceKey(url, 0), today)
+        XCTAssertNotEqual(ImageLoader.sliceKey(url, 0, maxPixelWidth: 1179), today)
+    }
+
+    func testSliceDecodesAtTheGivenWidthAndCachesTheRest() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).png")
+        try png(width: 800, height: 20000).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let url = file.absoluteString
+        let first = try await ImageLoader.shared.slice(0, of: url, maxPixelWidth: 400)
+        XCTAssertEqual(first.cgImage?.width, 400)
+        XCTAssertLessThanOrEqual(first.cgImage?.height ?? .max, 4096)
+        XCTAssertEqual(ImageMemoryCache.shared.size(of: url), CGSize(width: 800, height: 20000))
+        for index in 1..<3 {
+            XCTAssertNotNil(ImageMemoryCache.shared[ImageLoader.sliceKey(url, index, maxPixelWidth: 400)])
+        }
+    }
+
+    func testShortPageIsOneSlice() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).png")
+        try png(width: 800, height: 1000).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let url = file.absoluteString
+        let only = try await ImageLoader.shared.slice(0, of: url, maxPixelWidth: 400)
+        XCTAssertEqual(only.cgImage?.width, 400)
+        XCTAssertEqual(only.cgImage?.height, 500)
+        do {
+            _ = try await ImageLoader.shared.slice(1, of: url, maxPixelWidth: 400)
+            XCTFail("there is no second slice")
+        } catch {}
+    }
+
     func testGarbageIsNil() {
         XCTAssertNil(ImageLoader.decode(Data("not an image".utf8), maxPixelWidth: 600))
     }
