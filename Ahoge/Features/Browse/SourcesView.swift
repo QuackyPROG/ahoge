@@ -7,15 +7,9 @@ struct SourcesView: View {
     @State private var incognito = Pref.incognitoSources.value()
     @State private var visibility = SourceVisibility.current()
     @State private var globalQuery = ""
-    /// A submitted search, pushed as the global search screen.
-    @State private var searching: String?
-    /// A source whose extension details to show (from the context menu).
-    @State private var details: String?
     @State private var openingLink = false
     @State private var linkText = ""
     @State private var linkFailed = false
-    /// A title found from a pasted link, pushed as its page.
-    @State private var opened: MangaRef?
     @EnvironmentObject private var navigator: AppNavigator
 
     var body: some View {
@@ -66,11 +60,8 @@ struct SourcesView: View {
         .searchable(text: $globalQuery, prompt: "Search all sources")
         .onSubmit(of: .search) {
             let query = globalQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !query.isEmpty { searching = query }
+            if !query.isEmpty { navigator.push(.globalSearch(query)) }
         }
-        .navigationDestination(item: $searching) { RouteView(route: .globalSearch($0)) }
-        .navigationDestination(item: $details) { RouteView(route: .extensionDetails($0)) }
-        .navigationDestination(item: $opened) { RouteView(route: .manga($0)) }
         .alert("Open link", isPresented: $openingLink) {
             TextField("https://…", text: $linkText)
                 .textInputAutocapitalization(.never)
@@ -128,7 +119,7 @@ struct SourcesView: View {
         .contextMenu {
             Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") { togglePin(item.id) }
             Button(isIncognito ? "Turn off incognito" : "Read in incognito", systemImage: "eyeglasses") { toggleIncognito(item.id) }
-            Button("Extension details", systemImage: "info.circle") { details = item.id }
+            Button("Extension details", systemImage: "info.circle") { navigator.push(.extensionDetails(item.id)) }
         }
     }
 
@@ -140,8 +131,8 @@ struct SourcesView: View {
             return
         }
         switch link {
-        case .manga(let sourceId, let path): opened = MangaRef(sourceId: sourceId, url: path, title: "", cover: "")
-        case .search(let query): searching = query
+        case .manga(let sourceId, let path): navigator.push(.manga(MangaRef(sourceId: sourceId, url: path, title: "", cover: "")))
+        case .search(let query): navigator.push(.globalSearch(query))
         case .addRepo: navigator.open(link)
         }
     }

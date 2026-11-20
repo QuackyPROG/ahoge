@@ -6,8 +6,7 @@ struct ExtensionsView: View {
     @State private var showRepos = false
     @State private var busy: Set<String> = []
     @State private var actionError: String?
-    /// An installed source whose details to show.
-    @State private var details: String?
+    @EnvironmentObject private var navigator: AppNavigator
     @AppStorage(Pref.browseContentFilter.name) private var content = ContentFilter.all.rawValue
     @Environment(\.palette) private var palette
 
@@ -58,7 +57,6 @@ struct ExtensionsView: View {
             }
         }
         .sheet(isPresented: $showRepos) { NavigationStack { RepositoriesView() } }
-        .navigationDestination(item: $details) { RouteView(route: .extensionDetails($0)) }
         .alert("Extension error", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -75,7 +73,7 @@ struct ExtensionsView: View {
                         row: row,
                         busy: busy.contains(row.id),
                         hasDetails: row.state == .installed || row.state == .updateAvailable,
-                        showDetails: { details = row.id }
+                        showDetails: { navigator.push(.extensionDetails(row.id)) }
                     ) { await perform(row) }
                 }
             }

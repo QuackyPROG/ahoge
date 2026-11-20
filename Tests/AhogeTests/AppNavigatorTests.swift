@@ -27,6 +27,14 @@ final class AppNavigatorTests: XCTestCase {
         XCTAssertEqual(navigator.path(for: .updates), [.manga(two)])
     }
 
+    func testAResultTappedInGlobalSearchStacksOnTopOfIt() {
+        let navigator = AppNavigator()
+        navigator.tab = .browse
+        navigator.push(.globalSearch("q"))
+        navigator.push(.manga(one))
+        XCTAssertEqual(navigator.path(for: .browse), [.globalSearch("q"), .manga(one)])
+    }
+
     func testOpeningAMangaSelectsLibraryAndQueuesTheRoute() {
         let navigator = AppNavigator()
         navigator.tab = .more
