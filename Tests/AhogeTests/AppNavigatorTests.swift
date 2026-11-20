@@ -51,6 +51,13 @@ final class AppNavigatorTests: XCTestCase {
         navigator.push(.migrate(one))
         XCTAssertEqual(navigator.path(for: .more), [.migrateSources, .migrateTitles("s"), .migrate(one)])
     }
+    func testATitleTappedInUpcomingStacksOnTopOfIt() {
+        let navigator = AppNavigator()
+        navigator.tab = .updates
+        navigator.push(.upcoming)
+        navigator.push(.manga(one))
+        XCTAssertEqual(navigator.path(for: .updates), [.upcoming, .manga(one)])
+    }
     func testOpeningAMangaSelectsLibraryAndQueuesTheRoute() {
         let navigator = AppNavigator()
         navigator.tab = .more

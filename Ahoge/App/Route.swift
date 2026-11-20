@@ -17,6 +17,8 @@ enum Route: Hashable {
     case migrateSources
     /// One source's library titles to pick for migration.
     case migrateTitles(String)
+    /// Updates > Upcoming: when the next library update checks each title.
+    case upcoming
 }
 
 struct RouteView: View {
@@ -33,6 +35,7 @@ struct RouteView: View {
         case .migrate(let ref): GlobalSearchView(query: ref.title, migrating: ref)
         case .migrateSources: MigrateSourcesView()
         case .migrateTitles(let id): MigrateTitlesView(sourceId: id)
+        case .upcoming: UpcomingView()
         }
     }
 }

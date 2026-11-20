@@ -129,7 +129,7 @@ struct UpdatesView: View {
                         .accessibilityLabel("Filter updates")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink { UpcomingView() } label: { Image(systemName: "calendar") }
+                        NavigationLink(value: Route.upcoming) { Image(systemName: "calendar") }
                             .accessibilityLabel("Upcoming updates")
                     }
                     ToolbarItem(placement: .topBarTrailing) {
