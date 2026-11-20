@@ -201,4 +201,18 @@ final class BackupServiceTests: XCTestCase {
         target.markPreviousRead(nine, in: merged)
         XCTAssertEqual(merged.chapters.filter(\.read).map(\.number).sorted(), [8, 8.5, 9])
     }
+
+    func testTitleInACategoryWithStraySpacesLandsInThatCategory() async throws {
+        let target = try LibraryRepository.inMemory()
+        let backup = Backup(
+            createdAt: Date(timeIntervalSince1970: 5000),
+            manga: [BackupManga(sourceId: "en.demo", url: "/m/1", title: "One", categories: ["Reading "])],
+            categories: [BackupCategory(name: "Reading ", sort: 0)]
+        )
+        _ = await BackupService.restore(backup, into: target, store: store(), defaults: defaults(), includingSettings: false)
+
+        let reading = try XCTUnwrap(target.categories.first { $0.name == "Reading" })
+        let restored = try XCTUnwrap(target.manga(sourceId: "en.demo", url: "/m/1"))
+        XCTAssertEqual(target.categoryIds(of: restored), [reading.id])
+    }
 }

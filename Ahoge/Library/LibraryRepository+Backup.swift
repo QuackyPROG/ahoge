@@ -45,7 +45,7 @@ extension LibraryRepository {
     @discardableResult
     func categoryId(named name: String, creating template: BackupCategory? = nil) -> Int64? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let existing = categories.first(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) { return existing.id }
+        if let existing = existingCategoryId(named: trimmed) { return existing }
         guard let created = createCategory(named: trimmed), let index = categories.firstIndex(where: { $0.id == created.id }) else { return nil }
         if let template {
             categories[index].flags = template.flags
@@ -54,6 +54,12 @@ extension LibraryRepository {
             write { try category.update($0) }
         }
         return created.id
+    }
+
+    /// The id of the category with this name, ignoring case and surrounding spaces; nil when there is none.
+    private func existingCategoryId(named name: String) -> Int64? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return categories.first { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }?.id
     }
 
     /// Merges one backed-up title into the database: a chapter is read if it is read on either side,
@@ -144,7 +150,7 @@ extension LibraryRepository {
             let current = categoryIds(of: manga)
             var ids = current
             for name in item.categories {
-                if let category = categories.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) { ids.insert(category.id) }
+                if let id = existingCategoryId(named: name) { ids.insert(id) }
             }
             if ids != current { setCategories(ids, for: manga) }
         }
