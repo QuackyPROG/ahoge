@@ -1,6 +1,6 @@
 # 02 — Upright pages and the webtoon width from the first frame
 
-- **Status:** in-progress
+- **Status:** done
 - **Blocked by:** 01
 - **Change type:** logic
 - **Model:** sonnet  <!-- ImageIO orientation handling and a SwiftUI timing fix -->
