@@ -19,7 +19,8 @@ private struct GlobalSearchScreen: View {
     @StateObject private var search: GlobalSearch
     @State private var query: String
     @State private var searched = ""
-    @AppStorage(Pref.globalSearchPinnedOnly.name) private var pinnedOnly = false
+    /// Per screen, so toggling re-runs only this search; new screens start from the last choice.
+    @State private var pinnedOnly = Pref.globalSearchPinnedOnly.value()
     @State private var onlyWithResults = false
     @Environment(\.palette) private var palette
     private let migrating: MangaRef?
@@ -54,7 +55,10 @@ private struct GlobalSearchScreen: View {
         .themedScreen()
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search all sources")
         .onSubmit(of: .search) { start() }
-        .onChange(of: pinnedOnly) { start() }
+        .onChange(of: pinnedOnly) { _, on in
+            Pref.globalSearchPinnedOnly.set(on)
+            start()
+        }
         .task { if searched.isEmpty { start() } }
         .sheet(item: $pick) { pick in
             MigrateSheet(old: pick.old, target: pick.target) { navigator.finishMigration(from: pick.old.ref, to: $0) }
